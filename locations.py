@@ -9,7 +9,7 @@ usage = """
 """
 
 USERNAME = "ocschwar@mit.edu"
-PASSWORD = "VolttronShines"
+PASSWORD = ""
 PREFIX = "https://webservices.iso-ne.com/api/v1.1/"
 
 def main(argv):
