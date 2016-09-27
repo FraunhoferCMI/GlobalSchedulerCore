@@ -6,10 +6,15 @@ import json
 import pprint
 from optparse import OptionParser
 usage = """
+python locations.py [resource]
+
+EXAMPLE:
+
+python locations.py locations locations/all
 """
 
 USERNAME = "ocschwar@mit.edu"
-PASSWORD = ""
+PASSWORD = "VolttronShines"
 PREFIX = "https://webservices.iso-ne.com/api/v1.1/"
 
 def main(argv):
