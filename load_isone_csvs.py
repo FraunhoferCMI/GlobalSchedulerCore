@@ -29,14 +29,12 @@ Load one of the ISONE historical CSVs into Monetdb
             row[2] = pymonetdb.sql.monetize.convert(
                 datetime.datetime.combine(
                     fdate,
-                    pymonetdb.py_time(row[2])).isoformat())
-            print row
+                    pymonetdb.py_time(row[2])).isoformat())            
             query = "insert into %s values (%s);"%(
                 table,
                 ','.join(row[1:]))
-            print query
-            c.execute(query)
-
+            print C.execute(query)
+    C.commit()
                 
 if __name__ == "__main__":
     main(sys.argv)

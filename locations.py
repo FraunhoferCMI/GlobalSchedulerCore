@@ -41,7 +41,6 @@ def main(argv):
                            auth=(opts.username,opts.password))
         print (opts.prefix+a)
         print(req.status_code)
-        print(req.text)
         pprint.pprint(req.json())
     
                 
