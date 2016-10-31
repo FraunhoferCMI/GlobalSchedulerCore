@@ -14,7 +14,7 @@ INTERVAL=300
 def ISOpub(config_path, **kwargs):
     conf = utils.load_config(config_path)
     query_interval = conf.get("interval",300)
-    
+    topic = conf.get("topic","devces/isone/lmp/4332")
     class ISOAgent(Agent):
         #
         def __init__(self, config_path, **kwargs):
@@ -24,7 +24,7 @@ def ISOpub(config_path, **kwargs):
                 "interval":600,
                 "username": "ocschwar@mit.edu",
                 "password":"VolttronShines",
-                "baseurl":"https://webservices.iso-ne.com/api/v1.1/"
+                "baseurl":"https://webservices.iso-ne.com/api/v1.1/",
                 "LMP":"/fiveminutelmp/current/location/4332"
             }
             
