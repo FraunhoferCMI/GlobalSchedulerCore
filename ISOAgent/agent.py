@@ -11,7 +11,7 @@ _log = logging.getLogger(__name__)
 import requests
 
 INTERVAL=300
-def ISOpub(config_path, **kwargs):
+def ISOPub(config_path, **kwargs):
     conf = utils.load_config(config_path)
     query_interval = conf.get("interval",300)
     topic = conf.get("topic","devces/isone/lmp/4332")
