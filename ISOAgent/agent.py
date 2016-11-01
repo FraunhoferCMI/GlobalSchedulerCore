@@ -21,6 +21,19 @@ def ISOPub(config_path, **kwargs):
     topic = conf.get("topic","/isone/lmp/4332")
     class ISOAgent(Agent):
         #
+        """
+2016-11-01 18:13:34,293 (ISOAgentagent-0.1 2737) ISOAgent.agent ERROR: Fetching /fiveminutelmp/current/location/4332, got 200
+2016-11-01 18:13:34,293 (ISOAgentagent-0.1 2737) ISOAgent.agent ERROR: {u'FiveMinLmp': [{u'BeginDate': u'2016-11-01T14:10:02.000-04:00',
+                  u'CongestionComponent': 0.07,
+                  u'EnergyComponent': 17,
+                  u'LmpTotal': 16.88,
+                  u'Location': {u'$': u'LD.AYER    69',
+                                u'@LocId': u'4332',
+                                u'@LocType': u'NETWORK NODE'},
+                  u'LossComponent': -0.19}]}
+
+        """
+        
         def __init__(self, config_path, **kwargs):
             super(ISOAgent, self).__init__(**kwargs)
             
@@ -37,7 +50,6 @@ def ISOPub(config_path, **kwargs):
             self.vip.config.subscribe(self.configure, actions=["NEW", "UPDATE"], pattern="config")
             
         def configure(self,config_name, action, contents):
-            self._config = self.default_config.copy()
             self._config.update(contents)
             
             # make sure config variables are valid
