@@ -8,17 +8,17 @@ from volttron.platform.agent import utils
 utils.setup_logging()
 _log = logging.getLogger(__name__)
 
-import requests
+__version__="0.1"
 
-INTERVAL=300
+
 def ISOPub(config_path, **kwargs):
     conf = utils.load_config(config_path)
     query_interval = conf.get("interval",300)
-    topic = conf.get("topic","devces/isone/lmp/4332")
+    topic = conf.get("topic","/isone/lmp/4332")
     class ISOAgent(Agent):
         #
         def __init__(self, config_path, **kwargs):
-            super(TestAgent, self).__init__(**kwargs)
+            super(ISOAgent, self).__init__(**kwargs)
             
             self.default_config = {
                 "interval":600,
@@ -56,7 +56,7 @@ def ISOPub(config_path, **kwargs):
             _log.debug(pprint.pformat(req.json()))
     #
     ISOAgent.__name__ = "ISOPub"
-    return ISOAgent(**kwargs)
+    return ISOAgent(config_path,**kwargs)
             
 def main(argv=sys.argv):
     '''Main method called by the platform.'''
