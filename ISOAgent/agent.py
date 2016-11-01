@@ -4,6 +4,10 @@ import requests
 
 from volttron.platform.vip.agent import Agent, PubSub, Core
 from volttron.platform.agent import utils
+from volttron.platform.agent.utils import jsonapi
+from volttron.platform.messaging import topics
+from volttron.platform.messaging import headers as headers_mod
+
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -53,7 +57,8 @@ def ISOPub(config_path, **kwargs):
                     self._config['password']))            
             _log.debug("Fetching {}, got {}".format(a, req.status_code))
             if req.status_code == 200:
-                self.publish_json(self, topic, {}, req.json())
+                pass
+                #self.publish_json(self, topic, {}, req.json())
             _log.debug(pprint.pformat(req.json()))
     #
     ISOAgent.__name__ = "ISOPub"
