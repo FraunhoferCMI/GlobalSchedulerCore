@@ -42,7 +42,9 @@ def ISOPub(config_path, **kwargs):
                 "username": "ocschwar@mit.edu",
                 "password":"VolttronShines",
                 "baseurl":"https://webservices.iso-ne.com/api/v1.1/",
-                "LMP":"/fiveminutelmp/current/location/4332"
+                "LMP":"/fiveminutelmp/current/location/4332",
+                "topic": "datalogger/isone/lmp/4332",
+
             }
             self._config = self.default_config.copy()
             
