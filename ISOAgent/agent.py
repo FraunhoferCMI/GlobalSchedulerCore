@@ -27,6 +27,7 @@ def ISOPub(config_path, **kwargs):
                 "baseurl":"https://webservices.iso-ne.com/api/v1.1/",
                 "LMP":"/fiveminutelmp/current/location/4332"
             }
+            self._config = self.default_config.copy()
             
             self.vip.config.set_default("config", self.default_config)
             self.vip.config.subscribe(self.configure, actions=["NEW", "UPDATE"], pattern="config")
