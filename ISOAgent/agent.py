@@ -75,7 +75,7 @@ def ISOPub(config_path, **kwargs):
                         "Readings":
                            [  R["BeginDate"],R["LmpTotal"]],
                         "Units":"Dollar",
-                        "tz":"America/NewYork"
+                        "tz":"America/NewYork",
                         "data_type":"float"}}
                 self.vip.pubsub.publish(
                     peer="pubsub",
