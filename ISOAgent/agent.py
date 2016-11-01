@@ -38,7 +38,7 @@ def ISOPub(config_path, **kwargs):
             super(ISOAgent, self).__init__(**kwargs)
             
             self.default_config = {
-                "interval":600,
+                "interval":290,
                 "username": "ocschwar@mit.edu",
                 "password":"VolttronShines",
                 "baseurl":"https://webservices.iso-ne.com/api/v1.1/",
@@ -69,7 +69,19 @@ def ISOPub(config_path, **kwargs):
                     self._config['password']))            
             _log.debug("Fetching {}, got {}".format(a, req.status_code))
             if req.status_code == 200:
-                pass
+                R = req.json()["FiveMinLmp"][0]
+                message = {
+                    "LMP":{
+                        "Readings":
+                           [  R["BeginDate"],R["LmpTotal"]],
+                        "Units":"Dollar",
+                        "tz":"America/NewYork"
+                        "data_type":"float"}}
+                self.vip.pubsub.publish(
+                    peer="pubsub",
+                    topic=self._config['topic'],
+                    headers={},
+                    message=message)
                 #self.publish_json(self, topic, {}, req.json())
             _log.debug(pprint.pformat(req.json()))
     #
