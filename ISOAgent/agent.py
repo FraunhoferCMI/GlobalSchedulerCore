@@ -53,6 +53,7 @@ Example datum:
                 "LMP":"/fiveminutelmp/current/location/4332",
                 "DA" : "/hourlylmp/da/final/day/%Y%m%d/location/4332",
                 "topic": "datalogger/isone/lmp/4332",
+                "da_topic": "datalogger/isone/da_lmp/4332",
 
             }
             self._config = self.default_config.copy()
