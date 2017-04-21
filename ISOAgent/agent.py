@@ -86,7 +86,10 @@ Example datum:
                         self._config['password']))
                 _log.debug("Fetching {}, got {}".format(a, req.status_code))
                 if req.status_code == 200:
-                    Rl = req.json()["HourlyLmps"]['HourlyLmp']
+                    Rl = req.json()["HourlyLmps"]
+                    # this is to address how empty lists are served as the blank string
+                    if Rl:
+                        RL = Rl['HourlyLmp']
                     message = {
                         #d.astimezone(pytz.timezone("UTC")).isoformat(
                         "LMP": {
