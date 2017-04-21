@@ -69,41 +69,50 @@ Example datum:
                 pass
             except ValueError as e:
                 _log.error("ERROR PROCESSING CONFIGURATION: {}".format(e))
-
+\
         def get_future(self):
             path = self._config["baseurl"] + self._config["DA"]
-            day = datetime.datetime.now()
-            nowstr = isodate.datetime_isoformat(day)
-            req = requests.get(
-                datetime.datetime.strftime(day,path),
-                headers={"Accept":"application/json"},
-                auth=(
-                    self._config['username'],
-                    self._config['password']))
-            _log.debug("Fetching {}, got {}".format(a, req.status_code))
-            if req.status_code == 200:
-                Rl = req.json()["HourlyLmps"]['HourlyLmp']
-                message = {
-                    "LMP": {
-                        "Readings":
-                        [  [R["BeginDate"],R["LmpTotal"]]
-                           for R in Rl
-                           if R["BeginDate"] > nowstr
-                        ],
-                        "Units":"Dollar",
-                        "tz":"America/NewYork",
-                        "data_type":"float"}}
-                self.vip.pubsub.publish(
-                    peer="pubsub",
-                    topic=self._config['topic'],
-                    headers={},
-                    message=message)
+            today = datetime.datetime.now()
+            nowstr = isodate.datetime_isoformat(today)
+            tz = pytz.timezone("UTC")
+            for day in [
+                    today,
+                    today + datetime.timedelta(days=1)]:
+                req = requests.get(
+                    datetime.datetime.strftime(day,path),
+                    headers={"Accept":"application/json"},
+                    auth=(
+                        self._config['username'],
+                        self._config['password']))
+                _log.debug("Fetching {}, got {}".format(a, req.status_code))
+                if req.status_code == 200:
+                    Rl = req.json()["HourlyLmps"]['HourlyLmp']
+                    message = {
+                        #d.astimezone(pytz.timezone("UTC")).isoformat(
+                        "LMP": {
+                            "Readings":
+                            [  [
+                                isodate.parse_datetime(
+                                R["BeginDate"]).astimezone(tz).isoformat()
+                                ,R["LmpTotal"]]
+                               for R in Rl
+                               if R["BeginDate"] > nowstr
+                            ],
+                            "Units":"Dollar",
+                            "tz":"UTC",
+                            "data_type":"float"}}
+                    self.vip.pubsub.publish(
+                        peer="pubsub",
+                        topic=self._config['topic'],
+                        headers={},
+                        message=message)
                 #self.publish_json(self, topic, {}, req.json())
             _log.debug(pprint.pformat(req.json()))
 
         @Core.periodic(period = query_interval)
         def query_isone(self):
             self.get_future()
+            tz = pytz.timezone("UTC")
             a = self._config['LMP']
             req = requests.get(
                 self._config['baseurl']+a,
@@ -114,10 +123,15 @@ Example datum:
             _log.debug("Fetching {}, got {}".format(a, req.status_code))
             if req.status_code == 200:
                 R = req.json()["FiveMinLmp"][0]
+                DT = isodate.parse_datetime(
+                    R["BeginDate"]).astimezone(tz)
+                DT -= datetime.timedelta(seconds=DT.second)
                 message = {
                     "LMP":{
                         "Readings":
-                           [  R["BeginDate"],R["LmpTotal"]],
+                           [
+                               DT.isoformat(),                               
+                               R["LmpTotal"]],
                         "Units":"Dollar",
                         "tz":"America/NewYork",
                         "data_type":"float"}}
