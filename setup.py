@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 packages = find_packages('.')
 package = packages[0]
-
+print(package,packages)
 setup(
     name = package + 'agent',
     version = "0.1",

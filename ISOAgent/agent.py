@@ -2,7 +2,7 @@ import logging
 import sys
 import requests
 import pprint
-import datetime, isodate
+import datetime, isodate, pytz
 from volttron.platform.vip.agent import Agent, PubSub, Core
 from volttron.platform.agent import utils
 from volttron.platform.agent.utils import jsonapi
@@ -69,7 +69,7 @@ Example datum:
                 pass
             except ValueError as e:
                 _log.error("ERROR PROCESSING CONFIGURATION: {}".format(e))
-\
+
         def get_future(self):
             path = self._config["baseurl"] + self._config["DA"]
             today = datetime.datetime.now()
@@ -84,14 +84,19 @@ Example datum:
                     auth=(
                         self._config['username'],
                         self._config['password']))
-                _log.debug("Fetching {}, got {}".format(a, req.status_code))
+                _log.debug("Fetching {}, got {}".format(day, req.status_code))
                 if req.status_code == 200:
                     Rl = req.json()["HourlyLmps"]
                     # this is to address how empty lists are served as the blank string
                     if Rl:
-                        RL = Rl['HourlyLmp']
+                        Rl = Rl['HourlyLmp']
+                        _log.warning("GOt data for {}".format(day))
+                    else:
+                        _log.warning("NO data for {}".format(day))
+                        continue
                     message = {
                         #d.astimezone(pytz.timezone("UTC")).isoformat(
+                        #for R in Rl:
                         "LMP": {
                             "Readings":
                             [  [
@@ -109,8 +114,7 @@ Example datum:
                         topic=self._config['topic'],
                         headers={},
                         message=message)
-                #self.publish_json(self, topic, {}, req.json())
-            _log.debug(pprint.pformat(req.json()))
+                    _log.debug(pprint.pformat(req.json()))
 
         @Core.periodic(period = query_interval)
         def query_isone(self):
@@ -125,7 +129,9 @@ Example datum:
                     self._config['password']))            
             _log.debug("Fetching {}, got {}".format(a, req.status_code))
             if req.status_code == 200:
+                _log.warning("GOT RT PRICE")
                 R = req.json()["FiveMinLmp"][0]
+                _log.warning(R["BeginDate"])
                 DT = isodate.parse_datetime(
                     R["BeginDate"]).astimezone(tz)
                 DT -= datetime.timedelta(seconds=DT.second)
@@ -136,7 +142,7 @@ Example datum:
                                DT.isoformat(),                               
                                R["LmpTotal"]],
                         "Units":"Dollar",
-                        "tz":"America/NewYork",
+                        "tz":"UTC",#America/New_York",
                         "data_type":"float"}}
                 self.vip.pubsub.publish(
                     peer="pubsub",
