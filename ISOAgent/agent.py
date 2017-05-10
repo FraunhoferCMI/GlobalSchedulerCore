@@ -106,7 +106,7 @@ Example datum:
                             "data_type":"float"}}
                     self.vip.pubsub.publish(
                         peer="pubsub",
-                        topic=self._config['topic'],
+                        topic=self._config['da_topic'],
                         headers={},
                         message=message)
                 #self.publish_json(self, topic, {}, req.json())
