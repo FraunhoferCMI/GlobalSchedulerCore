@@ -145,7 +145,31 @@ class DERDevice():
                 print("int endpt = "+int_endpt+" fail state = "+fail_state)
                 self.fail_state.update({int_endpt: int(fail_state)})    
 
-    def get_forecast(self):
+    ##############################################################################
+    def get_forecast_lowresolution(self):
+        """
+        Retrieves a time-series resource forecast for a specified location and stores
+        in a data model associated with that location / resource.  
+
+        This forecast looks for topics under the /lowres category, and timing parameters etc 
+        under the _lowres identifier.  
+
+        For the current implementation, it is assumed that the forecast is published on a set
+        schedule.  A future modification could change this model to have this function actually
+        send an active request to query a forecast service.  
+        So The resource forecast is published on a topic specified in the xxx configuration
+        file.  This function just subscribes to that topic and updates the associated data
+        structure.
+  
+        FIXME: revisit this: should this function REQUEST a forecast
+        or should the forecast be published synchronously?  
+
+        Format for forecasts: 
+            time_horizon_lowres -- indicates the expected time horizon of the forecast
+            resolution_lowres -- indicates the expected time resolution of the forecast
+            The forecast data structure is a time series of time - power_kWh pairs, 
+            with length = time_horizon x resolution
+        """
         pass
 
     ##############################################################################
