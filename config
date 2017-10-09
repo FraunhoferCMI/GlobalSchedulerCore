@@ -1,0 +1,14 @@
+{
+
+    "DEFAULT_MESSAGE" :'SiteManager Message',
+    "DEFAULT_AGENTID": "site_manager",
+    "DEFAULT_HEARTBEAT_PERIOD": 5,
+    "log-level":"INFO",
+    "moving_averages" :{
+	"length" : 12,
+        "keys":[
+            "analysis/Shirley-MA/PV/RealPower"
+        ]
+    }
+    
+}
