@@ -286,9 +286,42 @@ class DERDevice():
         pass
 
 
-    def set_mode_ctrl(self, cmd, val):
-        # change operational state of the site... 
+
+    def reserve_modbus (self):       
+        start = datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S")
+        end = (datetime.now()+timedelta(seconds=5)).strftime(
+            "%Y-%m-%d %H:%M:%S")
+        return self.vip.rpc.call(
+            "platform.actuator",
+            "request_new_schedule",
+            "", "SiteManager"+self.PATH, "HIGH",
+            [self.PATH, start, end]).get()
         
+    def release_modbus(self):
+        return self.vip.rpc.call(
+            "platform.actuator",
+            "request_cancel_schedule",
+            "curtail","SiteManager"+self.PATH).get()
+
+
+    ##############################################################################
+    @RPC.export
+    def set_mode_ctrl(self, cmd, val, sitemgr):
+        """
+        calls the mode command "cmd" associated with device
+        this is the most generic command to actualy actaute something.
+        """
+        #self.reserve_modbus()            
+        device_path = sitemgr.path+self.mode_ctrl.map_int_to_ext_endpt[cmd]
+        print("device path is "+device_path+"; cmd = "+str(cmd)+"; val = "+str(val))
+        ret = sitemgr.vip.rpc.call(
+            "platform.actuator",
+            "set_point",
+            "SiteManager",
+            device_path,
+            val)
+        #self.release_modbus()
         pass
 
     def update_config(self):
@@ -422,7 +455,7 @@ class DERDevice():
                 cur_attribute.data_dict[keyval] = incoming_msg[k]
                 print("Keyval is "+cur_device+"."+cur_attribute_name+"."+keyval+ "; value is "+ str(cur_attribute.data_dict[keyval]))
             except KeyError as e:
-                print("Warning: Key "+k+" not found")
+                # print("Warning: Key "+k+" not found")
                 pass            
         
         self.update_op_status()
@@ -449,8 +482,8 @@ class ESSDevice(DERDevice):
         # what I want to do is to read the registry file, and then populate dictionary entries.
         pass
 
-    def set_mode_ctrl(self):
-        pass
+    #def set_mode_ctrl(self):
+    #    pass
 
     def set_nameplate(self):
         self.nameplate = {'pwr_chg_kw': 500, 'pwr_dis_kw': 500, 'energy': 1000}
@@ -555,6 +588,8 @@ class SiteManagerAgent(Agent):
             }
 
         }
+        self.path = 'Shirley-MA/South/PMC/'
+
         self._config = self.default_config.copy()
         self._agent_id = self._config.get("DEFAULT_AGENTID")
         self._message = self._config.get("DEFAULT_MESSAGE")
@@ -655,8 +690,10 @@ class SiteManagerAgent(Agent):
         #self.cache[TimeStamp]["North"]=out            
 
         out = self.cache.pop(TimeStamp)
-        print(str(TimeStamp)+ " " + out)
+        print(str(TimeStamp)+ " " + str(out.items))
         # self.summarize(out,headers)
+        val = self.site.mode_ctrl.data_dict["OpModeCtrl"]+1
+        self.site.set_mode_ctrl("OpModeCtrl",val, self)
 
     @RPC.export
     def set_mode(self, device, cmd, value):
