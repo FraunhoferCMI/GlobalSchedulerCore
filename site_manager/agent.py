@@ -68,6 +68,8 @@ from volttron.platform.messaging.health import STATUS_GOOD
 from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
 from volttron.platform.agent import utils
 from volttron.platform.messaging import headers as headers_mod
+from volttron.platform.agent.known_identities import (
+    VOLTTRON_CENTRAL, VOLTTRON_CENTRAL_PLATFORM, CONTROL, CONFIGURATION_STORE)
 
 from . import settings
 
@@ -589,7 +591,7 @@ class SiteManagerAgent(Agent):
 
         }
         self.path = 'Shirley-MA/South/PMC/'
-
+        self.cnt = 0
         self._config = self.default_config.copy()
         self._agent_id = self._config.get("DEFAULT_AGENTID")
         self._message = self._config.get("DEFAULT_MESSAGE")
@@ -694,6 +696,34 @@ class SiteManagerAgent(Agent):
         # self.summarize(out,headers)
         val = self.site.mode_ctrl.data_dict["OpModeCtrl"]+1
         self.site.set_mode_ctrl("OpModeCtrl",val, self)
+        self.cnt += 1
+        print("Cnt = "+str(self.cnt))
+        if self.cnt == 1:
+            print("Value = 2 - going to try installing a new agent!!")
+            # /home/matt/sundial/volttron/
+            #listener_uuid = volttron_instance.install_agent(
+            #agent_dir="examples/ListenerAgent",
+            #config_file="examples/ListenerAgent/config",
+            #start=True)
+            self.vip.rpc.call(CONTROL, 'status_agents').get(timeout=5)
+            agents = self.vip.rpc.call(CONTROL, "list_agents").get(timeout=5)
+            print(dir(agents))
+            for a in agents:
+                print("Agent name is:" + a["name"] + "; UUID = " + a["uuid"])
+                #if a["name"] == "listeneragent-3.2":
+                #    self.vip.rpc.call(CONTROL, "start_agent", a["uuid"]).get(timeout=5)
+                #    self.l_agent = a
+            #_log.info("agent id: ", listener_uuid)
+            fname = "/home/matt/.volttron/packaged/listeneragent-3.2-py2-none-any.whl"
+            self.vip.rpc.call(CONTROL, "install_agent_local", fname,None,None,None).get(timeout=30)
+
+            #listener_uuid = volttron_instance.install_agent(
+            #agent_dir="examples/ListenerAgent",
+            #config_file="examples/ListenerAgent/config",
+            #start=True)
+
+        #if self.cnt == 3:
+        #    self.vip.rpc.call(CONTROL, "stop_agent", self.l_agent["uuid"]).get(timeout=5)
 
     @RPC.export
     def set_mode(self, device, cmd, value):
@@ -709,7 +739,6 @@ class SiteManagerAgent(Agent):
             "set_point",
             device_path,
             value)
-
 
         self.release_modbus()
 
