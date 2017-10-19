@@ -83,16 +83,16 @@ __version__ = '1.0'
 
 
 ##############################################################################
-class ExecutiveAgent(Agent):
+class UIAgent(Agent):
     """
     Runs SunDial Executive state machine
     """
 
     def __init__(self, config_path, **kwargs):
-        super(ExecutiveAgent, self).__init__(**kwargs)
+        super(UIAgent, self).__init__(**kwargs)
         self.default_config = {
-            "DEFAULT_MESSAGE" :'Executive Message',
-            "DEFAULT_AGENTID": "executive",
+            "DEFAULT_MESSAGE" :'UI Message',
+            "DEFAULT_AGENTID": "UI",
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "log-level":"INFO"
         }
@@ -105,12 +105,7 @@ class ExecutiveAgent(Agent):
             self.configure,
             actions=["NEW", "UPDATE"],
             pattern="config")
-        
-        #FIXME - this should be set up with a configurable path....        
-        sys.path.append("/home/matt/sundial/SiteManager")
-        SiteCfgFile = "/home/matt/sundial/SiteManager/ShirleySouthSiteConfiguration.json"
-        self.SiteCfgList = json.load(open(SiteCfgFile, 'r'))
-        self.cnt = 0
+
  
 
 
@@ -145,86 +140,57 @@ class ExecutiveAgent(Agent):
             self.vip.heartbeat.start_with_period(self._heartbeat_period)
             self.vip.health.set_status(STATUS_GOOD, self._message)
 
-        # I think right here is where I want to do my "init"-type functions...
-        # one thought is to instantiate a new DERDevice right here and see if that works!
-        _log.info("**********INSTANTIATING NEW SITES*******************")
 
-        self.sitemgr_list = []
-        for site in self.SiteCfgList:
-            _log.info(str(site["ID"]))
-            _log.info(str(site))
-            
-            # start a new SiteManager agent 
-            # FIXME - path to site manager.....
-            # TODO - you could name the installed agent after the site's ID
-            fname = "/home/matt/.volttron/packaged/site_manageragent-1.0-py2-none-any.whl"
-            uuid = self.vip.rpc.call(CONTROL, "install_agent_local", fname,vip_identity=site["ID"],secretkey=None,publickey=None).get(timeout=30)
-            _log.info("Agent uuid is:" + uuid) 
-            self.vip.rpc.call(CONTROL, "start_agent", uuid).get(timeout=5)  
-            gevent.sleep(0.2)
-           
-            agents = self.vip.rpc.call(CONTROL, "list_agents").get(timeout=5)
-            for cur_agent in agents:
-                if cur_agent["uuid"] == uuid:
-                    self.sitemgr_list.append(cur_agent)
-                    _log.info("Agent name is: "+cur_agent["name"])
-                    _log.info("Agent dir is: "+str(dir(cur_agent)))
-                    _log.info("Agent id is: "+cur_agent["identity"])
-                    break
-            # TODO - return something?             
-            self.vip.rpc.call(cur_agent["identity"], "init_site", site)
-            #self.sites.append(new_site) #DERDevice.DERSite(site, None))
-            #    self.vip.rpc.call(CONTROL, "start_agent", a["uuid"]).get(timeout=5)
-            #    self.l_agent = a
-            #_log.info("agent id: ", listener_uuid)
+    @Core.periodic(30)
+    def set_point(self):
+        """
+        This is a method that periodically polls a designated file for a command to set a point for a
+        SiteManager via an RPC call.
+        Could be altered so that it is instead polling a database, or just issuing a command
+        based on a specific set of internal variables / values.
+
+        assume csv file is rows with:
+        agentID, siteDERDevicepath, Attribute, EndPt, value
+        e.g.,
+        ShirleySouth,ShirleySouth,ModeCtrl,OpModeCtrl,1
+
+        :return:
+        """
+
+        fname = "sitemanager_cmds.csv"
+        try:
+            with open(fname, 'rb') as csvfile:
+            cmds = csv.reader(csvfile)
+            for cur_cmd in cmds:
+                self.vip.rpc.call(cur_cmd[0], "set_point", cur_cmd)
+        except IOError as e:
+            # file name not found implies that the device does not have any children
+            print("NO Site Manager Cmd found!! Skipping!")
+            pass
 
 
+    @PubSub.subscribe('pubsub', 'devices/Shirley-MA/South/PMC/all')
+    def ieb_scrape_to_datafile(self, peer, sender, bus,  topic, headers, message):
 
-    @Core.periodic(5)
-    def run_executive(self):
-        #if self.cnt == 1:
-        #    agents = self.vip.rpc.call(CONTROL, "list_agents").get(timeout=5)
-        #    for cur_agent in agents:
-        #        #    print("Agent name is:" + a["name"] + "; UUID = " + a["uuid"])
-        #        if cur_agent["uuid"] == self.a:
-        #            new_site_manager = cur_agent
-        #            _log.info("Agent name is: "+new_site_manager["name"])
-        #            _log.info("Agent dir is: "+str(dir(new_site_manager)))
-        #            _log.info("Agent id is: "+new_site_manager["identity"])
-        #            break
-        #    
-        #    new_site = self.vip.rpc.call(new_site_manager["identity"], "init_site", self.sitecfg) #.get()
-        #_log.info("New Site - dir"+dir(new_site))
-        #_log.info("New site's device id is"+new_site.device_id)
-        #self.sites.append(new_site) #DERDevice.DERSite(site, None))
-        #    self.vip.rpc.call(CONTROL, "start_agent", a["uuid"]).get(timeout=5)
-        #    self.l_agent = a
-        #_log.info("agent id: ", listener_uuid)
-        # read something
-        # build sdr file?
-        # I might want keys of dev id / agent....
-        pass
-        #self.cnt = self.cnt + 1
-        
-    @PubSub.subscribe('pubsub', 'data/NewSite/all')
-    def add_site(self, peer, sender, bus,  topic, headers, message):
-        _log.info("New Site found!!")
+        if sender == 'pubsub.compat':
+            message = compat.unpack_legacy_message(headers, message)
         data = message[0]
-        _log.info("message is "+data) #str(dir(data)))
 
+        TimeStamp = datetime.strptime(
+            headers["TimeStamp"][:19],
+            "%Y-%m-%dT%H:%M:%S"
+        )
 
-    @Core.receiver('onstop')
-    def onstop(self, sender, **kwargs):
-        for site in self.sitemgr_list:
-            self.vip.rpc.call(CONTROL, "remove_agent", site["uuid"]).get(timeout=5)
-        pass
+        with open(fname, 'a') as datafile:
+            for k, v in data.items():
+                write(datafile, str(TimeStamp)+" "+str(k)+" "+str(v))
 
 
 
 def main(argv=sys.argv):
     '''Main method called by the eggsecutable.'''
     try:
-        utils.vip_main(ExecutiveAgent)
+        utils.vip_main(UIAgent)
     except Exception as e:
         _log.exception('unhandled exception')
 

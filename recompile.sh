@@ -1,7 +1,7 @@
-volttron-ctl stop --tag exec
+volttron-ctl stop --tag ui
 volttron-pkg package . 
-volttron-ctl remove --tag exec
-volttron-ctl install --tag exec ~/.volttron/packaged/executiveagent-1.0-py2-none-any.whl 
-volttron-ctl start --tag exec
+volttron-ctl remove --tag ui
+volttron-ctl install --tag ui ~/.volttron/packaged/<namehere>.whl
+volttron-ctl start --tag ui
 
 
