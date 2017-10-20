@@ -1,0 +1,31 @@
+[
+   {
+      "ID":"ShirleySouth",
+      "Path":"xyz",
+      "Use" :"Y",
+      "DeviceList":[
+         {
+            "ID":"ESSPlant",
+            "ResourceType":"ESSCtrlNode",
+            "DeviceList":[
+               {
+                  "ID":"ESS1",
+                  "ResourceType":"ESS",
+                  "DeviceList":[]
+               }
+            ]
+         },
+         {
+            "ID":"PVPlant",
+            "ResourceType":"PVCtrlNode",
+            "DeviceList":[
+               {
+                  "ID":"Inverter1",
+                  "ResourceType":"PV",
+                  "DeviceList":[]
+               }
+            ]
+         }
+      ]
+   }
+]

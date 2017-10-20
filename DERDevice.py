@@ -3,6 +3,13 @@ import logging
 import sys
 import os
 import csv
+from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
+from volttron.platform.agent import utils
+from volttron.platform.messaging import headers as headers_mod
+
+utils.setup_logging()
+_log = logging.getLogger(__name__)
+__version__ = '1.0'
 
 
 ##############################################################################
@@ -170,22 +177,39 @@ class DERDeviceOld():
         self.nameplate = 0
         pass
 
-    def reserve_modbus(self):
-        start = datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S")
-        end = (datetime.now() + timedelta(seconds=5)).strftime(
-            "%Y-%m-%d %H:%M:%S")
-        return self.vip.rpc.call(
-            "platform.actuator",
-            "request_new_schedule",
-            "", "SiteManager" + self.PATH, "HIGH",
-            [self.PATH, start, end]).get()
+    def reserve_modbus(self, task_id, sitemgr):
+	request_status = "FAILURE"        
+	#FIXME - this should (a) probably time out; (b) have some pause in between attempts; and (c) triage
+	# what the failure reason is...
+	while (request_status == "FAILURE"):
+	    _log.info("Requesting to reserve modbus, requester: "+self.device_id+"; task "+task_id)	
+	    start = datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S")
+            end = (datetime.now() + timedelta(seconds=2)).strftime(
+                "%Y-%m-%d %H:%M:%S")
+	
+            res = sitemgr.vip.rpc.call(
+                "platform.actuator",
+                "request_new_schedule",
+                self.device_id, task_id, "HIGH",
+                ["devices/"+sitemgr.path[0], start, end]).get()
 
-    def release_modbus(self):
-        return self.vip.rpc.call(
+	    request_status = res["result"]
+	    if request_status == "FAILURE":
+	        _log.info("Request failed, reason is "+res["info"])
+	return res
+
+
+    def release_modbus(self, task_id, sitemgr):
+        res = sitemgr.vip.rpc.call(
             "platform.actuator",
             "request_cancel_schedule",
-            "curtail", "SiteManager" + self.PATH).get()
+            self.device_id, task_id).get()
+
+        if res["result"] == "FAILURE":
+	    _log.info("Request failed, reason is "+res["info"])
+
+	return res
 
     def set_config(self):
         pass
@@ -222,9 +246,9 @@ class DERDeviceOld():
             self.op_status.data_dict["Pwr_kW"] = int(self.op_status.data_dict["Pwr_raw"]) * self.POWERS[
                 int(self.op_status.data_dict["Pwr_SF"])]
 
-        print("device id is: " + self.device_id)
-        for k, v in self.op_status.data_dict.items():
-            print k, v
+        #print("device id is: " + self.device_id)
+        #for k, v in self.op_status.data_dict.items():
+        #    print k, v
         pass
 
     ##############################################################################
@@ -258,7 +282,7 @@ class DERDeviceOld():
             self.health_status.data_dict["status"] = self.health_status.data_dict["status"] and val
             # print(key+": "+str(self.health_status.data_dict[key])+"val = "+str(val))
 
-        print("Device ID =" + self.device_id + "Health Status is: " + str(self.health_status.data_dict["status"]))
+        #print("Device ID =" + self.device_id + "Health Status is: " + str(self.health_status.data_dict["status"]))
 
         pass
 
@@ -269,9 +293,9 @@ class DERDeviceOld():
         for cur_device in self.devices:
             cur_device.update_mode_status()
 
-        print("device id is: " + self.device_id)
-        for k, v in self.mode_status.data_dict.items():
-            print k, v
+        #print("device id is: " + self.device_id)
+        #for k, v in self.mode_status.data_dict.items():
+        #    print k, v
 
         pass
 
@@ -321,10 +345,10 @@ class DERDeviceOld():
                 keyval = cur_attribute.data_mapping_dict[k]
                 cur_attribute.data_dict[keyval] = incoming_msg[k]
 
-                # Todo!!  correct for units!!!
+                # TODO  correct for units!!!
                 # if cur_attribute.units_dict[k] != incoming_msg[k] units then call convert_units....
 
-                print("Keyval is " + cur_device + "." + cur_attribute_name + "." + keyval + "; value is " + str(
+                _log.info(cur_device + "." + cur_attribute_name + "." + keyval + "= " + str(
                     cur_attribute.data_dict[keyval]))
             except KeyError as e:
                 # print("Warning: Key "+k+" not found")
@@ -472,7 +496,7 @@ class DERSite(DERDevice):
         # Mapping is done in a file called "<sitename>-data-map.csv"
         # Open the config file that maps modbus end pts to device data dictionaries
         # FIXME - site should probably be its own separate class.
-        csv_dir = "./data/"
+        csv_dir = "/home/matt/sundial/SiteManager/data/" #"./data/"
         csv_name = (csv_dir + self.device_id + "-data-map.csv")
         print(csv_name)
         self.extpt_to_device_dict = {}
@@ -489,9 +513,9 @@ class DERSite(DERDevice):
             print("data map file not found")
             pass
 
-        for keyval in self.extpt_to_device_dict:
-            print("Key = " + keyval)
-            print("Key = " + keyval + ", Val = " + self.extpt_to_device_dict[keyval].device_id)
+        #for keyval in self.extpt_to_device_dict:
+        #    print("Key = " + keyval)
+        #    print("Key = " + keyval + ", Val = " + self.extpt_to_device_dict[keyval].device_id)
 
     ##############################################################################
     #@RPC.export
@@ -500,16 +524,16 @@ class DERSite(DERDevice):
         calls the mode command "cmd" associated with device
         this is the most generic command to actualy actaute something.
         """
-        # self.reserve_modbus()
-        device_path = sitemgr.path + self.mode_ctrl.map_int_to_ext_endpt[cmd]
-        print("device path is " + device_path + "; cmd = " + str(cmd) + "; val = " + str(val))
+        res = self.reserve_modbus("set_mode", sitemgr)
+        device_path = sitemgr.path[0] + "/"+self.mode_ctrl.map_int_to_ext_endpt[cmd]
+        _log.info("device path is " + device_path + "; cmd = " + str(cmd) + "; val = " + str(val))
         ret = sitemgr.vip.rpc.call(
             "platform.actuator",
             "set_point",
             "SiteManager",
             device_path,
             val)
-        # self.release_modbus()
+        res = self.release_modbus("set_mode", sitemgr)
         pass
 
     #@core.periodic(10)
