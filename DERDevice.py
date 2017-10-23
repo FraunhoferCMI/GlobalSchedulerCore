@@ -51,18 +51,18 @@ class DERDevice():
 
 
         for device in device_info["DeviceList"]:
-            print(device["ResourceType"] + " " + device["ID"])
+            _log.info(device["ResourceType"] + " " + device["ID"])
             if device["ResourceType"] == 'ESS':
                 self.devices.append(
                     ESSDevice(device, parent_device=self))
             elif (device["ResourceType"] in self.DGPlant):
                 self.devices.append(
-                    DERPlant(device, parent_device=self))
+                    DERCtrlNode(device, parent_device=self))
             else:
                 self.devices.append(
                     DERDevice(device, parent_device=self))
 
-        init_attributes()
+        self.init_attributes()
 
     ##############################################################################
     def init_attributes(self):
@@ -101,6 +101,7 @@ class DERDevice():
         self.datagroup_dict_list.update({"HealthStatus": self.health_status})
         self.datagroup_dict_list.update({"ModeStatus": self.mode_status})
         self.datagroup_dict_list.update({"ModeControl": self.mode_ctrl})
+        self.datagroup_dict_list.update({"RealPwrCtrl": self.pwr_ctrl})
         self.datagroup_dict_list.update({"Forecast": self.forecast})
         self.datagroup_dict_list.update({"ModeControlCmd": self.mode_ctrl_cmd})
 
@@ -304,7 +305,7 @@ class DERDevice():
         self.update_mode_status()
 
 ##############################################################################
-def reserve_modbus(self, device, task_id, sitemgr):
+def reserve_modbus(device, task_id, sitemgr):
     request_status = "FAILURE"
 
     # FIXME - this should (a) probably time out; (b) have some pause in between attempts; and (c) triage
@@ -322,14 +323,14 @@ def reserve_modbus(self, device, task_id, sitemgr):
             device.device_id, task_id, "HIGH",
             ["devices/" + sitemgr.path[0], start, end]).get()
 
-    request_status = res["result"]
-    if request_status == "FAILURE":
-        _log.info("Request failed, reason is " + res["info"])
+    	request_status = res["result"]
+    	if request_status == "FAILURE":
+            _log.info("Request failed, reason is " + res["info"])
 
     return res
 
 ##############################################################################
-def release_modbus(self, device, task_id, sitemgr):
+def release_modbus(device, task_id, sitemgr):
     res = sitemgr.vip.rpc.call(
         "platform.actuator",
         "request_cancel_schedule",
@@ -365,8 +366,8 @@ class DERSite(DERDevice):
 
         self.extpt_to_device_dict = {}
 
-        for topics in site_info["Topics"]
-            csv_name = (data_map_dir + self.device_id + topics["TopicName"]+""-data-map.csv")
+        for topics in site_info["Topics"]:
+            csv_name = (data_map_dir + self.device_id + "-"+topics["TopicName"]+"-data-map.csv")
             print(csv_name)
 
             try:
@@ -381,9 +382,9 @@ class DERSite(DERDevice):
                 print("data map file "+csv_name+" not found")
                 pass
 
-            #for keyval in self.extpt_to_device_dict:
-            #    print("Key = " + keyval)
-            #    print("Key = " + keyval + ", Val = " + self.extpt_to_device_dict[keyval].device_id)
+            for keyval in self.extpt_to_device_dict:
+                #print("Key = " + keyval)
+                print("Key = " + keyval + ", Val = " + self.extpt_to_device_dict[keyval].device_id)
 
     ##############################################################################
     def set_mode(self, cmd, val, sitemgr):
@@ -400,17 +401,17 @@ class DERModbusSite(DERSite):
         calls the mode command "cmd" associated with device
         this is the most generic command to actualy actuate something.
         """
-        res = reserve_modbus("set_mode", sitemgr)
+        res = reserve_modbus(self, "set_mode", sitemgr) 
         device_path = sitemgr.path[0] + "/"+self.mode_ctrl.map_int_to_ext_endpt[cmd]
         _log.info("device path is " + device_path + "; cmd = " + str(cmd) + "; val = " + str(val))
-        self.mode_ctrl_cmd[cmd+"_cmd"] = val
+        self.mode_ctrl_cmd.data_dict.update({cmd+"_cmd": val})
         ret = sitemgr.vip.rpc.call(
             "platform.actuator",
             "set_point",
             "SiteManager",
             device_path,
-            self.mode_ctrl_cmd[cmd + "_cmd"])
-        res = release_modbus("set_mode", sitemgr)
+            self.mode_ctrl_cmd.data_dict[cmd + "_cmd"])
+        res = release_modbus(self, "set_mode", sitemgr)
         pass
 
     ##############################################################################
@@ -452,17 +453,17 @@ class DERModbusSite(DERSite):
         # write modbus command
         # unlock modbus
 
-        res = reserve_modbus("set_mode", sitemgr)
-        self.mode_ctrl.cmds("<>") = self.mode_ctrl("<>") + 1
-        device_path = sitemgr.path[0] + "/"+self.mode_ctrl.map_int_to_ext_endpt[cmd]
-        _log.info("device path is " + device_path + "; cmd = " + str(cmd) + "; val = " + str(val))
-        ret = sitemgr.vip.rpc.call(
-            "platform.actuator",
-            "set_point",
-            "SiteManager",
-            device_path,
-            val)
-        res = release_modbus("set_mode", sitemgr)
+        res = reserve_modbus(self, "set_mode", sitemgr)
+        #self.mode_ctrl.cmds("<>") = self.mode_ctrl("<>") + 1
+        #device_path = sitemgr.path[0] + "/"+self.mode_ctrl.map_int_to_ext_endpt[cmd]
+        #_log.info("device path is " + device_path + "; cmd = " + str(cmd) + "; val = " + str(val))
+        #ret = sitemgr.vip.rpc.call(
+        #    "platform.actuator",
+        #    "set_point",
+        #    "SiteManager",
+        #    device_path,
+        #    val)
+        res = release_modbus(self, "set_mode", sitemgr)
 
         pass
 
@@ -529,9 +530,9 @@ class DERCtrlNode(DERDevice):
 
         # This method has a number of issues -
 
-        res = reserve_modbus("set_power", sitemgr)
+        res = reserve_modbus(self, "set_power", sitemgr)
         device_path = sitemgr.path[0] + "/"+self.pwr_ctrl.map_int_to_ext_endpt[cmd]
-        self.pwr_ctrl_cmd[cmd+"_cmd"] = val
+        self.pwr_ctrl_cmd.update({cmd+"_cmd": val})
         _log.info("device path is " + device_path + "; cmd = " + str(cmd) + "; val = " + str(val))
         ret = sitemgr.vip.rpc.call(
             "platform.actuator",
@@ -539,7 +540,7 @@ class DERCtrlNode(DERDevice):
             "SiteManager",
             device_path,
             self.pwr_ctrl_cmd[cmd + "_cmd"])
-        res = release_modbus("set_power", sitemgr)
+        res = release_modbus(self, "set_power", sitemgr)
         pass
 
 
@@ -613,7 +614,7 @@ class VirtualDERCtrlNode(DERCtrlNode):
         self.DGDevice = ["PV", "ESS"]
         self.DGPlant = ["ESSCtrlNode", "PVCtrlNode", "LoadShiftCtrlNode"] #self.DGPlant = ["ESS_PLANT", "PV_PLANT"]
 
-        init_attributes()
+        self.init_attributes()
 
     pass
 
@@ -658,7 +659,7 @@ class Deprecated_DERDevice():
                             ESSDevice(device_id=(device_id + "-" + row[0]), device_type=row[1], parent_device=self))
                     elif (row[1] in self.DGPlant):
                         self.devices.append(
-                            DERPlant(device_id=(device_id + "-" + row[0]), device_type=row[1], parent_device=self))
+                            DERCtrlNode(device_id=(device_id + "-" + row[0]), device_type=row[1], parent_device=self))
                     else:
                         self.devices.append(
                             DERDevice(device_id=(device_id + "-" + row[0]), device_type=row[1], parent_device=self))
