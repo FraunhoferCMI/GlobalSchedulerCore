@@ -10,7 +10,7 @@
             "TopicName":"Forecast",
             "TopicPath":"datalogger/cpr/forecast"
          }
-      ]
+      ],
       "Use" :"Y",
       "DeviceList":[
          {
@@ -39,7 +39,7 @@
    },
    {
       "ID":"ShirleyNorth",
-      "Path":"xyz",
+      "Topics":["xyz"],
       "Use" :"Y",
       "DeviceList":[
          {
@@ -61,17 +61,17 @@
       ]
    },
    {
-      "ID":"IPKeys",
-      "Path":"xyz",
+      "ID":"FLAME",
+      "Topics":["xyz"],
       "Use" :"Y",
       "DeviceList":[
          {
-            "ID":"FLAME_loadshift",
+            "ID":"LoadShift",
             "ResourceType":"LoadShiftCtrlNode",
             "DeviceList":[]
          },
          {
-            "ID":"FLAME_baseline",
+            "ID":"Baseline",
             "ResourceType":"Load",
             "DeviceList":[]
          }
