@@ -46,28 +46,5 @@
         "DeviceID":"ShirleySouth-ESSPlant"
       }
     ]
-  },
-  {
-    "ID": "System",
-    "ResourceType": "System",
-    "Use": "Y",
-    "DeviceList": [
-      {
-        "AgentID":"SundialResource",
-        "DeviceID":"SystemLoadShift"
-      },
-      {
-        "AgentID":"SundialResource",
-        "DeviceID":"SystemLoad"
-      },
-      {
-        "AgentID":"SundialResource",
-        "DeviceID":"SystemPV"
-      },
-      {
-        "AgentID":"SundialResource",
-        "DeviceID":"SystemESS"
-      }
-      ]
   }
   ]
