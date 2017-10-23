@@ -1,7 +1,16 @@
 [
    {
       "ID":"ShirleySouth",
-      "Path":"xyz",
+      "Topics":[
+         {
+            "TopicName":"Modbus",
+            "TopicPath":"/devices/Shirley-MA/South/PMC"
+         },
+         {
+            "TopicName":"Forecast",
+            "TopicPath":"datalogger/cpr/forecast"
+         }
+      ],
       "Use" :"Y",
       "DeviceList":[
          {
