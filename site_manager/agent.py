@@ -106,6 +106,8 @@ class SiteManagerAgent(Agent):
         #FIXME - shouldn't be hard-coded!!!
         #FIXME - need to (1) add mapping of topic in the device mapping file; (2) parse this in on_match
         self.path = ['Shirley-MA/South/PMC'] # was 'devices/Shirley-MA/South/PMC/all'
+        self.data_map_dir = "/home/matt/sundial/SiteManager/data/" #"./data/"
+
         self.cnt = 0
         self._config = self.default_config.copy()
         self._agent_id = self._config.get("DEFAULT_AGENTID")
@@ -120,7 +122,6 @@ class SiteManagerAgent(Agent):
             self.configure,
             actions=["NEW", "UPDATE"],
             pattern="config")
-        
 
         for topics in self.path:
             self.vip.pubsub.subscribe(peer='pubsub',prefix='devices/'+topics+'/all',callback=self.on_match)
@@ -138,9 +139,10 @@ class SiteManagerAgent(Agent):
         """
         _log.info("**********INSTANTIATING A NEW SITE*******************")
         _log.info("Site name is: "+cursite["ID"])
-        self.site = DERDevice.DERSite(cursite, None)
 
+        self.topics = cursite["Topics"]
 
+        self.site = DERDevice.DERSite(cursite, None, self.data_map_dir)
         self.vip.pubsub.publish('pubsub', 
                                 'data/NewSite/all', 
                                 headers={}, 
@@ -240,8 +242,6 @@ class SiteManagerAgent(Agent):
                 if child_device != None:
                     return child_device
 
-
-
     @RPC.export
     def set_point(self, cmd):
         """
@@ -261,12 +261,11 @@ class SiteManagerAgent(Agent):
         #val = self.site.mode_ctrl.data_dict["OpModeCtrl"]+1
         if cmd_attribute == "ModeControl":
             cmd_device.set_mode(cmd_endpt,int(cmd_val), self)
+        elif cmd_attribute == "PowerControl":
+            cmd_device.set_power(cmd_endpt, val, self)
 
         #self.site.set_mode("OpModeCtrl",val, self)
 
-
-
-        
     def handle_moving_averages (self, msg):
         for k,v in msg.items():
             if k not in self._config["moving_averages"]["keys"]:
