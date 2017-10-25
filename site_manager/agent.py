@@ -74,7 +74,7 @@ from volttron.platform.agent.known_identities import (
     VOLTTRON_CENTRAL, VOLTTRON_CENTRAL_PLATFORM, CONTROL, CONFIGURATION_STORE)
 
 from . import settings
-
+from gs_identities import (INTERACTIVE, AUTO)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -169,12 +169,14 @@ class SiteManagerAgent(Agent):
         except ValueError as e:
             _log.error("ERROR PROCESSING CONFIGURATION: {}".format(e))
    
+    ##############################################################################
     @Core.receiver('onsetup')
     def onsetup(self, sender, **kwargs):
         # Demonstrate accessing a value from the config file
         _log.info(self._message)
         self._agent_id = self._config.get('agentid')
 
+    ##############################################################################
     @Core.receiver('onstart')
     def onstart(self, sender, **kwargs):
         if self._heartbeat_period != 0:
@@ -199,7 +201,12 @@ class SiteManagerAgent(Agent):
         #for k, v in data.items():
         #    _log.info("Message is: "+k+": "+str(v))
 
-        self.site.populate_endpts(data) 
+        try:
+            self.site.populate_endpts(data)
+        except:
+            # indicates that agent is still initializing - init_sites has not yet been called.
+            # There is possibly a better way to handle this issue
+            pass
 
         # FIXME: This is legacy code, should be reintegrated.  Not currently doing anything
         # with timestamps.
@@ -215,6 +222,7 @@ class SiteManagerAgent(Agent):
 
         # self.summarize(out,headers)
 
+    ##############################################################################
     @Core.periodic(20)
     def test_write(self):
         """
@@ -223,9 +231,29 @@ class SiteManagerAgent(Agent):
         """
         _log.info("updating op mode!!")
         val = self.site.mode_ctrl.data_dict["OpModeCtrl"]+1
-        self.site.set_mode("OpModeCtrl",val, self)
+        self.site.set_point("OpModeCtrl",val, self)
         #self.cnt += 1
         #print("Cnt = "+str(self.cnt))
+
+
+    ##############################################################################
+    @RPC.export
+    def set_interactive_mode(self, new_mode):
+        """
+        changes site's mode from "AUTO" to "INTERACTIVE"
+        """
+        _log.info("updating op mode!!")
+        val = self.site.set_mode(INTERACTIVE)
+
+    ##############################################################################
+    @RPC.export
+    def set_auto_mode(self):
+        """
+        changes site's mode from "AUTO" to "INTERACTIVE"
+        """
+        _log.info("updating op mode!!")
+        val = self.site.set_mode(AUTO)
+
 
 
     def find_device(device_list, device_id):
