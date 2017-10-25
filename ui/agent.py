@@ -158,6 +158,10 @@ class UIAgent(Agent):
         """
 
         fname = "UI_cmd.json"
+        cwd = os.getcwd()
+        cwd = cwd+"/../../../../"
+        _log.info("Current directory is: "+cwd)
+        fname = cwd+"system_cmds.csv" #"/home/matt/sundial/UI/system_cmds.csv"
         try:
 
             with open(fname, 'rb') as jsonfile:
@@ -174,6 +178,8 @@ class UIAgent(Agent):
         except IOError as e:
             # file name not found implies that the device does not have any children
             print("NO Site Manager Cmd found!! Skipping!")
+            cwd = os.getcwd()
+            _log.info("Current directory: "+cwd)
             pass
 
 
@@ -189,9 +195,10 @@ class UIAgent(Agent):
             "%Y-%m-%dT%H:%M:%S"
         )
 
+        fname = "/home/matt/sundial/UI/testlogfile.txt"
         with open(fname, 'a') as datafile:
             for k, v in data.items():
-                write(datafile, str(TimeStamp)+" "+str(k)+" "+str(v))
+                datafile.write(str(TimeStamp)+" "+str(k)+" "+str(v)+"\n")
 
 
 
