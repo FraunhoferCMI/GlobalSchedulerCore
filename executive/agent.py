@@ -66,7 +66,6 @@ import os
 import csv
 import json
 import gevent
-import DERDevice
 from volttron.platform.messaging.health import STATUS_GOOD
 from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
 from volttron.platform.agent import utils
@@ -77,13 +76,15 @@ from volttron.platform.agent.known_identities import (
 from . import settings
 
 
+import DERDevice
+from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXECUTIVE_CLKTIME, GS_SCHEDULE)
+
 utils.setup_logging()
 _log = logging.getLogger(__name__)
 __version__ = '1.0'
 
 import DERDevice
 import json
-
 
 class SunDialResource():
     def __init__(self, resource_cfg):
@@ -144,6 +145,7 @@ class ExecutiveAgent(Agent):
     """
     Runs SunDial Executive state machine
     """
+    OperatingModes = ["IDLE", "USER_CONTROL", "APPLICATION_CONTROL"]
 
     def __init__(self, config_path, **kwargs):
         super(ExecutiveAgent, self).__init__(**kwargs)
@@ -154,8 +156,8 @@ class ExecutiveAgent(Agent):
             "log-level":"INFO"
         }
 
-        self.OperatingMode = ["MONITORING", "USER_CONTROL", "APPLICATION_CONTROL"]
-        self.OperatingModeInd = 0     
+        self.OperatingMode_set = IDLE
+        self.OperatingMode     = self.OperatingMode_set
         self._config = self.default_config.copy()
         self._agent_id = self._config.get("DEFAULT_AGENTID")
         self._message = self._config.get("DEFAULT_MESSAGE")
@@ -197,12 +199,14 @@ class ExecutiveAgent(Agent):
         except ValueError as e:
             _log.error("ERROR PROCESSING CONFIGURATION: {}".format(e))
     
+    ##############################################################################
     @Core.receiver('onsetup')
     def onsetup(self, sender, **kwargs):
         # Demonstrate accessing a value from the config file
         _log.info(self._message)
         self._agent_id = self._config.get('agentid')
 
+    ##############################################################################
     @Core.receiver('onstart')
     def onstart(self, sender, **kwargs):
         if self._heartbeat_period != 0:
@@ -213,6 +217,10 @@ class ExecutiveAgent(Agent):
         # one thought is to instantiate a new DERDevice right here and see if that works!
         _log.info("**********INSTANTIATING NEW SITES*******************")
 
+
+        # The following reads a json site configuration file and installs / starts a new site
+        # manager for each site identified in the configuration file.
+        # agents are stored in an object list called "self.sitemgr_list"
         self.sitemgr_list = []
         for site in self.SiteCfgList:
             _log.info(str(site["ID"]))
@@ -220,13 +228,30 @@ class ExecutiveAgent(Agent):
             
             # start a new SiteManager agent 
             # FIXME - path to site manager.....
-            # TODO - you could name the installed agent after the site's ID
+            # FIXME - needs error trapping: (1) is agent already installed? (2) does site mgr agent exist?
+            # FIXME - (3) did it start successfully?
             fname = "/home/matt/.volttron/packaged/site_manageragent-1.0-py2-none-any.whl"
-            uuid = self.vip.rpc.call(CONTROL, "install_agent_local", fname,vip_identity=site["ID"],secretkey=None,publickey=None).get(timeout=30)
+            uuid = self.vip.rpc.call(CONTROL,
+                                     "install_agent_local",
+                                     fname,
+                                     vip_identity=site["ID"],secretkey=None,publickey=None).get(timeout=30)
             _log.info("Agent uuid is:" + uuid) 
-            self.vip.rpc.call(CONTROL, "start_agent", uuid).get(timeout=5)  
-            gevent.sleep(0.5)
-           
+            self.vip.rpc.call(CONTROL,
+                              "start_agent",
+                              uuid).get(timeout=5)
+
+            # I would like the "init_site" routine in SiteManager Agent to be part of the init, but I
+            # can't figure out how to pass a parameter to an Agent constructor, so instead we call
+            # an init routine ("init_site") that is supposed to follow the SiteManager __init__ function
+            # which provides configuration data for the actual site.
+            # the following sleep message is supposed to pause operation for long enough for site manager
+            # to finish its initialization, but it does not work.
+
+            #gevent.sleep(0.5)  # try without this?
+
+            # The idea of the below is to get a handle to the agent that we've just created
+            # Not done in a very efficient way though - get a list of agents and find one that
+            # matches to the uuid, then break
             agents = self.vip.rpc.call(CONTROL, "list_agents").get(timeout=5)
             for cur_agent in agents:
                 if cur_agent["uuid"] == uuid:
@@ -235,16 +260,13 @@ class ExecutiveAgent(Agent):
                     _log.info("Agent dir is: "+str(dir(cur_agent)))
                     _log.info("Agent id is: "+cur_agent["identity"])
                     break
-            # TODO - return something?             
+            # TODO - return something from init_site indicating success??
             self.vip.rpc.call(cur_agent["identity"], "init_site", site)
-            #self.sites.append(new_site) #DERDevice.DERSite(site, None))
-            #    self.vip.rpc.call(CONTROL, "start_agent", a["uuid"]).get(timeout=5)
-            #    self.l_agent = a
-            #_log.info("agent id: ", listener_uuid)
 
         self.init_resources(self.sundial_resource_cfg_list, self.sitemgr_list)
 
 
+    ##############################################################################
     def init_resources(self, sundial_resource_cfg_list, sitemgr_list):
         """
         This method constructs a list of sundial resource objects based on data stored in a system configuration
@@ -262,8 +284,8 @@ class ExecutiveAgent(Agent):
 
         self.sundial_resources = []
         for new_resource in sundial_resource_cfg_list:
-            # find devices matching the specified device names....
 
+            # find devices matching the specified device names....
             for device in new_resource["DeviceList"]:
                 _log.info("New Resource: "+new_resource["ID"]+" of type "+new_resource["ResourceType"])
                 _log.info("Device List entries: ")                
@@ -290,7 +312,8 @@ class ExecutiveAgent(Agent):
                           " not found, constructing a generic Sundial Resource")
                 self.sundial_resources.append(SunDialResource(new_resource))
 
-        # This constructs a "System" resource that is composed of all the virtual plants specified in the cfg file
+        # Next construct a "System" resource.  By convention, the System Resource
+        # is composed of all the virtual plants specified in the cfg file
         new_system_resource = {}
         new_system_resource.update({"ID": "System"})
         new_system_resource.update({"ResourceType": "System"})
@@ -299,9 +322,16 @@ class ExecutiveAgent(Agent):
         for resources in self.sundial_resources:
             new_system_resource["DeviceList"].append({"AgentID": resources.resource_id, "DeviceID": resources.resource_id})
         self.sundial_resources.append(SundialSystemResource(new_system_resource))
-        
-    def build_sundial(self):
 
+    ##############################################################################
+    def build_sundial(self):
+        """
+        Currently unused.
+        This would start up a separate "SunDialResourceManager" agent that is responsible for building
+        and managing sundial resources, and possibly would run the optimizer.  Analogous to Executive's
+        relationhip with the SiteManager agents
+        For simplicity, current implementation is keepin within the umbrella of the "executive" agent
+        """
         #sundial_cfg_list = [
         #    ("loadshift_sdr", ["IPKeys-FLAME_loadshift"], "LoadShiftCtrlNode"),
         #    ("load_sdr", ["IPKeys-FLAME_baseline"], "Load"),
@@ -325,44 +355,90 @@ class ExecutiveAgent(Agent):
                 _log.info("Agent id is: " + cur_agent["identity"])
                 break
 
-        self.init_resources(sundial_resource_cfg_list, self.sitemgr_list)
+        self.init_resources(self.sundial_resource_cfg_list, self.sitemgr_list)
         #self.vip.rpc.call(self.sdrm, "init_resources", sundial_resource_cfg_list)
 
 
+    ##############################################################################
+    def enable_site_interactive_mode(self):
+        """
+        send command to each site to transition to interactive mode
+        :return:
+        """
+        # TODO: think about whether this should be one method in SiteManager (not one for auto and one for interactive)
+        for site in self.sitemgr_list:
+            self.vip.rpc.call(site, "set_interactive_mode").get(timeout=5)
+            # check for success ...
 
 
-    @Core.periodic(60)
+    ##############################################################################
+    def disable_site_interactive_mode(self):
+        """
+        send command to each site to transition to auto (non-interactive) mode
+        :return:
+        """
+        for site in self.sitemgr_list:
+            self.vip.rpc.call(site, "set_auto_mode").get(timeout=5)
+
+
+    ##############################################################################
+    @Core.periodic(GS_SCHEDULE)
+    def run_optimizer(self):
+        """
+        place holder for optimizer
+        :return:
+        """
+        if self.OperatingMode == APPLICATION_CONTROL:
+            pass
+        pass
+
+
+    @Core.periodic(EXECUTIVE_CLKTIME)
     def run_executive(self):
-        #if self.cnt == 1:
-        #    agents = self.vip.rpc.call(CONTROL, "list_agents").get(timeout=5)
-        #    for cur_agent in agents:
-        #        #    print("Agent name is:" + a["name"] + "; UUID = " + a["uuid"])
-        #        if cur_agent["uuid"] == self.a:
-        #            new_site_manager = cur_agent
-        #            _log.info("Agent name is: "+new_site_manager["name"])
-        #            _log.info("Agent dir is: "+str(dir(new_site_manager)))
-        #            _log.info("Agent id is: "+new_site_manager["identity"])
-        #            break
-        #    
-        #    new_site = self.vip.rpc.call(new_site_manager["identity"], "init_site", self.sitecfg) #.get()
-        #_log.info("New Site - dir"+dir(new_site))
-        #_log.info("New site's device id is"+new_site.device_id)
-        #self.sites.append(new_site) #DERDevice.DERSite(site, None))
-        #    self.vip.rpc.call(CONTROL, "start_agent", a["uuid"]).get(timeout=5)
-        #    self.l_agent = a
-        #_log.info("agent id: ", listener_uuid)
-        # read something
-        # build sdr file?
-        # I might want keys of dev id / agent....
-        _log.info("Publishing op mode!!")
-        self.vip.pubsub.publish('pubsub', 
-                                'data/Executive/all', 
-                                headers={}, 
-                                message=[self.OperatingMode[self.OperatingModeInd]]).get(timeout=10.0)        
-   
+        """
+        Periodically polls system mode and health indicators and transitions system state accordingly
+        :return:
+        """
+
+        if self.OperatingMode_set != self.OperatingMode:
+            # indicates that a mode change has been requested
+            _log.info("Changing operating mode to: " + self.OperatingMode_set)
+
+            self.OperatingMode = self.OperatingMode_set
+
+            self.vip.pubsub.publish('pubsub',
+                                    'data/Executive/all',
+                                    headers={},
+                                    message=[self.OperatingModes[self.OperatingMode]]).get(timeout=10.0)
+
+
+
+            if self.OperatingMode == IDLE:
+                # change sites to AUTO mode
+                self.enable_site_interactive_mode(self)
+                # shut down optimizer
+                pass
+            elif self.OperatingMode == APPLICATION_CONTROL:
+                # change sites to interactive mode
+                self.enable_site_interactive_mode(self)
+                # instantiate and build a new sundial resource manager when we switch to app ctrl mode
+
+                # (re)start optimizer - would call "build_sundial"
+                # instead, this can just be implied by checking op mode in the scheduled 'optimizer'
+                # routine
+                pass
+            elif self.OperatingMode == USER_CONTROL:
+                # change sites to interactive mode
+                self.enable_site_interactive_mode(self)
+                # shut down optimizer
+                pass
+
+
+
+
 
         pass
-        #self.cnt = self.cnt + 1
+
         
     @PubSub.subscribe('pubsub', 'data/NewSite/all')
     def add_site(self, peer, sender, bus,  topic, headers, message):
@@ -372,19 +448,18 @@ class ExecutiveAgent(Agent):
 
 
     @RPC.export
-    def set_point(self, cmd):
+    def set_mode(self, mode_val):
         """
         This method writes an end point to a specified DER Device path
         """
         fname = "/home/matt/sundial/Executive/cmdfile.txt"
-        cmd_agentid = cmd[0]
-        cmd_method = cmd[1]
-        cmd_val = cmd[2]
+        cmd_agentid = cmd["AgentID"]
+        cmd_method = cmd["FcnName"]
+
+        self.OperatingMode_set = int(mode_val) #self.OperatingModes[self.OperatingModeInd]
 
         with open(fname, 'a') as datafile:
-            self.OperatingModeInd = int(cmd_val)
-            _log.info("Changing operating mode to: "+ self.OperatingMode[self.OperatingModeInd])
-            datafile.write(str(cmd_method)+" "+str(cmd_val)+ " "+self.OperatingMode[self.OperatingModeInd])
+            datafile.write(str(cmd_method)+" "+str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
 
 
     @Core.receiver('onstop')
