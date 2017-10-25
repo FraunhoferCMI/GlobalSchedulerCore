@@ -142,7 +142,7 @@ class SiteManagerAgent(Agent):
 
         self.topics = cursite["Topics"]
 
-        self.site = DERDevice.DERSite(cursite, None, self.data_map_dir)
+        self.site = DERDevice.DERModbusSite(cursite, None, self.data_map_dir)
         self.vip.pubsub.publish('pubsub', 
                                 'data/NewSite/all', 
                                 headers={}, 
