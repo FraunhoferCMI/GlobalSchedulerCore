@@ -157,12 +157,20 @@ class UIAgent(Agent):
         :return:
         """
 
-        fname = "sitemanager_cmds.csv"
+        fname = "UI_cmd.json"
         try:
-            with open(fname, 'rb') as csvfile:
-            cmds = csv.reader(csvfile)
-            for cur_cmd in cmds:
-                self.vip.rpc.call(cur_cmd[0], "set_point", cur_cmd)
+
+            with open(fname, 'rb') as jsonfile:
+                cmds = json.load(jsonfile)
+
+                for cur_cmd in cmds:
+                    self.vip.rpc.call(cur_cmd["AgentID"], cur_cmd["FcnName"], cur_cmd)
+
+            try:
+                os.remove(fname) # delete after commands have been issued
+            except OSError:
+                pass
+
         except IOError as e:
             # file name not found implies that the device does not have any children
             print("NO Site Manager Cmd found!! Skipping!")
