@@ -7,6 +7,8 @@ from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
 from volttron.platform.agent import utils
 from volttron.platform.messaging import headers as headers_mod
 
+from gs_identities import (INTERACTIVE, AUTO, SITE_IDLE, SITE_RUNNING)
+
 utils.setup_logging()
 _log = logging.getLogger(__name__)
 __version__ = '1.0'
@@ -93,6 +95,7 @@ class DERDevice():
         self.pwr_ctrl = self.DeviceAttributes("RealPwrCtrl")
         self.forecast = self.DeviceAttributes("Forecast")
         self.mode_ctrl_cmd = self.DeviceAttributes("ModeControlCmd")
+        self.pwr_ctrl_cmd = self.DeviceAttributes("RealPwrCtrlCmd")
 
         print("device is ..." + self.device_id)
         self.datagroup_dict_list = {}
@@ -104,6 +107,7 @@ class DERDevice():
         self.datagroup_dict_list.update({"RealPwrCtrl": self.pwr_ctrl})
         self.datagroup_dict_list.update({"Forecast": self.forecast})
         self.datagroup_dict_list.update({"ModeControlCmd": self.mode_ctrl_cmd})
+        self.datagroup_dict_list.update({"RealPwrCtrlCmd": self.pwr_ctrl_cmd})
 
 
     ##############################################################################
@@ -116,6 +120,7 @@ class DERDevice():
             self.data_dict = {"GrpName": attribute_name}
             self.map_int_to_ext_endpt = {"GrpName": attribute_name}
             self.units = {"GrpName": attribute_name}
+            self.topic_map = {"GrpName": attribute_name}
 
             # initialize certain known key word values that are inherited between parent/children devices
             if attribute_name == "OpStatus":
@@ -140,27 +145,35 @@ class DERDevice():
             # if data map units don't match -->
             # W to kW, kW to W, Wh to kWh, VA to kVA
             # in general: (1) if units don't match... ; (2) if no units are included...
+
+
+            # something like this:
+            # 1. get config --> only works for modbus!!
+            # 2. see if units match ?
+
             pass
 
 
     ##############################################################################
-    def init_data_maps(self, device_id, group_id, int_endpt, ext_endpt, fail_state, units):
+    def init_data_maps(self, device_id, group_id, int_endpt, ext_endpt, fail_state, units, topic_index):
         """
         This function traverses the device tree to find the object matching device_id,
         then initializes a data_mapping dictionary entry to be associated with that device
         """
         if self.device_id == device_id:
+            #FIXME - what happens if a name is duplicated (esp between different devices/topics?)
             self.datagroup_dict_list[group_id].data_mapping_dict.update({ext_endpt: int_endpt})
             self.datagroup_dict_list[group_id].map_int_to_ext_endpt.update({int_endpt: ext_endpt})
             self.datagroup_dict_list[group_id].data_dict.update({int_endpt: 0})
             self.datagroup_dict_list[group_id].update_fail_states(int_endpt, fail_state, group_id)
             self.datagroup_dict_list[group_id].units.update({int_endpt: units})
-            self.datagroup_dict.update({ext_endpt: self.datagroup_dict_list[group_id]})
+            self.datagroup_dict_list[group_id].topic_map.update({ext_endpt: topic_index})
+            self.datagroup_dict.update({int_endpt: self.datagroup_dict_list[group_id]})
             return self
         else:
             for cur_device in self.devices:
                 child_device = cur_device.init_data_maps(device_id, group_id, int_endpt, ext_endpt, fail_state,
-                                                         units)
+                                                         units, topic_index)
                 if child_device != None:
                     return child_device
 
@@ -304,28 +317,69 @@ class DERDevice():
         self.update_health_status()
         self.update_mode_status()
 
-##############################################################################
-def reserve_modbus(device, task_id, sitemgr):
-    request_status = "FAILURE"
+    ##############################################################################
+    #@RPC.export
+    def set_point(self, attribute, cmd, sitemgr):
+        """
+        sets an arbitrary point to this device's command space.
+        Reserves modbus, strips out "device from the data path, ...
+        """
+        #FIXME - this should either be a standalone method or it should be part of a "ModbusDevice Class"
+        #FIXME - ID in the RPC call should be the VIP agent identity...
 
-    # FIXME - this should (a) probably time out; (b) have some pause in between attempts; and (c) triage
+        device_prefix = "devices/"
+
+
+        #TODO - make this generic - not tied to mode_ctrl
+        #TODO - error trap to make sure that this value is writeable....
+        device_topic = self.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]
+        if device_topic.startswith(device_prefix) == True:
+            device_path = device_topic[len(device_prefix):]
+            cmd_path = device_path+self.datagroup_dict_list[attribute].map_int_to_ext_endpt[cmd]
+        else:
+            _log.info("Error in DERDevice.set_interactive_mode: device type invalid")
+
+        res = reserve_modbus("set_point", sitemgr, device_path)
+
+        _log.info("set_point: path is " + cmd_path + "; end pt = " + str(cmd) + "; val = " + str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
+
+        ret = sitemgr.vip.rpc.call(
+            "platform.actuator",
+            "set_point",
+            "SiteManager",
+            cmd_path,
+            self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"])
+
+        res = release_modbus("set_point", sitemgr)
+        pass
+
+
+
+##############################################################################
+def reserve_modbus(self, device, task_id, sitemgr, device_path):
+    request_status = "FAILURE"
+    attempt        = 0
+
+    # FIXME - this should (a) have some pause in between attempts; and (c) triage errors
     # what the failure reason is...
-    while (request_status == "FAILURE"):
+    # TODO - double check that topic path should include "devices"
+    while (request_status == "FAILURE") & (attempt<10):
         _log.info("Requesting to reserve modbus, requester: " + device.device_id + "; task " + task_id)
         start = datetime.now().strftime(
             "%Y-%m-%d %H:%M:%S")
-        end = (datetime.now() + timedelta(seconds=2)).strftime(
+        end = (datetime.now() + timedelta(seconds=0.5)).strftime(
             "%Y-%m-%d %H:%M:%S")
 
         res = sitemgr.vip.rpc.call(
             "platform.actuator",
             "request_new_schedule",
             device.device_id, task_id, "HIGH",
-            ["devices/" + sitemgr.path[0], start, end]).get()
+            [device_path, start, end]).get()
 
-    	request_status = res["result"]
-    	if request_status == "FAILURE":
+        request_status = res["result"]
+        if request_status == "FAILURE":
             _log.info("Request failed, reason is " + res["info"])
+            attempt += 1
 
     return res
 
@@ -365,22 +419,24 @@ class DERSite(DERDevice):
         # Open the config file that maps modbus end pts to device data dictionaries
 
         self.extpt_to_device_dict = {}
-
-        for topics in site_info["Topics"]:
-            csv_name = (data_map_dir + self.device_id + "-"+topics["TopicName"]+"-data-map.csv")
-            print(csv_name)
+        cnt = 0
+        self.topics = site_info["Topics"]
+        for topics in self.topics:
+            csv_name = (data_map_dir + self.device_id + topics["TopicName"]+"-data-map.csv")
+            _log.info(csv_name)
 
             try:
                 with open(csv_name, 'rb') as csvfile:
                     data_map = csv.reader(csvfile)
 
                     for row in data_map:
-                        print ("row[0] is " + row[0])
-                        cur_device = self.init_data_maps(row[1], row[2], row[3], row[0], row[4], row[5])
+                        _log.info("row[0] is " + row[0])
+                        cur_device = self.init_data_maps(row[1], row[2], row[3], row[0], row[4], row[5], cnt)
                         self.extpt_to_device_dict.update({row[0]: cur_device})
             except IOError as e:
-                print("data map file "+csv_name+" not found")
+                _log.info("data map file "+csv_name+" not found")
                 pass
+            cnt += 1
 
             for keyval in self.extpt_to_device_dict:
                 #print("Key = " + keyval)
@@ -394,25 +450,41 @@ class DERSite(DERDevice):
 ##############################################################################
 class DERModbusSite(DERSite):
 
+
     ##############################################################################
     #@RPC.export
-    def set_mode(self, cmd, val, sitemgr):
+    def set_interactive_mode(self, sitemgr):
         """
-        calls the mode command "cmd" associated with device
-        this is the most generic command to actualy actuate something.
+        Sets mode to interactive
+        1. changes system op mode to "running"
+        2. changes system ctrl mode to "interactive"
         """
-        res = reserve_modbus(self, "set_mode", sitemgr) 
-        device_path = sitemgr.path[0] + "/"+self.mode_ctrl.map_int_to_ext_endpt[cmd]
-        _log.info("device path is " + device_path + "; cmd = " + str(cmd) + "; val = " + str(val))
-        self.mode_ctrl_cmd.data_dict.update({cmd+"_cmd": val})
-        ret = sitemgr.vip.rpc.call(
-            "platform.actuator",
-            "set_point",
-            "SiteManager",
-            device_path,
-            self.mode_ctrl_cmd.data_dict[cmd + "_cmd"])
-        res = release_modbus(self, "set_mode", sitemgr)
-        pass
+        #TODO - does this need to set op mode -> wait for op mode -> then set sys ctrl mode?
+        #TODO - for now assume they can be written simultaneously.  REVISIT!
+        #TODO - also: when / how does the site go into SITE_IDLE mode?
+
+        # set internal commands to new operating state:
+        self.mode_ctrl_cmd.data_dict.update({"OpModeCtrl_cmd": SITE_RUNNING})
+        self.mode_ctrl_cmd.data_dict.update({"SysModeCtrl_cmd": INTERACTIVE})
+
+        set_point("ModeControl", "OpModeCtrl", sitemgr)
+        set_point("ModeControl", "SysModeCtrl", sitemgr)
+
+
+    ##############################################################################
+    def set_auto_mode(self, sitemgr):
+        """
+        Sets mode to interactive
+        2. changes system ctrl mode to "interactive"
+        3. verifies that change has occurred
+        """
+        # TODO - does this need to set op mode -> wait for op mode -> then set sys ctrl mode?
+        # TODO - for now assume they can be written simultaneously.  REVISIT!
+        # TODO - also: when / how does the site go into SITE_IDLE mode?
+
+        # set internal commands to new operating state:
+        self.mode_ctrl_cmd.data_dict.update({"SysModeCtrl_cmd", AUTO})
+        self.set_point("ModeControl", "SysModeCtrl", sitemgr)
 
     ##############################################################################
     #@core.periodic(10)
@@ -431,40 +503,31 @@ class DERModbusSite(DERSite):
         #    raise heartbeat_timeout_error --> should trigger mode changes, etc in the executive
         #
 
+        #todo -
+
         #if self.health_status.data_dict["heartbeat_counter"] - self.prev_heartbeat
 
         #self.prev_heartbeat = self.health_status.data_dict["heartbeat_counter"]
 
         #self.health_status.data_dict["total_heartbeat_errors"] = \
         #    self.health_status.data_dict["total_heartbeat_errors"]+1
-
-
         pass
 
     ##############################################################################
-    #@core.periodic(10)
+    #@core.periodic(PMC_WATCHDOG_PD)
     def send_watchdog(self, sitemgr):
         """
         increments the watchdog counter
         :return:
         """
-        # lock modbus
-        # increment internal watchdog counter
-        # write modbus command
-        # unlock modbus
+        # TODO - review/test whether this should be incremented from the Watchdog_cmd or the Watchdog
+        # TODO - end pt
 
-        res = reserve_modbus(self, "set_mode", sitemgr)
-        #self.mode_ctrl.cmds("<>") = self.mode_ctrl("<>") + 1
-        #device_path = sitemgr.path[0] + "/"+self.mode_ctrl.map_int_to_ext_endpt[cmd]
-        #_log.info("device path is " + device_path + "; cmd = " + str(cmd) + "; val = " + str(val))
-        #ret = sitemgr.vip.rpc.call(
-        #    "platform.actuator",
-        #    "set_point",
-        #    "SiteManager",
-        #    device_path,
-        #    val)
-        res = release_modbus(self, "set_mode", sitemgr)
-
+        #TODO - figure out how to do an update / initialize correctly...
+        self.mode_ctrl_cmd.data_dict["Watchdog_cmd"] = self.mode_ctrl_cmd.data_dict["Watchdog"]+1
+        if self.mode_ctrl_cmd.data_dict["Watchdog_cmd"] == PMC_WATCHDOG_RESET:
+            self.mode_ctrl_cmd.data_dict["Watchdog_cmd"] = 0
+        self.set_point("ModeControl", "Watchdog", sitemgr)
         pass
 
 ##############################################################################
@@ -529,21 +592,11 @@ class DERCtrlNode(DERDevice):
         # 6. <optional> read output
 
         # This method has a number of issues -
+        #TODO: Limit check
+        self.pwr_ctrl_cmd.data_dict.update({"pwr_kW_cmd": val})
+        self.set_point("RealPwrCtrl", "pwr_kW", sitemgr)
 
-        res = reserve_modbus(self, "set_power", sitemgr)
-        device_path = sitemgr.path[0] + "/"+self.pwr_ctrl.map_int_to_ext_endpt[cmd]
-        self.pwr_ctrl_cmd.update({cmd+"_cmd": val})
-        _log.info("device path is " + device_path + "; cmd = " + str(cmd) + "; val = " + str(val))
-        ret = sitemgr.vip.rpc.call(
-            "platform.actuator",
-            "set_point",
-            "SiteManager",
-            device_path,
-            self.pwr_ctrl_cmd[cmd + "_cmd"])
-        res = release_modbus(self, "set_power", sitemgr)
-        pass
-
-
+        # where does the actual pwr ctrl live???
 
         pass
 
