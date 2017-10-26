@@ -170,7 +170,8 @@ class ExecutiveAgent(Agent):
         
         #FIXME - this should be set up with a configurable path....        
         sys.path.append("/home/matt/sundial/SiteManager")
-        SiteCfgFile = "/home/matt/sundial/SiteManager/SiteConfiguration.json"
+        #SiteCfgFile = "/home/matt/sundial/SiteManager/ShirleySouthSiteConfiguration.json"
+        SiteCfgFile = "/home/matt/sundial/SiteManager/ShirleySouthSiteConfiguration.json"
         self.SiteCfgList = json.load(open(SiteCfgFile, 'r'))
 
         SundialCfgFile = "/home/matt/sundial/SiteManager/SundialSystemConfiguration.json"
@@ -247,7 +248,7 @@ class ExecutiveAgent(Agent):
             # the following sleep message is supposed to pause operation for long enough for site manager
             # to finish its initialization, but it does not work.
 
-            #gevent.sleep(0.5)  # try without this?
+            gevent.sleep(0.5)  # try without this?
 
             # The idea of the below is to get a handle to the agent that we've just created
             # Not done in a very efficient way though - get a list of agents and find one that
@@ -367,7 +368,7 @@ class ExecutiveAgent(Agent):
         """
         # TODO: think about whether this should be one method in SiteManager (not one for auto and one for interactive)
         for site in self.sitemgr_list:
-            self.vip.rpc.call(site, "set_interactive_mode").get(timeout=5)
+            self.vip.rpc.call(site["identity"], "set_interactive_mode").get(timeout=5)
             # check for success ...
 
 
@@ -378,7 +379,7 @@ class ExecutiveAgent(Agent):
         :return:
         """
         for site in self.sitemgr_list:
-            self.vip.rpc.call(site, "set_auto_mode").get(timeout=5)
+            self.vip.rpc.call(site["identity"], "set_auto_mode").get(timeout=5)
 
 
     ##############################################################################
@@ -402,7 +403,7 @@ class ExecutiveAgent(Agent):
 
         if self.OperatingMode_set != self.OperatingMode:
             # indicates that a mode change has been requested
-            _log.info("Changing operating mode to: " + self.OperatingMode_set)
+            _log.info("Changing operating mode to: " + self.OperatingModes[self.OperatingMode_set])
 
             self.OperatingMode = self.OperatingMode_set
 
@@ -415,12 +416,12 @@ class ExecutiveAgent(Agent):
 
             if self.OperatingMode == IDLE:
                 # change sites to AUTO mode
-                self.enable_site_interactive_mode(self)
+                self.disable_site_interactive_mode()
                 # shut down optimizer
                 pass
             elif self.OperatingMode == APPLICATION_CONTROL:
                 # change sites to interactive mode
-                self.enable_site_interactive_mode(self)
+                self.enable_site_interactive_mode()
                 # instantiate and build a new sundial resource manager when we switch to app ctrl mode
 
                 # (re)start optimizer - would call "build_sundial"
@@ -429,7 +430,7 @@ class ExecutiveAgent(Agent):
                 pass
             elif self.OperatingMode == USER_CONTROL:
                 # change sites to interactive mode
-                self.enable_site_interactive_mode(self)
+                self.enable_site_interactive_mode()
                 # shut down optimizer
                 pass
 
@@ -448,18 +449,19 @@ class ExecutiveAgent(Agent):
 
 
     @RPC.export
-    def set_mode(self, mode_val):
+    def set_mode(self, args):
         """
         This method writes an end point to a specified DER Device path
         """
         fname = "/home/matt/sundial/Executive/cmdfile.txt"
-        cmd_agentid = cmd["AgentID"]
-        cmd_method = cmd["FcnName"]
-
+        #cmd_agentid = cmd["AgentID"]
+        #cmd_method = cmd["FcnName"]
+        mode_val = args[0]
         self.OperatingMode_set = int(mode_val) #self.OperatingModes[self.OperatingModeInd]
 
         with open(fname, 'a') as datafile:
-            datafile.write(str(cmd_method)+" "+str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
+            datafile.write(str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
+            _log.info("wrote: "+str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
 
 
     @Core.receiver('onstop')
