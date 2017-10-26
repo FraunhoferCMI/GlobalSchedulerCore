@@ -141,7 +141,7 @@ class UIAgent(Agent):
             self.vip.health.set_status(STATUS_GOOD, self._message)
 
 
-    @Core.periodic(30)
+    @Core.periodic(10)
     def set_point(self):
         """
         This is a method that periodically polls a designated file for a command to set a point for a
@@ -157,18 +157,22 @@ class UIAgent(Agent):
         :return:
         """
 
-        fname = "UI_cmd.json"
         cwd = os.getcwd()
         cwd = cwd+"/../../../../"
         _log.info("Current directory is: "+cwd)
-        fname = cwd+"system_cmds.csv" #"/home/matt/sundial/UI/system_cmds.csv"
+        fname = cwd+"UI_cmd.json" #"/home/matt/sundial/UI/system_cmds.csv"
         try:
+            #ret = self.vip.rpc.call("executiveagent-1.0_1", "set_mode", 2).get()
 
             with open(fname, 'rb') as jsonfile:
                 cmds = json.load(jsonfile)
-
-                for cur_cmd in cmds:
-                    self.vip.rpc.call(cur_cmd["AgentID"], cur_cmd["FcnName"], cur_cmd)
+            
+            for cur_cmd in cmds:
+               _log.info("New incoming command: "+cur_cmd["AgentID"]+"; function - "+cur_cmd["FcnName"])
+               _log.info("Args = "+str(cur_cmd["args"][0]))
+               # Not sure why this is required, but vip.rpc.call required me to recast cur_cmd["AgentID"]
+               # as a string
+               self.vip.rpc.call(str(cur_cmd["AgentID"]), cur_cmd["FcnName"], cur_cmd["args"])               
 
             try:
                 os.remove(fname) # delete after commands have been issued
