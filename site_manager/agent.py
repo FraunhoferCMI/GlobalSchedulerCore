@@ -148,7 +148,8 @@ class SiteManagerAgent(Agent):
                                 headers={}, 
                                 message=[self.site.device_id]).get(timeout=10.0)        
    
-
+        #ret = self.vip.rpc.call("executiveagent-1.0_1", "set_mode", 1).get()
+        #_log.info(str(dir(ret)))
 
     ##############################################################################
     def configure(self,config_name, action, contents):
@@ -206,7 +207,10 @@ class SiteManagerAgent(Agent):
         except:
             # indicates that agent is still initializing - init_sites has not yet been called.
             # There is possibly a better way to handle this issue
-            pass
+            #FIXME - this should probably look for specific error to trap, right now this is
+            # a catch-all....
+            _log.info("Skipped populate end_pts!!!")
+        pass
 
         # FIXME: This is legacy code, should be reintegrated.  Not currently doing anything
         # with timestamps.
@@ -223,7 +227,7 @@ class SiteManagerAgent(Agent):
         # self.summarize(out,headers)
 
     ##############################################################################
-    @Core.periodic(20)
+    #@Core.periodic(20)
     def test_write(self):
         """
         example method to demonstrate a write operation.  Just incrementing periodically increments a counter
@@ -238,12 +242,12 @@ class SiteManagerAgent(Agent):
 
     ##############################################################################
     @RPC.export
-    def set_interactive_mode(self, new_mode):
+    def set_interactive_mode(self):
         """
         changes site's mode from "AUTO" to "INTERACTIVE"
         """
         _log.info("updating op mode!!")
-        val = self.site.set_mode(INTERACTIVE)
+        val = self.site.set_interactive_mode(self)
 
     ##############################################################################
     @RPC.export
@@ -252,7 +256,7 @@ class SiteManagerAgent(Agent):
         changes site's mode from "AUTO" to "INTERACTIVE"
         """
         _log.info("updating op mode!!")
-        val = self.site.set_mode(AUTO)
+        val = self.site.set_auto_mode(self)
 
 
 
