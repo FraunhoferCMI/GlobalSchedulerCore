@@ -124,8 +124,8 @@ class DERDevice():
 
             # initialize certain known key word values that are inherited between parent/children devices
             if attribute_name == "OpStatus":
-                self.key_update_list = ["Pwr_kW", "FullChargeEnergy_kWh", "Energy_kWh", "PwrAvailableIn_kW",
-                                        "PwrAvailableOut_kW"]
+                self.key_update_list = ["Pwr_kW", "FullChargeEnergy_kWh", "Energy_kWh", "MaxDischargePwr_kW",
+                                        "MaxChargePwr_kW"]
                 for key in self.key_update_list:
                     self.data_dict[key] = 0
             if attribute_name == "HealthStatus":
@@ -167,8 +167,8 @@ class DERDevice():
             self.datagroup_dict_list[group_id].data_dict.update({int_endpt: 0})
             self.datagroup_dict_list[group_id].update_fail_states(int_endpt, fail_state, group_id)
             self.datagroup_dict_list[group_id].units.update({int_endpt: units})
-            self.datagroup_dict_list[group_id].topic_map.update({ext_endpt: topic_index})
-            self.datagroup_dict.update({int_endpt: self.datagroup_dict_list[group_id]})
+            self.datagroup_dict_list[group_id].topic_map.update({int_endpt: topic_index})
+            self.datagroup_dict.update({ext_endpt: self.datagroup_dict_list[group_id]})
             return self
         else:
             for cur_device in self.devices:
@@ -235,9 +235,9 @@ class DERDevice():
             self.op_status.data_dict["Pwr_kW"] = int(self.op_status.data_dict["Pwr_raw"]) * self.POWERS[
                 int(self.op_status.data_dict["Pwr_SF"])]
 
-        # print("device id is: " + self.device_id)
-        # for k, v in self.op_status.data_dict.items():
-        #    print k, v
+        _log.info("device id is: " + self.device_id)
+        for k, v in self.op_status.data_dict.items():
+            _log.info(k+": "+str(v))
         pass
 
     ##############################################################################
@@ -253,12 +253,16 @@ class DERDevice():
         compare to a "good state", and come up with a binary 0/1 status summary
         """
 
+	# for each child device, set a key called "<childdevicename_status>" to the value of the child 
+	# device's "status" entry.  Set the "fail state" for that key = to 0. (i.e., 0 indicates a fail mode)
         for cur_device in self.devices:
             cur_device.update_health_status()
             self.health_status.data_dict[cur_device.device_id + "_status"] = cur_device.health_status.data_dict[
                 "status"]
             self.health_status.fail_state[cur_device.device_id + "_status"] = 0
 
+	# Now the status of each child device is summarized in an "xxx_status" variable
+	# go through all of the current device's status keys to determine its summary status 
         self.health_status.data_dict["status"] = 1
         for key in self.health_status.fail_state:
             val = 1
@@ -271,7 +275,7 @@ class DERDevice():
             self.health_status.data_dict["status"] = self.health_status.data_dict["status"] and val
             # print(key+": "+str(self.health_status.data_dict[key])+"val = "+str(val))
 
-        # print("Device ID =" + self.device_id + "Health Status is: " + str(self.health_status.data_dict["status"]))
+        _log.info("Device ID =" + self.device_id + "Health Status is: " + str(self.health_status.data_dict["status"]))
 
         pass
 
@@ -298,11 +302,11 @@ class DERDevice():
 
         for k in incoming_msg:
             try:
-                cur_device = self.extpt_to_device_dict[k].device_id
-                cur_attribute = self.extpt_to_device_dict[k].datagroup_dict[k]
-                cur_attribute_name = cur_attribute.data_mapping_dict["GrpName"]
-                keyval = cur_attribute.data_mapping_dict[k]
-                cur_attribute.data_dict[keyval] = incoming_msg[k]
+		cur_device = self.extpt_to_device_dict[k].device_id
+		cur_attribute = self.extpt_to_device_dict[k].datagroup_dict[k]
+		cur_attribute_name = cur_attribute.data_mapping_dict["GrpName"]
+		keyval = cur_attribute.data_mapping_dict[k]
+		cur_attribute.data_dict[keyval] = incoming_msg[k]
 
                 # TODO  correct for units!!!
                 # if cur_attribute.units_dict[k] != incoming_msg[k] units then call convert_units....
@@ -310,7 +314,7 @@ class DERDevice():
                 _log.info(cur_device + "." + cur_attribute_name + "." + keyval + "= " + str(
                     cur_attribute.data_dict[keyval]))
             except KeyError as e:
-                # print("Warning: Key "+k+" not found")
+                _log.info("Warning: Key "+k+" not found")
                 pass
 
         self.update_op_status()
@@ -327,19 +331,27 @@ class DERDevice():
         #FIXME - this should either be a standalone method or it should be part of a "ModbusDevice Class"
         #FIXME - ID in the RPC call should be the VIP agent identity...
 
-        device_prefix = "devices/"
-
+        device_prefix = "/devices/"
+	task_id       = "set_point"
 
         #TODO - make this generic - not tied to mode_ctrl
         #TODO - error trap to make sure that this value is writeable....
-        device_topic = self.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]
+	
+	_log.info("Set Point: Cmd - "+str(cmd)+"; attribute - "+str(attribute))
+	_log.info("; topic # = " + str(self.datagroup_dict_list[attribute].topic_map[cmd]))
+	_log.info("topic = "+self.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"])
+
+
+        device_topic = self.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"]
         if device_topic.startswith(device_prefix) == True:
             device_path = device_topic[len(device_prefix):]
-            cmd_path = device_path+self.datagroup_dict_list[attribute].map_int_to_ext_endpt[cmd]
+	    _log.info("Device path: "+device_path)
+            cmd_path = device_path+"/"+self.datagroup_dict_list[attribute].map_int_to_ext_endpt[cmd]
+	    _log.info("Cmd Path: "+cmd_path)
         else:
             _log.info("Error in DERDevice.set_interactive_mode: device type invalid")
 
-        res = reserve_modbus("set_point", sitemgr, device_path)
+        res = reserve_modbus(self, task_id, sitemgr, device_path)
 
         _log.info("set_point: path is " + cmd_path + "; end pt = " + str(cmd) + "; val = " + str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
 
@@ -350,26 +362,27 @@ class DERDevice():
             cmd_path,
             self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"])
 
-        res = release_modbus("set_point", sitemgr)
+        res = release_modbus(self, task_id, sitemgr)
         pass
 
 
 
 ##############################################################################
-def reserve_modbus(self, device, task_id, sitemgr, device_path):
-    request_status = "FAILURE"
-    attempt        = 0
+def reserve_modbus(device, task_id, sitemgr, device_path):
+    #request_status = "FAILURE"
+    #attempt        = 0
 
     # FIXME - this should (a) have some pause in between attempts; and (c) triage errors
     # what the failure reason is...
     # TODO - double check that topic path should include "devices"
-    while (request_status == "FAILURE") & (attempt<10):
-        _log.info("Requesting to reserve modbus, requester: " + device.device_id + "; task " + task_id)
-        start = datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S")
-        end = (datetime.now() + timedelta(seconds=0.5)).strftime(
-            "%Y-%m-%d %H:%M:%S")
+    #while (request_status == "FAILURE") & (attempt<10):
+    _log.info("Requesting to reserve modbus, requester: " + device.device_id + "; task " + task_id)
+    start = datetime.now().strftime(
+	    "%Y-%m-%d %H:%M:%S")
+    end = (datetime.now() + timedelta(seconds=0.5)).strftime(
+	    "%Y-%m-%d %H:%M:%S")
 
+    try:
         res = sitemgr.vip.rpc.call(
             "platform.actuator",
             "request_new_schedule",
@@ -381,18 +394,29 @@ def reserve_modbus(self, device, task_id, sitemgr, device_path):
             _log.info("Request failed, reason is " + res["info"])
             attempt += 1
 
+    except:
+	#FIXME - error handling not done correctly!!!
+        #_log.info("Request failed, reason is " + res["info"])
+	_log.info("Request failed - agent not open")
+	res = "FAILURE"
     return res
 
 ##############################################################################
 def release_modbus(device, task_id, sitemgr):
-    res = sitemgr.vip.rpc.call(
-        "platform.actuator",
-        "request_cancel_schedule",
-        device.device_id, task_id).get()
+    
+    try:
+        res = sitemgr.vip.rpc.call(
+            "platform.actuator",
+            "request_cancel_schedule",
+            device.device_id, task_id).get()
 
-    if res["result"] == "FAILURE":
-        _log.info("Request failed, reason is " + res["info"])
-    return res
+    	if res["result"] == "FAILURE":
+            _log.info("Request failed, reason is " + res["info"])
+        return res
+    except:
+        #FIXME: error trapping not done correctly
+        res = "FAILURE'"
+        return res
 
 
 ##############################################################################
@@ -422,7 +446,7 @@ class DERSite(DERDevice):
         cnt = 0
         self.topics = site_info["Topics"]
         for topics in self.topics:
-            csv_name = (data_map_dir + self.device_id + topics["TopicName"]+"-data-map.csv")
+            csv_name = (data_map_dir + self.device_id +"-"+ topics["TopicName"]+"-data-map.csv")
             _log.info(csv_name)
 
             try:
@@ -467,8 +491,8 @@ class DERModbusSite(DERSite):
         self.mode_ctrl_cmd.data_dict.update({"OpModeCtrl_cmd": SITE_RUNNING})
         self.mode_ctrl_cmd.data_dict.update({"SysModeCtrl_cmd": INTERACTIVE})
 
-        set_point("ModeControl", "OpModeCtrl", sitemgr)
-        set_point("ModeControl", "SysModeCtrl", sitemgr)
+        self.set_point("ModeControl", "OpModeCtrl", sitemgr)
+        self.set_point("ModeControl", "SysModeCtrl", sitemgr)
 
 
     ##############################################################################
@@ -483,7 +507,7 @@ class DERModbusSite(DERSite):
         # TODO - also: when / how does the site go into SITE_IDLE mode?
 
         # set internal commands to new operating state:
-        self.mode_ctrl_cmd.data_dict.update({"SysModeCtrl_cmd", AUTO})
+        self.mode_ctrl_cmd.data_dict.update({"SysModeCtrl_cmd": AUTO})
         self.set_point("ModeControl", "SysModeCtrl", sitemgr)
 
     ##############################################################################
@@ -548,9 +572,9 @@ class DERCtrlNode(DERDevice):
         self.mode_status.data_dict["OpModeStatus"] = self.parent_device.mode_status.data_dict["OpModeStatus"]
         self.mode_status.data_dict["SysModeStatus"] = self.parent_device.mode_status.data_dict["SysModeStatus"]
 
-        print("device id is: " + self.device_id)
+        _log.info("device id is: " + self.device_id)
         for k, v in self.mode_status.data_dict.items():
-            print k, v
+            _log.info(k+": "+str(v))
         pass
 
     ##############################################################################
