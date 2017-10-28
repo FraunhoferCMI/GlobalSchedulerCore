@@ -393,7 +393,7 @@ class ExecutiveAgent(Agent):
             for k,v in site.SiteErrors.items():
                 if site.SiteErrors[k] == 1:
                     self.OperatingMode_set = IDLE
-                    _log.info("Warning: Error detected - " k+".  Transition to IDLE Mode")
+                    _log.info("Warning: Error detected - " +k+".  Transition to IDLE Mode")
 
 
 
