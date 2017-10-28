@@ -382,6 +382,21 @@ class ExecutiveAgent(Agent):
 
 
     ##############################################################################
+    def check_site_statuses(self):
+        """
+        Updates the site status for each active site
+        :return:
+        """
+        for site in self.sitemgr_list:
+            self.vip.rpc.call(site, "update_site_status").get(timeout=5)
+            for k,v in site.SiteErrors.items():
+                if site.SiteErrors[k] == 1:
+                    self.OperatingMode_set = IDLE
+                    _log.info("Warning: Error detected - " k+".  Transition to IDLE Mode")
+
+
+
+    ##############################################################################
     @Core.periodic(GS_SCHEDULE)
     def run_optimizer(self):
         """
@@ -399,6 +414,8 @@ class ExecutiveAgent(Agent):
         Periodically polls system mode and health indicators and transitions system state accordingly
         :return:
         """
+
+        check_site_statuses()
 
         if self.OperatingMode_set != self.OperatingMode:
             # indicates that a mode change has been requested
