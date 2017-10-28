@@ -253,16 +253,16 @@ class DERDevice():
         compare to a "good state", and come up with a binary 0/1 status summary
         """
 
-	# for each child device, set a key called "<childdevicename_status>" to the value of the child 
-	# device's "status" entry.  Set the "fail state" for that key = to 0. (i.e., 0 indicates a fail mode)
+        # for each child device, set a key called "<childdevicename_status>" to the value of the child
+	    # device's "status" entry.  Set the "fail state" for that key = to 0. (i.e., 0 indicates a fail mode)
         for cur_device in self.devices:
             cur_device.update_health_status()
             self.health_status.data_dict[cur_device.device_id + "_status"] = cur_device.health_status.data_dict[
                 "status"]
             self.health_status.fail_state[cur_device.device_id + "_status"] = 0
 
-	# Now the status of each child device is summarized in an "xxx_status" variable
-	# go through all of the current device's status keys to determine its summary status 
+        # Now the status of each child device is summarized in an "xxx_status" variable
+	    # go through all of the current device's status keys to determine its summary status
         self.health_status.data_dict["status"] = 1
         for key in self.health_status.fail_state:
             val = 1
@@ -293,20 +293,19 @@ class DERDevice():
 
         pass
 
+
     ##############################################################################
     def populate_endpts(self, incoming_msg):
         """
         This populates DERDevice variables based on the topic list
         """
-        self.lock = 1  # indicates that values are updating / need to wait
-
         for k in incoming_msg:
             try:
-		cur_device = self.extpt_to_device_dict[k].device_id
-		cur_attribute = self.extpt_to_device_dict[k].datagroup_dict[k]
-		cur_attribute_name = cur_attribute.data_mapping_dict["GrpName"]
-		keyval = cur_attribute.data_mapping_dict[k]
-		cur_attribute.data_dict[keyval] = incoming_msg[k]
+                cur_device = self.extpt_to_device_dict[k].device_id
+                cur_attribute = self.extpt_to_device_dict[k].datagroup_dict[k]
+                cur_attribute_name = cur_attribute.data_mapping_dict["GrpName"]
+                keyval = cur_attribute.data_mapping_dict[k]
+                cur_attribute.data_dict[keyval] = incoming_msg[k]
 
                 # TODO  correct for units!!!
                 # if cur_attribute.units_dict[k] != incoming_msg[k] units then call convert_units....
@@ -317,9 +316,11 @@ class DERDevice():
                 _log.info("Warning: Key "+k+" not found")
                 pass
 
-        self.update_op_status()
-        self.update_health_status()
-        self.update_mode_status()
+        self.dirtyFlag = 0  # indicates that end points have finished updating.
+
+        #self.update_op_status()
+        #self.update_health_status()
+        #self.update_mode_status()
 
     ##############################################################################
     #@RPC.export
@@ -332,22 +333,24 @@ class DERDevice():
         #FIXME - ID in the RPC call should be the VIP agent identity...
 
         device_prefix = "/devices/"
-	task_id       = "set_point"
+        task_id       = "set_point"
 
         #TODO - make this generic - not tied to mode_ctrl
         #TODO - error trap to make sure that this value is writeable....
-	
-	_log.info("Set Point: Cmd - "+str(cmd)+"; attribute - "+str(attribute))
-	_log.info("; topic # = " + str(self.datagroup_dict_list[attribute].topic_map[cmd]))
-	_log.info("topic = "+self.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"])
+        _log.info("Set Point: Cmd - "+str(cmd)+"; attribute - "+str(attribute))
+        _log.info("; topic # = " + str(self.datagroup_dict_list[attribute].topic_map[cmd]))
+        _log.info("topic = "+self.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"])
 
+        # indicates that a command has been sent to the target device, but target device has not
+        # been re-read with updated values since the command was issued.
+        self.dirtyFlag = 1
 
         device_topic = self.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"]
         if device_topic.startswith(device_prefix) == True:
             device_path = device_topic[len(device_prefix):]
-	    _log.info("Device path: "+device_path)
+            _log.info("Device path: "+device_path)
             cmd_path = device_path+"/"+self.datagroup_dict_list[attribute].map_int_to_ext_endpt[cmd]
-	    _log.info("Cmd Path: "+cmd_path)
+            _log.info("Cmd Path: "+cmd_path)
         else:
             _log.info("Error in DERDevice.set_interactive_mode: device type invalid")
 
@@ -363,9 +366,33 @@ class DERDevice():
             self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"])
 
         res = release_modbus(self, task_id, sitemgr)
-        pass
 
+        self.pending_cmd.append([{"Attribute": attribute}, {"Cmd": cmd}])
+        #return pending_cmd
 
+    ##############################################################################
+    def check_command(self):
+        """
+        checks that internal ("xxx_cmd") registers are the same as the corresponding
+        end point register on the target device
+        This is called after the target device has been scraped
+        """
+        # FIXME: this is not exactly right - if a third party controller writes a command, it
+        # FIXME: will not be reflected in the internal _cmd register
+        # an alternate approach would be to just check this for cmds that have been issued.
+
+        cmd_failure = 0
+        for cmd in self.pending_cmd:
+            target_val = self.datagroup_dict_list[cmd["Attribute"]].data_dict[cmd]
+            commanded_val = self.datagroup_dict_list[cmd["Attribute"]].data_dict[cmd+"_cmd"]
+
+            if  target_val != commanded_val:
+                cmd_failure += 1
+
+        for device in self.devices:
+            cmd_failure += device.check_command()
+
+        return cmd_failure
 
 ##############################################################################
 def reserve_modbus(device, task_id, sitemgr, device_path):
@@ -469,6 +496,34 @@ class DERSite(DERDevice):
     ##############################################################################
     def set_mode(self, cmd, val, sitemgr):
         pass
+
+    ##############################################################################
+    def check_mode(self):
+        """
+        checks that the mode set on the target device is synchronized with the target
+        device's internal state.
+        For example -- if target device has "XXXModeCtrl = 1", then the device's
+        "XXXModeStatus" should also = 1
+        This is called after the target device has been scraped
+        """
+
+        # FIXME: this routine should be generalized to check any arbitrary control
+        # FIXME: register against its associated status register
+        # FIXME: I think the way to do this would be to identify registers in the data
+        # FIXME: map as control registers, and then to identify an associated status register
+        # FIXME: so __init__ would build a table mapping control->status registers, and this
+        # FIXME: routine would make sure that they match
+
+        mode_failure = 0
+
+        if self.mode_ctrl_cmd.data_dict["OpModeCtrl"] != self.mode_ctrl_cmd.data_dict["OpModeStatus"]:
+            mode_failure += 1
+        if self.mode_ctrl_cmd.data_dict["SysModeCtrl"] != self.mode_ctrl_cmd.data_dict["SysModeStatus"]:
+            mode_failure += 1
+
+        return mode_failure
+
+
 
 
 ##############################################################################

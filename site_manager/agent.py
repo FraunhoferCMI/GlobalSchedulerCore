@@ -183,7 +183,6 @@ class SiteManagerAgent(Agent):
         if self._heartbeat_period != 0:
             self.vip.heartbeat.start_with_period(self._heartbeat_period)
             self.vip.health.set_status(STATUS_GOOD, self._message)
-        _log.info("HI Cameron!!!")
 
     ##############################################################################
     #@PubSub.subscribe('pubsub', 'devices/Shirley-MA/South/PMC/all')
@@ -224,7 +223,103 @@ class SiteManagerAgent(Agent):
         out = self.cache.pop(TimeStamp)
         print(str(TimeStamp)+ " " + str(out.items))
 
+        self.last_scrape_time = TimeStamp
+
+
         # self.summarize(out,headers)
+
+    ##############################################################################
+    @RPC.export
+    def update_site_status(self):
+        """
+        Used to poll the status of the site
+        Detects errors that impact the validity of data being monitored from the site and recalculates values
+        Periodically called by Executive
+
+        :return: SiteError - dictionary of errors associated with the site:
+        1. DeviceError: Issues with downstream DERDevices are captured within the "health_status" dictionary associated
+        with each DERDevice.  site.update_health_status() aggregates this information.  if health_status["status"] = 0,
+        it indicates an exception occurred with a downstream device
+
+        2. ReadError: Detected by checking that the time interval since the last time SiteManager received an
+        incoming pub/sub message on the IEB from the site communication agent is < the configured timeout period
+
+        3. WriteError: Indicates that a command was written to the site, but does not appear to have been received.
+
+        4. CmdError: Indicates that the site has not responded as expected to a command that it has received.
+
+        5. HeartbeatError: Indicates that the site has not updated its heartbeat counter within the expected timeout
+        period
+
+        6. CmdPending: Indicates that the site has not been scraped since the last command was sent.
+
+        """
+
+        # 1. when was the last scrape?
+        # 2. do _cmd registers = base registers?
+        # 3. do base registers = base status registers?
+
+        ReadError      = 0
+        CmdError       = 0
+        WriteError     = 0
+        DeviceError    = 0
+        HeartbeatError = 0
+        CmdPending     = 0
+
+        if self.site.dirtyFlag == 0:
+            # indicates that site has been scraped since the last command was posted.
+            WriteError = self.site.check_command()
+
+            self.site.update_op_status()
+            self.site.update_health_status()
+            self.site.update_mode_status()
+
+            if self.site.health_status.data_dict["status"] == 0:
+                DeviceError = 1
+
+            CmdError = self.site.check_mode()
+
+        else:
+            # the site has not been scraped since the last command was posted.
+            # Assume data from the site is suspect, and set "CmdPending" to 1
+            CmdPending = 1
+            pass
+
+
+
+        # Now check if the site is communicating with the site manager.
+        # we check this by seeing if the time interval since the last scrape is > the
+        # configured scrape timeout period.  (something like 2x the scrape interval).
+
+        # FIXME - need to do this for each topic -
+
+        TimeStamp = datetime.strptime(
+            headers["TimeStamp"][:19],
+            "%Y-%m-%dT%H:%M:%S"
+        )
+        _log.info("Current Time = " + TimeStamp + "; Last Scrape = self_last_scrape_time")
+
+        deltaT = datetime.timedelta(TimeStamp).total_seconds() - \
+                 datetime.timedelta(self.last_scrape_time).total_seconds()
+
+        _log.into("Delta T = "+deltaT+"; SCRAPE_TIMEOUT = "+ SCRAPE_TIMEOUT)
+
+
+        if deltaT > SCRAPE_TIMEOUT:
+            ReadError = 1
+
+
+
+        self.SiteErrors =  [{"ReadError": ReadError},
+                           {"WriteError": WriteError},
+                           {"DeviceError": DeviceError},
+                           {"CmdError": CmdError},
+                           {"HeartbeatError": HeartbeatError},
+                           {"CmdPending": CmdPending}]
+
+        for k,v in SiteErrors.items():
+            _log.info(k+": "+v)
+
 
     ##############################################################################
     #@Core.periodic(20)
