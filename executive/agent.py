@@ -389,10 +389,10 @@ class ExecutiveAgent(Agent):
         :return:
         """
         for site in self.sitemgr_list:
-            self.vip.rpc.call(site, "update_site_status").get(timeout=5)
-            for k,v in site.SiteErrors.items():
-                if site.SiteErrors[k] == 1:
-                    self.OperatingMode_set = IDLE
+            site_errors = self.vip.rpc.call(site["identity"], "update_site_status").get(timeout=5)
+            for k,v in site_errors.items():
+                if site_errors[k] != 0:
+                    #self.OperatingMode_set = IDLE
                     _log.info("Warning: Error detected - " +k+".  Transition to IDLE Mode")
 
 
@@ -416,7 +416,7 @@ class ExecutiveAgent(Agent):
         :return:
         """
 
-        check_site_statuses()
+        self.check_site_statuses()
 
         if self.OperatingMode_set != self.OperatingMode:
             # indicates that a mode change has been requested
