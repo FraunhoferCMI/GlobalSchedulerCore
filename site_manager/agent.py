@@ -74,7 +74,7 @@ from volttron.platform.agent.known_identities import (
     VOLTTRON_CENTRAL, VOLTTRON_CENTRAL_PLATFORM, CONTROL, CONFIGURATION_STORE)
 
 from . import settings
-from gs_identities import (INTERACTIVE, AUTO, SCRAPE_TIMEOUT)
+from gs_identities import (INTERACTIVE, AUTO, SCRAPE_TIMEOUT, ENABLED, DISABLED, PMC_WATCHDOG_PD)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -280,8 +280,10 @@ class SiteManagerAgent(Agent):
         CmdPending     = 0
 
         if self.site.dirtyFlag == 0:
+            # FIXME: needs to be a different flag for each topic <?>
             # indicates that site has been scraped since the last command was posted.
-            WriteError = self.site.check_command()
+
+            #WriteError = self.site.check_command()
 
             self.site.update_op_status()
             self.site.update_health_status()
@@ -291,6 +293,30 @@ class SiteManagerAgent(Agent):
                 DeviceError = 1
 
             CmdError = self.site.check_mode()
+
+
+            if (self.mode != self.mode_ctrl.data_dict["OpModeCtrl"]) or \
+                (self.mode != self.mode_ctrl.data_dict["SysModeCtrl"]):
+                # Indicates that the site is in a different mode than the SiteMgr thinks
+                # it should be.
+
+                # check reason - possible reasons include:
+                # (1) changed by non-GS 3rd party.  (Not an error, but needs to be communicated to Executive
+                # (2) GS failed to send
+                # (3) Site failed to receive
+                #TODO - need to check status code, etc...
+                #if self.write_error_count == 0:
+                # Try to resend.
+                #    self.write_error_count += 1
+                #else:
+                    # Has previously failed, assume that there is a problem
+                    # try to resend
+
+                # Try to resend.
+                self.set_SiteManager_mode(self.mode)
+                WriteError = 1 #self.site.check_command()
+
+                pass
 
         else:
             # the site has not been scraped since the last command was posted.
@@ -358,6 +384,7 @@ class SiteManagerAgent(Agent):
         changes site's mode from "AUTO" to "INTERACTIVE"
         """
         _log.info("updating op mode!!")
+        self.mode = INTERACTIVE
         val = self.site.set_interactive_mode(self)
 
     ##############################################################################
@@ -367,47 +394,73 @@ class SiteManagerAgent(Agent):
         changes site's mode from "AUTO" to "INTERACTIVE"
         """
         _log.info("updating op mode!!")
+        self.mode = AUTO
         val = self.site.set_auto_mode(self)
 
-
-
-    def find_device(device_list, device_id):
-        """
-        This function traverses the device tree to find the object matching device_id and returns the object.
-        """
-        #FIXME - this method is duplicated / not where this should live.  Should be in one spot, probably in DERDevice
-        # class and re-used everywhere
-        for cur_device in device_list:
-            if cur_device.device_id == device_id:
-                return cur_device
-            else:
-                child_device = find_device(cur_device.devices, device_id)
-                if child_device != None:
-                    return child_device
-
+    ##############################################################################
     @RPC.export
-    def set_point(self, cmd):
+    def set_real_pwr_cmd(self, device_id, cmd):
         """
-        This method writes an end point to a specified DER Device path
+        sends a real power command to the specified device
         """
-        cmd_agentid = cmd[0]
-        cmd_device_id = cmd[1]
-        cmd_attribute = cmd[2]
-        cmd_endpt = cmd[3]
-        cmd_val = cmd[4]
-        if self.site.device_id != cmd_device_id:
-            cmd_device = find_device(self.site.devices, cmd_device_id)
-        else:
-            cmd_device = self.site
-        #cmd_device.datagroup_dict_list[cmd_attribute].data_dict[cmd_endpt] = val
-        
-        #val = self.site.mode_ctrl.data_dict["OpModeCtrl"]+1
-        if cmd_attribute == "ModeControl":
-            cmd_device.set_mode(cmd_endpt,int(cmd_val), self)
-        elif cmd_attribute == "PowerControl":
-            cmd_device.set_power(cmd_endpt, val, self)
+        _log.info("updating site power output!!")
 
-        #self.site.set_mode("OpModeCtrl",val, self)
+        # find the device
+        device = self.site.find_device(device_id)
+
+        if device == None:
+            _log.info("ERROR! Device "+device_id+" not found in "+self.site.device_id)
+            # FIXME: other error trapping needed?
+        elif device.device_type != "DERCtrlNode":
+            _log.info("ERROR! Pwr dispatch command sent to non-controllable device "+device_id)
+            # FIXME: other error trapping needed?
+        else:
+            # send the command
+            device.set_power_real(cmd, val, sitemgr)
+
+    ##############################################################################
+    @Core.periodic(PMC_WATCHDOG_PD)
+    def increment_site_watchdog(self):
+        """
+        Commands site to increment watchdog counter
+        :return:
+        """
+        #FIXME - this need to be more nuanced - not every site has the same heartbeat period
+        #FIXME - or requires a heartbeat.
+        #FIXME - also is it assumed that only the "site" has a heartbeat? (i.e., not the forecast device?)
+        self.site.send_watchdog(self)
+
+
+    ##############################################################################
+    @RPC.export
+    def get_device_data(self, device_id, attribute):
+        """
+        sends a real power command to the specified device
+        """
+        _log.info("updating site power output!!")
+
+        # find the device
+        device = self.site.find_device(device_id)
+
+        # return the attribute data dict
+        return device.datagroup_dict_list[attribute].data_dict
+
+    ##############################################################################
+    @RPC.export
+    def set_SiteManager_mode(self, new_mode):
+        """
+        changes SiteManager's mode on call from Executive
+        """
+        _log.info("updating op mode!!")
+
+        self.mode = new_mode
+
+        if self.mode == AUTO:
+            self.pwr_ctrl_en = DISABLED
+            val = self.site.set_auto_mode(self)
+        else:
+            self.pwr_ctrl_en = ENABLED
+            val = self.site.set_interactive_mode(self)
 
     def handle_moving_averages (self, msg):
         for k,v in msg.items():

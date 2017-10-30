@@ -7,6 +7,9 @@ SITE_RUNNING = 1
 AUTO = 0
 INTERACTIVE = 1
 
+DISABLED = 0
+ENABLED  = 1
+
 # Site Timeout
 PMC_HEARTBEAT_TIMEOUT = 100 # timeout, in seconds
 PMC_HEARTBEAT_PD      = 10 # expected period, in seconds

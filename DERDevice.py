@@ -7,7 +7,7 @@ from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
 from volttron.platform.agent import utils
 from volttron.platform.messaging import headers as headers_mod
 
-from gs_identities import (INTERACTIVE, AUTO, SITE_IDLE, SITE_RUNNING)
+from gs_identities import (INTERACTIVE, AUTO, SITE_IDLE, SITE_RUNNING, PMC_WATCHDOG_RESET)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ class DERDevice():
                     DERDevice(device, parent_device=self))
 
         self.init_attributes()
-	self.pending_cmd = []
+    self.pending_cmd = []
 
     ##############################################################################
     def init_attributes(self):
@@ -110,6 +110,21 @@ class DERDevice():
         self.datagroup_dict_list.update({"ModeControlCmd": self.mode_ctrl_cmd})
         self.datagroup_dict_list.update({"RealPwrCtrlCmd": self.pwr_ctrl_cmd})
 
+    ##############################################################################
+    def find_device(self, device_id):
+        """
+        This function traverses the device tree to find the device object matching device_id and returns the object.
+        """
+        #FIXME - this functionality is duplicated elsewhere.  (E.g., in init_device fcns...)  Should reference
+        #FIXME - against this method
+        for cur_device in self.devices:
+            if cur_device.device_id == device_id:
+                return cur_device
+            else:
+                child_device = self.find_device(device_id)
+                if child_device != None:
+                    return child_device
+        return None
 
     ##############################################################################
     class DeviceAttributes():
@@ -214,6 +229,7 @@ class DERDevice():
         """
         for cur_device in self.devices:
             cur_device.update_op_status()
+            self.op_status.data_dict[key] = 0
             for key in self.op_status.key_update_list:
                 self.op_status.data_dict[key] += int(cur_device.op_status.data_dict[key])
             pass
@@ -368,6 +384,17 @@ class DERDevice():
 
         res = release_modbus(self, task_id, sitemgr)
 
+        val = sitemgr.vip.rpc.call(
+            "platform.actuator",
+            "get_point",
+            cmd_path).get()
+
+        if val != self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]:
+            # command wasn't written - raise an error
+            _log.info("SiteManager.set_point: Command "+str(cmd_path)+" not written. ")
+            _log.info("Expected "+self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]+"; Read: "+val)
+
+
         self.pending_cmd.append({"Attribute": attribute, "Cmd": cmd})
         #return pending_cmd
 
@@ -384,9 +411,9 @@ class DERDevice():
 
         cmd_failure = 0
         for cmd in self.pending_cmd:
-	    _log.info("In self.pending_cmd: Attribute = "+cmd["Attribute"])
-	    _log.info("Cmd = "+cmd["Cmd"])
-	    _log.info(self.datagroup_dict_list[cmd["Attribute"]].data_dict[cmd["Cmd"]])
+        _log.info("In self.pending_cmd: Attribute = "+cmd["Attribute"])
+        _log.info("Cmd = "+cmd["Cmd"])
+        _log.info(self.datagroup_dict_list[cmd["Attribute"]].data_dict[cmd["Cmd"]])
             target_val = self.datagroup_dict_list[cmd["Attribute"]].data_dict[cmd["Cmd"]]
             commanded_val = self.datagroup_dict_list[cmd["Attribute"]+"Cmd"].data_dict[cmd["Cmd"]+"_cmd"]
 
@@ -396,7 +423,7 @@ class DERDevice():
         for device in self.devices:
             cmd_failure += device.check_command()
 
-	# TODO - not sure if this is the proper place to reset the pending_Cmd queue....
+    # TODO - not sure if this is the proper place to reset the pending_Cmd queue....
 	#self.pending_cmd = []
         return cmd_failure
 
@@ -428,10 +455,10 @@ def reserve_modbus(device, task_id, sitemgr, device_path):
             attempt += 1
 
     except:
-	#FIXME - error handling not done correctly!!!
+    #FIXME - error handling not done correctly!!!
         #_log.info("Request failed, reason is " + res["info"])
 	_log.info("Request failed - agent not open")
-	res = "FAILURE"
+    res = "FAILURE"
     return res
 
 ##############################################################################
@@ -443,7 +470,7 @@ def release_modbus(device, task_id, sitemgr):
             "request_cancel_schedule",
             device.device_id, task_id).get()
 
-    	if res["result"] == "FAILURE":
+        if res["result"] == "FAILURE":
             _log.info("Request failed, reason is " + res["info"])
         return res
     except:
@@ -477,7 +504,7 @@ class DERSite(DERDevice):
 
         self.extpt_to_device_dict = {}
         cnt = 0
-	self.dirtyFlag = 0
+        self.dirtyFlag = 0
         self.topics = site_info["Topics"]
         for topics in self.topics:
             csv_name = (data_map_dir + self.device_id +"-"+ topics["TopicName"]+"-data-map.csv")
@@ -614,7 +641,7 @@ class DERModbusSite(DERSite):
         if self.mode_ctrl_cmd.data_dict["Watchdog_cmd"] == PMC_WATCHDOG_RESET:
             self.mode_ctrl_cmd.data_dict["Watchdog_cmd"] = 0
         self.set_point("ModeControl", "Watchdog", sitemgr)
-        pass
+
 
 ##############################################################################
 class DERCtrlNode(DERDevice):
