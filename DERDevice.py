@@ -65,6 +65,7 @@ class DERDevice():
                     DERDevice(device, parent_device=self))
 
         self.init_attributes()
+	self.pending_cmd = []
 
     ##############################################################################
     def init_attributes(self):
@@ -367,7 +368,7 @@ class DERDevice():
 
         res = release_modbus(self, task_id, sitemgr)
 
-        self.pending_cmd.append([{"Attribute": attribute}, {"Cmd": cmd}])
+        self.pending_cmd.append({"Attribute": attribute, "Cmd": cmd})
         #return pending_cmd
 
     ##############################################################################
@@ -383,8 +384,11 @@ class DERDevice():
 
         cmd_failure = 0
         for cmd in self.pending_cmd:
-            target_val = self.datagroup_dict_list[cmd["Attribute"]].data_dict[cmd]
-            commanded_val = self.datagroup_dict_list[cmd["Attribute"]].data_dict[cmd+"_cmd"]
+	    _log.info("In self.pending_cmd: Attribute = "+cmd["Attribute"])
+	    _log.info("Cmd = "+cmd["Cmd"])
+	    _log.info(self.datagroup_dict_list[cmd["Attribute"]].data_dict[cmd["Cmd"]])
+            target_val = self.datagroup_dict_list[cmd["Attribute"]].data_dict[cmd["Cmd"]]
+            commanded_val = self.datagroup_dict_list[cmd["Attribute"]+"Cmd"].data_dict[cmd["Cmd"]+"_cmd"]
 
             if  target_val != commanded_val:
                 cmd_failure += 1
@@ -392,6 +396,8 @@ class DERDevice():
         for device in self.devices:
             cmd_failure += device.check_command()
 
+	# TODO - not sure if this is the proper place to reset the pending_Cmd queue....
+	#self.pending_cmd = []
         return cmd_failure
 
 ##############################################################################
@@ -471,6 +477,7 @@ class DERSite(DERDevice):
 
         self.extpt_to_device_dict = {}
         cnt = 0
+	self.dirtyFlag = 0
         self.topics = site_info["Topics"]
         for topics in self.topics:
             csv_name = (data_map_dir + self.device_id +"-"+ topics["TopicName"]+"-data-map.csv")
@@ -516,9 +523,9 @@ class DERSite(DERDevice):
 
         mode_failure = 0
 
-        if self.mode_ctrl_cmd.data_dict["OpModeCtrl"] != self.mode_ctrl_cmd.data_dict["OpModeStatus"]:
+        if self.mode_ctrl.data_dict["OpModeCtrl"] != self.mode_status.data_dict["OpModeStatus"]:
             mode_failure += 1
-        if self.mode_ctrl_cmd.data_dict["SysModeCtrl"] != self.mode_ctrl_cmd.data_dict["SysModeStatus"]:
+        if self.mode_ctrl.data_dict["SysModeCtrl"] != self.mode_status.data_dict["SysModeStatus"]:
             mode_failure += 1
 
         return mode_failure

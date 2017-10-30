@@ -59,7 +59,7 @@
 
 from __future__ import absolute_import
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import sys
 import os
@@ -74,7 +74,7 @@ from volttron.platform.agent.known_identities import (
     VOLTTRON_CENTRAL, VOLTTRON_CENTRAL_PLATFORM, CONTROL, CONFIGURATION_STORE)
 
 from . import settings
-from gs_identities import (INTERACTIVE, AUTO)
+from gs_identities import (INTERACTIVE, AUTO, SCRAPE_TIMEOUT)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -125,6 +125,19 @@ class SiteManagerAgent(Agent):
 
         for topics in self.path:
             self.vip.pubsub.subscribe(peer='pubsub',prefix='devices/'+topics+'/all',callback=self.on_match)
+
+        TimeStamp = datetime.strftime(
+            datetime.now(),
+            "%Y-%m-%dT%H:%M:%S"
+        )      
+        self.last_scrape_time = datetime.now() #TimeStamp
+        self.SiteErrors = {}
+        self.SiteErrors.update({"ReadError": 0})
+        self.SiteErrors.update({"WriteError": 0})
+        self.SiteErrors.update({"DeviceError": 0})
+        self.SiteErrors.update({"CmdError": 0})
+        self.SiteErrors.update({"HeartbeatError": 0})
+        self.SiteErrors.update({"CmdPending": 0})
 
         _log.info("**********INITIALIIZING SITE MANAGER*******************")
 
@@ -223,7 +236,7 @@ class SiteManagerAgent(Agent):
         out = self.cache.pop(TimeStamp)
         print(str(TimeStamp)+ " " + str(out.items))
 
-        self.last_scrape_time = TimeStamp
+        self.last_scrape_time = TimeStamp# datetime.now()
 
 
         # self.summarize(out,headers)
@@ -293,32 +306,35 @@ class SiteManagerAgent(Agent):
 
         # FIXME - need to do this for each topic -
 
-        TimeStamp = datetime.strptime(
-            headers["TimeStamp"][:19],
-            "%Y-%m-%dT%H:%M:%S"
-        )
-        _log.info("Current Time = " + TimeStamp + "; Last Scrape = self_last_scrape_time")
+        TimeStamp = datetime.now()
+        #datetime.strftime(
+        #    datetime.now(),
+        #    "%Y-%m-%dT%H:%M:%S"
+        #)      
+        _log.info("Current Time = " + datetime.strftime(TimeStamp, "%Y-%m-%dT%H:%M:%S") + 
+        "; Last Scrape = " + datetime.strftime(self.last_scrape_time, "%Y-%m-%dT%H:%M:%S"))
 
-        deltaT = datetime.timedelta(TimeStamp).total_seconds() - \
-                 datetime.timedelta(self.last_scrape_time).total_seconds()
+        deltaT = TimeStamp - self.last_scrape_time
+        _log.info("delta T "+str(deltaT)) 
+        tot_sec = deltaT.total_seconds()
 
-        _log.into("Delta T = "+deltaT+"; SCRAPE_TIMEOUT = "+ SCRAPE_TIMEOUT)
+        _log.info("Delta T = "+str(deltaT)+"; SCRAPE_TIMEOUT = "+ str(SCRAPE_TIMEOUT)+"; tot sec = "+str(tot_sec))
 
 
-        if deltaT > SCRAPE_TIMEOUT:
+        if tot_sec > SCRAPE_TIMEOUT:
             ReadError = 1
 
+        self.SiteErrors.update({"ReadError": ReadError})
+        self.SiteErrors.update({"WriteError": WriteError})
+        self.SiteErrors.update({"DeviceError": DeviceError})
+        self.SiteErrors.update({"CmdError": CmdError})
+        self.SiteErrors.update({"HeartbeatError": HeartbeatError})
+        self.SiteErrors.update({"CmdPending": CmdPending})
 
+        for k, v in self.SiteErrors.items():
+            _log.info(k+": "+str(v))
 
-        self.SiteErrors =  [{"ReadError": ReadError},
-                           {"WriteError": WriteError},
-                           {"DeviceError": DeviceError},
-                           {"CmdError": CmdError},
-                           {"HeartbeatError": HeartbeatError},
-                           {"CmdPending": CmdPending}]
-
-        for k,v in SiteErrors.items():
-            _log.info(k+": "+v)
+        return self.SiteErrors
 
 
     ##############################################################################
