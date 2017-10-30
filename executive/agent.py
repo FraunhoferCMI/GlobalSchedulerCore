@@ -77,7 +77,7 @@ from . import settings
 
 
 import DERDevice
-from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXECUTIVE_CLKTIME, GS_SCHEDULE)
+from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLE)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -139,6 +139,10 @@ class SundialSystemResource(SunDialResource):
         """
         pass
 
+def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW, max_discharge_kW):
+    pass
+
+
 
 ##############################################################################
 class ExecutiveAgent(Agent):
@@ -178,6 +182,9 @@ class ExecutiveAgent(Agent):
         self.sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
 
         self.cnt = 0
+
+        self.OptimizerEnable = DISABLE
+        self.UICtrlEnable = DISABLE
  
 
 
@@ -404,11 +411,61 @@ class ExecutiveAgent(Agent):
         place holder for optimizer
         :return:
         """
-        if self.OperatingMode == APPLICATION_CONTROL:
+
+
+        if self.OptimizerEnable == ENABLE:
             pass
+
+            #self.sundial_resources
+
+            # What I was thinking about is this -
+            # update each virtual device
+            # call calc_setpoint on the sundial system (?)
+
+            #targetPwr_kW = forecast
+            #curPwr_kW    = PVVirtualPlant - curPwrOut
+
+            #for resources in self.sundial_resources:
+            #    new_system_resource["DeviceList"].append(
+            #        {"AgentID": resources.resource_id, "DeviceID": resources.resource_id})
+            #self.sundial_resources.append(SundialSystemResource(new_system_resource))
+
+            # What -should- happen is this:
+            # 1. sundial resources all update, aggregate their data - forecasts, power ,etc.
+            # THEN, we have a function who has target pwr = resource forecast.  Cur pwr = baseline pwr
+            #
+            #
+            #
+            #
+
+
+            #targetPwr_kW =
+            #curPwr_kW
+            #SOE_kWh
+            #min_SOE_kWh,
+            #max_SOE_kWh,
+            #max_charge_kW,
+            #max_discharge_kW
+
+
+            #calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW,
+            #                      max_discharge_kW)
+
+
+            # need a series of methods to retrieve site's ctrl node data
+            # 1. target power = sum of all baseline forecasts  (update_forecast)
+            #
+            # 2. cur_pwr_kW = sum of all baseline generation (update_op_status?)
+            # 3. SOE - go to battery
+            # 4. min_SOE
+            # 5. max_SOE
+            # 6. max_charge
+            # 7. min_charge
+
+            # we know the agent_id for each ctrl device.
         pass
 
-
+    ##############################################################################
     @Core.periodic(EXECUTIVE_CLKTIME)
     def run_executive(self):
         """
@@ -434,11 +491,14 @@ class ExecutiveAgent(Agent):
             if self.OperatingMode == IDLE:
                 # change sites to AUTO mode
                 self.disable_site_interactive_mode()
-                # shut down optimizer
+                self.OptimizerEnable = DISABLE # shut down optimizer
+                self.UICtrlEnable = DISABLE # placeholder
                 pass
             elif self.OperatingMode == APPLICATION_CONTROL:
                 # change sites to interactive mode
                 self.enable_site_interactive_mode()
+                self.OptimizerEnable = ENABLE
+                self.UICtrlEnable = DISABLE
                 # instantiate and build a new sundial resource manager when we switch to app ctrl mode
 
                 # (re)start optimizer - would call "build_sundial"
@@ -448,7 +508,8 @@ class ExecutiveAgent(Agent):
             elif self.OperatingMode == USER_CONTROL:
                 # change sites to interactive mode
                 self.enable_site_interactive_mode()
-                # shut down optimizer
+                self.OptimizerEnable = DISABLE # shut down optimizer
+                self.UICtrlEnable = ENABLE
                 pass
 
 
@@ -457,7 +518,7 @@ class ExecutiveAgent(Agent):
 
         pass
 
-        
+    ##############################################################################
     @PubSub.subscribe('pubsub', 'data/NewSite/all')
     def add_site(self, peer, sender, bus,  topic, headers, message):
         _log.info("New Site found!!")
@@ -465,6 +526,7 @@ class ExecutiveAgent(Agent):
         _log.info("message is "+data) #str(dir(data)))
 
 
+    ##############################################################################
     @RPC.export
     def set_mode(self, args):
         """
@@ -480,7 +542,7 @@ class ExecutiveAgent(Agent):
             datafile.write(str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
             _log.info("wrote: "+str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
 
-
+    ##############################################################################
     @Core.receiver('onstop')
     def onstop(self, sender, **kwargs):
         for site in self.sitemgr_list:
