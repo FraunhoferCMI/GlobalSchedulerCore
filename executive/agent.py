@@ -77,7 +77,7 @@ from . import settings
 
 
 import DERDevice
-from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLE)
+from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLED, DISABLED)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -183,8 +183,8 @@ class ExecutiveAgent(Agent):
 
         self.cnt = 0
 
-        self.OptimizerEnable = DISABLE
-        self.UICtrlEnable = DISABLE
+        self.OptimizerEnable = DISABLED
+        self.UICtrlEnable = DISABLED
  
 
 
@@ -412,8 +412,7 @@ class ExecutiveAgent(Agent):
         :return:
         """
 
-
-        if self.OptimizerEnable == ENABLE:
+        if self.OptimizerEnable == ENABLED:
             pass
 
             #self.sundial_resources
@@ -473,6 +472,9 @@ class ExecutiveAgent(Agent):
         :return:
         """
 
+        _log.info("Running Executive.  Curent Mode = "+self.OperatingModes[self.OperatingMode])
+
+
         self.check_site_statuses()
 
         if self.OperatingMode_set != self.OperatingMode:
@@ -491,14 +493,14 @@ class ExecutiveAgent(Agent):
             if self.OperatingMode == IDLE:
                 # change sites to AUTO mode
                 self.disable_site_interactive_mode()
-                self.OptimizerEnable = DISABLE # shut down optimizer
-                self.UICtrlEnable = DISABLE # placeholder
+                self.OptimizerEnable = DISABLED # shut down optimizer
+                self.UICtrlEnable = DISABLED # placeholder
                 pass
             elif self.OperatingMode == APPLICATION_CONTROL:
                 # change sites to interactive mode
                 self.enable_site_interactive_mode()
-                self.OptimizerEnable = ENABLE
-                self.UICtrlEnable = DISABLE
+                self.OptimizerEnable = ENABLED
+                self.UICtrlEnable = DISABLED
                 # instantiate and build a new sundial resource manager when we switch to app ctrl mode
 
                 # (re)start optimizer - would call "build_sundial"
@@ -508,8 +510,8 @@ class ExecutiveAgent(Agent):
             elif self.OperatingMode == USER_CONTROL:
                 # change sites to interactive mode
                 self.enable_site_interactive_mode()
-                self.OptimizerEnable = DISABLE # shut down optimizer
-                self.UICtrlEnable = ENABLE
+                self.OptimizerEnable = DISABLED # shut down optimizer
+                self.UICtrlEnable = ENABLED
                 pass
 
 
