@@ -434,6 +434,19 @@ class SiteManagerAgent(Agent):
 
     ##############################################################################
     @RPC.export
+    def set_watchdog_timeout_enable(self, val):
+        """
+        changes site's watchdog timeout enable per val (either ENABLED or DISABLED
+        """
+        _log.info("updating watchdog timeout enable flag!!")
+        self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
+        val = self.site.set_watchdog_timeout_enable(int(val), self)
+
+
+
+
+    ##############################################################################
+    @RPC.export
     def set_real_pwr_cmd(self, device_id, val):
         """
         sends a real power command to the specified device

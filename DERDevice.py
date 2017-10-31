@@ -560,6 +560,19 @@ class DERSite(DERDevice):
         return mode_failure
 
 
+    ##############################################################################
+    #@RPC.export
+    def set_watchdog_timeout_enable(self, val, sitemgr):
+        """
+        Sets mode to interactive
+        1. changes system op mode to "running"
+        2. changes system ctrl mode to "interactive"
+        """
+
+        # set internal commands to new operating state:
+        self.mode_ctrl_cmd.data_dict.update({"WatchDogTimeoutEnable_cmd": val})
+        self.set_point("ModeControl", "WatchDogTimeoutEnable", sitemgr)
+
 
 
 ##############################################################################
