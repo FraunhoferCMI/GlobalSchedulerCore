@@ -93,7 +93,7 @@ class SiteManagerAgent(Agent):
             "DEFAULT_MESSAGE" :'SM Message',
             "DEFAULT_AGENTID": "site_manager",
             "DEFAULT_HEARTBEAT_PERIOD": 5,
-            "log-level":"INFO",
+            "log-level":"DEBUG",
             "moving_averages" :{
 	        "length" : 12,
                 "keys":[
@@ -123,6 +123,9 @@ class SiteManagerAgent(Agent):
             actions=["NEW", "UPDATE"],
             pattern="config")
 
+        _log.info("Agent ID is "+self._agent_id)
+        _log.debug("TEST Debug message!!")
+
         for topics in self.path:
             self.vip.pubsub.subscribe(peer='pubsub',prefix='devices/'+topics+'/all',callback=self.on_match)
 
@@ -141,7 +144,8 @@ class SiteManagerAgent(Agent):
 
         self.mode = AUTO
         self.write_error_count = 0
-
+        # FIXME - need to have dirty flag for each topic!
+        self.dirtyFlag = 1 
         _log.info("**********INITIALIIZING SITE MANAGER*******************")
 
 
@@ -219,6 +223,7 @@ class SiteManagerAgent(Agent):
 
         try:
             self.site.populate_endpts(data)
+            self.dirtyFlag = 0 # clear dirtyFlag on new read
         except:
             # indicates that agent is still initializing - init_sites has not yet been called.
             # There is possibly a better way to handle this issue
@@ -284,7 +289,7 @@ class SiteManagerAgent(Agent):
 
         _log.info("Checking Site Status.  Curent Site Mode = "+str(self.mode))
 
-        if self.site.dirtyFlag == 0:
+        if self.dirtyFlag == 0:
             # FIXME: needs to be a different flag for each topic <?>
             # indicates that site has been scraped since the last command was posted.
 
@@ -393,6 +398,7 @@ class SiteManagerAgent(Agent):
         """
         _log.info("updating op mode!!")
         self.mode = INTERACTIVE
+        self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
         val = self.site.set_interactive_mode(self)
 
     ##############################################################################
@@ -403,6 +409,7 @@ class SiteManagerAgent(Agent):
         """
         _log.info("updating op mode!!")
         self.mode = AUTO
+        self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
         val = self.site.set_auto_mode(self)
 
     ##############################################################################
@@ -427,6 +434,7 @@ class SiteManagerAgent(Agent):
             # FIXME: other error trapping needed?
         else:
             # send the command
+            self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
             device.set_power_real(val, self)
 
     ##############################################################################
@@ -465,7 +473,7 @@ class SiteManagerAgent(Agent):
         _log.info("updating op mode!!")
 
         self.mode = new_mode
-
+        self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
         if self.mode == AUTO:
             self.pwr_ctrl_en = DISABLED
             val = self.site.set_auto_mode(self)

@@ -352,7 +352,7 @@ class DERDevice():
         #FIXME - ID in the RPC call should be the VIP agent identity...
 
         device_prefix = "/devices/"
-        task_id       = "set_point"
+        task_id       = "ShirleySouth" #FIXME need to automatically query from sitemgr #"set_point"
 
         #TODO - make this generic - not tied to mode_ctrl
         #TODO - error trap to make sure that this value is writeable....
