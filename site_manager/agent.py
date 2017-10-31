@@ -126,8 +126,8 @@ class SiteManagerAgent(Agent):
         _log.info("Agent ID is "+self._agent_id)
         _log.debug("TEST Debug message!!")
 
-        for topics in self.path:
-            self.vip.pubsub.subscribe(peer='pubsub',prefix='devices/'+topics+'/all',callback=self.on_match)
+        #for topics in self.path:
+        #    self.vip.pubsub.subscribe(peer='pubsub',prefix='devices/'+topics+'/all',callback=self.on_match)
 
         TimeStamp = datetime.strftime(
             datetime.now(),
@@ -161,6 +161,15 @@ class SiteManagerAgent(Agent):
         _log.info("Site name is: "+cursite["ID"])
 
         self.topics = cursite["Topics"]
+
+        _log.info("old topic was: "+'devices/'+self.path[0]+'/all')
+
+        for topics in self.topics:
+            self.vip.pubsub.subscribe(peer='pubsub',prefix=topics["TopicPath"],callback=self.on_match) #+'/all'
+            _log.info("Subscribing to new topic: "+topics["TopicPath"]+'/all')
+
+        #self.vip.pubsub.subscribe(peer='pubsub',prefix=topics["TopicPath"],callback=self.on_match)
+
 
         self.site = DERDevice.DERModbusSite(cursite, None, self.data_map_dir)
         self.vip.pubsub.publish('pubsub', 
@@ -217,7 +226,12 @@ class SiteManagerAgent(Agent):
         _log.info("Topic found - "+str(topic))
         if sender == 'pubsub.compat':
             message = compat.unpack_legacy_message(headers, message)
-        data = message[0]
+
+        #_log.info("Message length is: "+message.len())
+        _log.debug(str(message))
+        if type(message) is dict:  #FIXME temporary fix
+            data = message
+        else: data = message[0]
         #for k, v in data.items():
         #    _log.info("Message is: "+k+": "+str(v))
 
@@ -232,20 +246,26 @@ class SiteManagerAgent(Agent):
             _log.info("Skipped populate end_pts!!!")
         pass
 
+        
+
         # FIXME: This is legacy code, should be reintegrated.  Not currently doing anything
         # with timestamps.
-        TimeStamp = datetime.strptime(
-            headers["TimeStamp"][:19],            
-            "%Y-%m-%dT%H:%M:%S"
-        )      
-        self.cache[TimeStamp] = self.cache.get(
-            TimeStamp,{})
+        if 0:
+            TimeStamp = datetime.strptime(
+                headers["TimeStamp"][:19],            
+                "%Y-%m-%dT%H:%M:%S"
+            )      
+            self.cache[TimeStamp] = self.cache.get(
+                TimeStamp,{})
 
-        out = self.cache.pop(TimeStamp)
-        print(str(TimeStamp)+ " " + str(out.items))
+            out = self.cache.pop(TimeStamp)
+            print(str(TimeStamp)+ " " + str(out.items))
 
-        self.last_scrape_time = datetime.now() #TimeStamp# datetime.now()
-
+        #if str(topic) == self.topics[0]["TopicPath"]: # FIXME temporary
+        self.last_scrape_time = datetime.now() #TimeStamp# datetime.now()  #FIXME - need to separate by topic...
+        #else:
+        #    _log.info("topic is "+topic)
+        #    _log.info("topic[0] is "+self.topics[0]["TopicPath"])
 
         # self.summarize(out,headers)
 

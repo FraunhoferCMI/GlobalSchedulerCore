@@ -254,9 +254,9 @@ class DERDevice():
             self.op_status.data_dict["Pwr_kW"] = int(self.op_status.data_dict["Pwr_raw"]) * self.POWERS[
                 int(self.op_status.data_dict["Pwr_SF"])]
 
-        _log.info("device id is: " + self.device_id)
+        _log.debug("device id is: " + self.device_id)
         for k, v in self.op_status.data_dict.items():
-            _log.info(k+": "+str(v))
+            _log.debug(k+": "+str(v))
         pass
 
     ##############################################################################
@@ -294,7 +294,7 @@ class DERDevice():
             self.health_status.data_dict["status"] = self.health_status.data_dict["status"] and val
             # print(key+": "+str(self.health_status.data_dict[key])+"val = "+str(val))
 
-        _log.info("Device ID =" + self.device_id + "Health Status is: " + str(self.health_status.data_dict["status"]))
+        _log.debug("Device ID =" + self.device_id + "Health Status is: " + str(self.health_status.data_dict["status"]))
 
         pass
 
@@ -351,7 +351,7 @@ class DERDevice():
         #FIXME - this should either be a standalone method or it should be part of a "ModbusDevice Class"
         #FIXME - ID in the RPC call should be the VIP agent identity...
 
-        device_prefix = "/devices/"
+        device_prefix = "devices/"  # was /devices/
         task_id       = "ShirleySouth" #FIXME need to automatically query from sitemgr #"set_point"
 
         #TODO - make this generic - not tied to mode_ctrl
@@ -457,10 +457,10 @@ def reserve_modbus(device, task_id, sitemgr, device_path):
             attempt += 1
 
     except:
-    #FIXME - error handling not done correctly!!!
+        #FIXME - error handling not done correctly!!!
         #_log.info("Request failed, reason is " + res["info"])
 	_log.info("Request failed - agent not open")
-    res = "FAILURE"
+        res = "FAILURE"
     return res
 
 ##############################################################################
@@ -473,7 +473,7 @@ def release_modbus(device, task_id, sitemgr):
             device.device_id, task_id).get()
 
         if res["result"] == "FAILURE":
-            _log.info("Request failed, reason is " + res["info"])
+            _log.info("Release Modbus: Request failed, reason is " + res["info"])
         return res
     except:
         #FIXME: error trapping not done correctly
@@ -510,7 +510,7 @@ class DERSite(DERDevice):
         #self.topics = site_info["Topics"]
         for topics in site_info["Topics"]: #self.topics:
             csv_name = (data_map_dir + self.device_id +"-"+ topics["TopicName"]+"-data-map.csv")
-            _log.info(csv_name)
+            _log.debug(csv_name)
 
             try:
                 with open(csv_name, 'rb') as csvfile:
@@ -527,7 +527,7 @@ class DERSite(DERDevice):
 
             for keyval in self.extpt_to_device_dict:
                 #print("Key = " + keyval)
-                print("Key = " + keyval + ", Val = " + self.extpt_to_device_dict[keyval].device_id)
+                _log.debug("Key = " + keyval + ", Val = " + self.extpt_to_device_dict[keyval].device_id)
 
     ##############################################################################
     def set_mode(self, cmd, val, sitemgr):
