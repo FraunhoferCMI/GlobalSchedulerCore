@@ -169,10 +169,11 @@ class UIAgent(Agent):
             
             for cur_cmd in cmds:
                _log.info("New incoming command: "+cur_cmd["AgentID"]+"; function - "+cur_cmd["FcnName"])
-               _log.info("Args = "+str(cur_cmd["args"][0]))
+               for arg in cur_cmd["args"]:
+                   _log.info("Args = "+str(arg))
                # Not sure why this is required, but vip.rpc.call required me to recast cur_cmd["AgentID"]
                # as a string
-               self.vip.rpc.call(str(cur_cmd["AgentID"]), cur_cmd["FcnName"], cur_cmd["args"])               
+               self.vip.rpc.call(str(cur_cmd["AgentID"]), cur_cmd["FcnName"], *cur_cmd["args"])               
 
             try:
                 os.remove(fname) # delete after commands have been issued
