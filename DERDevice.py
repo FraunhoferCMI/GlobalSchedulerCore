@@ -65,7 +65,7 @@ class DERDevice():
                     DERDevice(device, parent_device=self))
 
         self.init_attributes()
-    self.pending_cmd = []
+        self.pending_cmd = []
 
     ##############################################################################
     def init_attributes(self):
@@ -227,12 +227,14 @@ class DERDevice():
         """
         To do: how to handle non-opstatus devices?
         """
+
+        for key in self.op_status.key_update_list:
+            self.op_status.data_dict[key] = 0            
+	
         for cur_device in self.devices:
-            cur_device.update_op_status()
-            self.op_status.data_dict[key] = 0
+            cur_device.update_op_status()            
             for key in self.op_status.key_update_list:
                 self.op_status.data_dict[key] += int(cur_device.op_status.data_dict[key])
-            pass
 
         # IF the current device is an actual generator (as opposed to a virtualized aggregation),
         # it should:
@@ -356,13 +358,13 @@ class DERDevice():
         #TODO - error trap to make sure that this value is writeable....
         _log.info("Set Point: Cmd - "+str(cmd)+"; attribute - "+str(attribute))
         _log.info("; topic # = " + str(self.datagroup_dict_list[attribute].topic_map[cmd]))
-        _log.info("topic = "+self.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"])
+        _log.info("topic = "+sitemgr.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"])
 
         # indicates that a command has been sent to the target device, but target device has not
         # been re-read with updated values since the command was issued.
         self.dirtyFlag = 1
 
-        device_topic = self.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"]
+        device_topic = sitemgr.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"]
         if device_topic.startswith(device_prefix) == True:
             device_path = device_topic[len(device_prefix):]
             _log.info("Device path: "+device_path)
@@ -411,9 +413,9 @@ class DERDevice():
 
         cmd_failure = 0
         for cmd in self.pending_cmd:
-        _log.info("In self.pending_cmd: Attribute = "+cmd["Attribute"])
-        _log.info("Cmd = "+cmd["Cmd"])
-        _log.info(self.datagroup_dict_list[cmd["Attribute"]].data_dict[cmd["Cmd"]])
+            _log.info("In self.pending_cmd: Attribute = "+cmd["Attribute"])
+            _log.info("Cmd = "+cmd["Cmd"])
+            _log.info(self.datagroup_dict_list[cmd["Attribute"]].data_dict[cmd["Cmd"]])
             target_val = self.datagroup_dict_list[cmd["Attribute"]].data_dict[cmd["Cmd"]]
             commanded_val = self.datagroup_dict_list[cmd["Attribute"]+"Cmd"].data_dict[cmd["Cmd"]+"_cmd"]
 
@@ -505,8 +507,8 @@ class DERSite(DERDevice):
         self.extpt_to_device_dict = {}
         cnt = 0
         self.dirtyFlag = 0
-        self.topics = site_info["Topics"]
-        for topics in self.topics:
+        #self.topics = site_info["Topics"]
+        for topics in site_info["Topics"]: #self.topics:
             csv_name = (data_map_dir + self.device_id +"-"+ topics["TopicName"]+"-data-map.csv")
             _log.info(csv_name)
 
@@ -637,10 +639,10 @@ class DERModbusSite(DERSite):
         # TODO - end pt
 
         #TODO - figure out how to do an update / initialize correctly...
-        self.mode_ctrl_cmd.data_dict["Watchdog_cmd"] = self.mode_ctrl_cmd.data_dict["Watchdog"]+1
-        if self.mode_ctrl_cmd.data_dict["Watchdog_cmd"] == PMC_WATCHDOG_RESET:
-            self.mode_ctrl_cmd.data_dict["Watchdog_cmd"] = 0
-        self.set_point("ModeControl", "Watchdog", sitemgr)
+        self.mode_ctrl_cmd.data_dict["PMCWatchDog_cmd"] = self.mode_ctrl.data_dict["PMCWatchDog"]+1
+        if self.mode_ctrl_cmd.data_dict["PMCWatchDog_cmd"] == PMC_WATCHDOG_RESET:
+            self.mode_ctrl_cmd.data_dict["PMCWatchDog_cmd"] = 0
+        self.set_point("ModeControl", "PMCWatchDog", sitemgr)
 
 
 ##############################################################################
@@ -696,7 +698,7 @@ class DERCtrlNode(DERDevice):
 
 
     ##############################################################################
-    def set_power_real(self, cmd, val, sitemgr):
+    def set_power_real(self, val, sitemgr):
         # 1. Enable
         # 2. Verify that it is enabled
         # 3. set the value
@@ -706,9 +708,9 @@ class DERCtrlNode(DERDevice):
 
         # This method has a number of issues -
         #TODO: Limit check
-        self.pwr_ctrl_cmd.data_dict.update({"pwr_kW_cmd": val})
-        self.set_point("RealPwrCtrl", "pwr_kW", sitemgr)
-
+        self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": int(val)})
+	_log.info("Setting Power to "+str(val))
+        self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
         # where does the actual pwr ctrl live???
 
         pass

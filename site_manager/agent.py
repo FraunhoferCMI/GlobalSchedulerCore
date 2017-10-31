@@ -139,6 +139,9 @@ class SiteManagerAgent(Agent):
         self.SiteErrors.update({"HeartbeatError": 0})
         self.SiteErrors.update({"CmdPending": 0})
 
+        self.mode = AUTO
+        self.write_error_count = 0
+
         _log.info("**********INITIALIIZING SITE MANAGER*******************")
 
 
@@ -236,7 +239,7 @@ class SiteManagerAgent(Agent):
         out = self.cache.pop(TimeStamp)
         print(str(TimeStamp)+ " " + str(out.items))
 
-        self.last_scrape_time = TimeStamp# datetime.now()
+        self.last_scrape_time = datetime.now() #TimeStamp# datetime.now()
 
 
         # self.summarize(out,headers)
@@ -279,6 +282,8 @@ class SiteManagerAgent(Agent):
         HeartbeatError = 0
         CmdPending     = 0
 
+        _log.info("Checking Site Status.  Curent Site Mode = "+str(self.mode))
+
         if self.site.dirtyFlag == 0:
             # FIXME: needs to be a different flag for each topic <?>
             # indicates that site has been scraped since the last command was posted.
@@ -295,8 +300,7 @@ class SiteManagerAgent(Agent):
             CmdError = self.site.check_mode()
 
 
-            if (self.mode != self.mode_ctrl.data_dict["OpModeCtrl"]) or \
-                (self.mode != self.mode_ctrl.data_dict["SysModeCtrl"]):
+            if (self.mode != self.site.mode_ctrl.data_dict["SysModeCtrl"]):
                 # Indicates that the site is in a different mode than the SiteMgr thinks
                 # it should be.
 
@@ -312,11 +316,15 @@ class SiteManagerAgent(Agent):
                     # Has previously failed, assume that there is a problem
                     # try to resend
 
-                # Try to resend.
-                self.set_SiteManager_mode(self.mode)
+                if self.write_error_count < 2:
+                    # Try to resend.
+                    _log.info("Retrying write mode")
+                    self.set_SiteManager_mode(self.mode)
                 WriteError = 1 #self.site.check_command()
+                self.write_error_count += 1
 
-                pass
+            else:
+                self.write_error_count = 0
 
         else:
             # the site has not been scraped since the last command was posted.
@@ -399,24 +407,27 @@ class SiteManagerAgent(Agent):
 
     ##############################################################################
     @RPC.export
-    def set_real_pwr_cmd(self, device_id, cmd):
+    def set_real_pwr_cmd(self, device_id, val):
         """
         sends a real power command to the specified device
         """
         _log.info("updating site power output!!")
 
         # find the device
+        #device_id = args[0] #*args
+        #val = args[1]
         device = self.site.find_device(device_id)
 
         if device == None:
             _log.info("ERROR! Device "+device_id+" not found in "+self.site.device_id)
             # FIXME: other error trapping needed?
-        elif device.device_type != "DERCtrlNode":
-            _log.info("ERROR! Pwr dispatch command sent to non-controllable device "+device_id)
+        elif device.device_type not in self.site.DGPlant:
+            _log.info("ERROR! Pwr dispatch command sent to non-controllable device "+device.device_id)
+            _log.info("Device type = "+device.device_type)
             # FIXME: other error trapping needed?
         else:
             # send the command
-            device.set_power_real(cmd, val, sitemgr)
+            device.set_power_real(val, self)
 
     ##############################################################################
     @Core.periodic(PMC_WATCHDOG_PD)
