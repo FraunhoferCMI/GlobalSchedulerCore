@@ -17,13 +17,17 @@ __version__ = '1.0'
 ##############################################################################
 class DERDevice():
     POWERS = {
-        -3: 0.001,
+	-5: 0.00001,
+        -4: 0.0001,
+	-3: 0.001,
         -2: 0.01,
         -1: 0.1,
         0: 1,
         1: 10,
         2: 100,
-        3: 1000
+        3: 1000,
+	4: 10000,
+	5: 100000
 
     }
 
@@ -42,7 +46,6 @@ class DERDevice():
         else:
             self.device_id = self.parent_device.device_id + "-" + device_info["ID"]
             self.device_type = device_info["ResourceType"]
-
         self.devices = []
         self.set_nameplate()
 
@@ -57,13 +60,15 @@ class DERDevice():
             if device["ResourceType"] == 'ESS':
                 self.devices.append(
                     ESSDevice(device, parent_device=self))
+            elif device["ResourceType"] == 'PV':
+                self.devices.append(
+                    PVDevice(device, parent_device=self))
             elif (device["ResourceType"] in self.DGPlant):
                 self.devices.append(
                     DERCtrlNode(device, parent_device=self))
             else:
                 self.devices.append(
                     DERDevice(device, parent_device=self))
-
         self.init_attributes()
         self.pending_cmd = []
 
@@ -98,7 +103,7 @@ class DERDevice():
         self.mode_ctrl_cmd = self.DeviceAttributes("ModeControlCmd")
         self.pwr_ctrl_cmd = self.DeviceAttributes("RealPwrCtrlCmd")
 
-        print("device is ..." + self.device_id)
+        _log.info("device is ..." + self.device_id)
         self.datagroup_dict_list = {}
         self.datagroup_dict_list.update({"Config": self.config})
         self.datagroup_dict_list.update({"OpStatus": self.op_status})
@@ -137,6 +142,7 @@ class DERDevice():
             self.map_int_to_ext_endpt = {"GrpName": attribute_name}
             self.units = {"GrpName": attribute_name}
             self.topic_map = {"GrpName": attribute_name}
+            self.endpt_units = {"GrpName": attribute_name}
 
             # initialize certain known key word values that are inherited between parent/children devices
             if attribute_name == "OpStatus":
@@ -152,23 +158,6 @@ class DERDevice():
             if grp_name == "HealthStatus":
                 print("int endpt = " + int_endpt + " fail state = " + fail_state)
                 self.fail_state.update({int_endpt: int(fail_state)})
-
-        def convert_units(self):
-            """
-            Method for converting units between external end points and internal values.
-            :return:
-            """
-            # if data map units don't match -->
-            # W to kW, kW to W, Wh to kWh, VA to kVA
-            # in general: (1) if units don't match... ; (2) if no units are included...
-
-
-            # something like this:
-            # 1. get config --> only works for modbus!!
-            # 2. see if units match ?
-
-            pass
-
 
     ##############################################################################
     def init_data_maps(self, device_id, group_id, int_endpt, ext_endpt, fail_state, units, topic_index):
@@ -216,11 +205,14 @@ class DERDevice():
 
     ##############################################################################
     def set_config(self):
+	self.config.data_dict.update({"Nameplate_kW": 0})
+        _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"]))
         pass
 
     ##############################################################################
-    def update_config(self):
-        pass
+    def get_nameplate(self):
+	return self.config.data_dict["Nameplate_kW"]
+
 
     ##############################################################################
     def update_op_status(self):
@@ -247,12 +239,12 @@ class DERDevice():
         # for now: do this in the very dumb brute force way, and then later, can fix it for
         # scalability
 
-        if self.device_type in self.DGDevice:
+        #if self.device_type in self.DGDevice:
             # this device is an end point generator
             # FIXME: could automate the below / error trap the below in a number of ways
             # FIXME: SF should be referenced to a 10^SF power, not multiplication
-            self.op_status.data_dict["Pwr_kW"] = int(self.op_status.data_dict["Pwr_raw"]) * self.POWERS[
-                int(self.op_status.data_dict["Pwr_SF"])]
+        #    self.op_status.data_dict["Pwr_kW"] = int(self.op_status.data_dict["Pwr_raw"]) * self.POWERS[
+        #        int(self.op_status.data_dict["Pwr_SF"])]
 
         _log.debug("device id is: " + self.device_id)
         for k, v in self.op_status.data_dict.items():
@@ -311,10 +303,58 @@ class DERDevice():
         #    print k, v
 
         pass
+        
+    ##############################################################################
+    def convert_units_from_endpt(self, k, endpt_units):
+        """
+        Method for converting units between external end points and internal values.
+        :return:
+        """
+	# if data map units don't match -->
+	# W to kW, kW to W, Wh to kWh, VA to kVA
+	    # in general: (1) if units don't match... ; (2) if no units are included...
+
+	cur_device = self.extpt_to_device_dict[k]
+        cur_attribute = self.extpt_to_device_dict[k].datagroup_dict[k]
+        keyval = cur_attribute.data_mapping_dict[k]
+
+	if ((endpt_units == "W") and (cur_attribute.units[keyval] == "kW") or
+	    (endpt_units == "Wh") and (cur_attribute.units[keyval] == "kWh")):
+            if type(cur_attribute.data_dict[keyval]) is list:
+		# FIXME - ugh
+                tmplist = [v/1000 for v in cur_attribute.data_dict[keyval]]
+                del cur_attribute.data_dict[keyval][:]
+		cur_attribute.data_dict[keyval] = tmplist[:]
+                _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
+            else:
+                cur_attribute.data_dict[keyval] /= 1000
+    	        _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
+	if (endpt_units == "ScaledW") and (cur_attribute.units[keyval] == "kW"):
+	    base_name = keyval[:len(keyval)-len("raw")] # assume this has "_raw" on the end of the name               
+            cur_attribute.data_dict[base_name+"kW"] = cur_attribute.data_dict[keyval]*10^cur_attribute.data_dict[base_name+"SF"]
+	    _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
+
+	if (endpt_units == "Pct") and (cur_attribute.units[keyval] == "kW"):   # FIXME - make this PctkW?
+	    v = cur_device.get_nameplate()
+	    cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
+	    _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
+
+    ##############################################################################
+    def convert_units_to_endpt(self, attribute, cmd):
+
+        ext_endpt = self.datagroup_dict_list[attribute].map_int_to_ext_endpt[cmd]
+        try:
+            _log.info("SetPt: Ext End pt is "+ext_endpt+". Ext units are "+self.datagroup_dict_list[attribute].endpt_units[ext_endpt])
+	    _log.info("SetPt: Int End pt is "+cmd+".  Int units are "+self.datagroup_dict_list[attribute].units[cmd])
+	    if (self.datagroup_dict_list[attribute].endpt_units[ext_endpt] == "Pct") and (self.datagroup_dict_list[attribute].units[cmd] == "kW"):   # FIXME - make this PctkW?
+                self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"] = int((float(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]) / self.get_nameplate()) * 100)
+	        _log.info("SetPt: New val = "+str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
+        except KeyError as e:
+            _log.info("SetPt: No units found for "+ext_endpt+".  Assume no conversion is needed.")        
 
 
     ##############################################################################
-    def populate_endpts(self, incoming_msg):
+    def populate_endpts(self, incoming_msg, meta_data = None):
         """
         This populates DERDevice variables based on the topic list
         """
@@ -329,11 +369,26 @@ class DERDevice():
                 # TODO  correct for units!!!
                 # if cur_attribute.units_dict[k] != incoming_msg[k] units then call convert_units....
 
-                _log.info(cur_device + "." + cur_attribute_name + "." + keyval + "= " + str(
+                _log.info("PopEndpts: "+cur_device + "." + cur_attribute_name + "." + keyval + "= " + str(
                     cur_attribute.data_dict[keyval]))
+
+		if meta_data != None:
+                    #_log.info("PopEndpts: Units - "+meta_data[k]["units"])
+                    cur_attribute.endpt_units.update({k: meta_data[k]["units"]})
+		else:
+		    _log.info("PopEndpts: No Meta data found!")
+
             except KeyError as e:
                 _log.info("Warning: Key "+k+" not found")
                 pass
+
+        for k in incoming_msg:
+	    try:
+                self.convert_units_from_endpt(k, meta_data[k]["units"])
+            except KeyError as e:
+                _log.info("Skipping: Key "+k+" not found")
+	    
+
 
         self.dirtyFlag = 0  # indicates that end points have finished updating.
 
@@ -356,9 +411,8 @@ class DERDevice():
 
         #TODO - make this generic - not tied to mode_ctrl
         #TODO - error trap to make sure that this value is writeable....
-        _log.info("Set Point: Cmd - "+str(cmd)+"; attribute - "+str(attribute))
-        _log.info("; topic # = " + str(self.datagroup_dict_list[attribute].topic_map[cmd]))
-        _log.info("topic = "+sitemgr.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"])
+        _log.info("SetPt: Cmd - "+str(cmd)+"; attribute - "+str(attribute)+"; topic # = " + str(self.datagroup_dict_list[attribute].topic_map[cmd]))
+        _log.info("SetPt: topic = "+sitemgr.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"])
 
         # indicates that a command has been sent to the target device, but target device has not
         # been re-read with updated values since the command was issued.
@@ -367,16 +421,18 @@ class DERDevice():
         device_topic = sitemgr.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"]
         if device_topic.startswith(device_prefix) == True:
             device_path = device_topic[len(device_prefix):]
-            _log.info("Device path: "+device_path)
+            _log.info("SetPt: Device path: "+device_path)
             cmd_path = device_path+"/"+self.datagroup_dict_list[attribute].map_int_to_ext_endpt[cmd]
-            _log.info("Cmd Path: "+cmd_path)
+            _log.info("SetPt: Cmd Path: "+cmd_path)
         else:
-            _log.info("Error in DERDevice.set_interactive_mode: device type invalid")
+            _log.info("SetPt: Error in DERDevice.set_interactive_mode: device type invalid")
 
-        res = reserve_modbus(self, task_id, sitemgr, device_path)
+        #res = reserve_modbus(self, task_id, sitemgr, device_path)
+	res = 0
+        _log.info("SetPt: path is " + cmd_path + "; end pt = " + str(cmd) + "; val = " + str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
 
-        _log.info("set_point: path is " + cmd_path + "; end pt = " + str(cmd) + "; val = " + str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
-
+	# convert units if necessary:
+        self.convert_units_to_endpt(attribute, cmd)
         ret = sitemgr.vip.rpc.call(
             "platform.actuator",
             "set_point",
@@ -384,7 +440,7 @@ class DERDevice():
             cmd_path,
             self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"])
 
-        res = release_modbus(self, task_id, sitemgr)
+        #res = release_modbus(self, task_id, sitemgr)
 
         val = sitemgr.vip.rpc.call(
             "platform.actuator",
@@ -393,8 +449,8 @@ class DERDevice():
 
         if val != self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]:
             # command wasn't written - raise an error
-            _log.info("SiteManager.set_point: Command "+str(cmd_path)+" not written. ")
-            _log.info("Expected "+self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]+"; Read: "+val)
+            _log.info("SetPt: SiteManager.set_point: Command "+str(cmd_path)+" not written. ")
+            _log.info("SetPt: Expected "+self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]+"; Read: "+val)
 
 
         self.pending_cmd.append({"Attribute": attribute, "Cmd": cmd})
@@ -494,6 +550,7 @@ class DERSite(DERDevice):
         :param device_type: should always be site -- remove?.
         :param parent_device: should always none....
         """
+        _log.info("Initializing a Site....")
         DERDevice.__init__(self, site_info, parent_device) #device_id, device_type, parent_device)
         # need to change how this is called.....
         #device_id = "site1", device_type = "Site", parent_device = None
@@ -528,6 +585,8 @@ class DERSite(DERDevice):
             for keyval in self.extpt_to_device_dict:
                 #print("Key = " + keyval)
                 _log.debug("Key = " + keyval + ", Val = " + self.extpt_to_device_dict[keyval].device_id)
+        self.set_config()
+
 
     ##############################################################################
     def set_mode(self, cmd, val, sitemgr):
@@ -558,6 +617,22 @@ class DERSite(DERDevice):
             mode_failure += 1
 
         return mode_failure
+
+    ##############################################################################
+    def set_config(self):
+        """
+        traverses the site tree and sets configuration info
+        """
+        for cur_device in self.devices:
+            cur_device.set_config()
+	self.config.data_dict.update({"Nameplate_kW": 0})
+        _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"]))
+	# TODO: should a site have a nameplate that represents aggregate of children CtrlNodes?
+        pass
+
+    ##############################################################################
+    def get_nameplate(self):
+	return self.config.data_dict["Nameplate_kW"]
 
 
     ##############################################################################
@@ -662,6 +737,14 @@ class DERModbusSite(DERSite):
 class DERCtrlNode(DERDevice):
 
     ##############################################################################
+    def set_config(self):
+        self.config.data_dict.update({"Nameplate_kW": 0}) # FIXME - charge vs discharge?
+        for device in self.devices:
+            device.set_config()
+	    self.config.data_dict["Nameplate_kW"] += device.get_nameplate()
+        _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"]))
+
+    ##############################################################################
     def update_mode_status(self):
         """
 
@@ -745,20 +828,18 @@ class PVCtrlNode(DERCtrlNode):
 
 ##############################################################################
 class ESSDevice(DERDevice):
-    def __init__(self, device_info, parent_device=None):
-        #device_id = "site1", device_type = "Site", parent_device = None):
-        #DERDevice.__init__(self, device_id, device_type, parent_device)
-        DERDevice.__init__(self, device_info, parent_device)
-        # self.set_nameplate
-        pass
-
     ##############################################################################
     def set_config(self):
-        # For ESS - most config data is stored / transmitted from the device
+        # For PV - configure manually.
+        # FIXME: should be done through a config file, not hardcoded
+        self.config.data_dict["Mfr"] = "Tesla"
+	self.config.data_dict.update({"Nameplate_kW": 500}) # FIXME - charge vs discharge?
+        _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"]))
+        _log.info("SetConfig: Mfr = "+self.config.data_dict["Mfr"])
         pass
 
     ##############################################################################
-    def set_alaram_status(self):
+    def set_alarm_status(self):
         # for each device - populat a dictionary entry?
         # what I want to do is to read the registry file, and then populate dictionary entries.
         pass
@@ -769,7 +850,10 @@ class ESSDevice(DERDevice):
     ##############################################################################
     def set_nameplate(self):
         self.nameplate = {'pwr_chg_kw': 500, 'pwr_dis_kw': 500, 'energy': 1000}
+        pass
 
+    def get_nameplate(self):
+	return self.config.data_dict["Nameplate_kW"]
 
 ##############################################################################
 class PVDevice(DERDevice):
@@ -777,15 +861,20 @@ class PVDevice(DERDevice):
     def set_config(self):
         # For PV - configure manually.
         # FIXME: should be done through a config file, not hardcoded
-        self.data_dict["Pwr_kW"] = 500
-        self.data_dict["Mfr"] = "Solectria"
+        self.config.data_dict["Mfr"] = "Solectria"
+	self.config.data_dict.update({"Nameplate_kW": 500}) # FIXME - charge vs discharge?
+        _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"]))
+        _log.info("SetConfig: Mfr = "+self.config.data_dict["Mfr"])
         pass
+
+    def get_nameplate(self):
+	return self.config.data_dict["Nameplate_kW"]
 
 ##############################################################################
 class VirtualDERCtrlNode(DERCtrlNode):
     ##############################################################################
     def __init__(self, device_id="plant1", device_list=[]):
-        print("Device ID = " + str(device_id))
+        _log.info("Device ID = " + str(device_id))
 
         self.device_id = device_id
         self.device_type = "DERCtrlNode"
@@ -794,8 +883,11 @@ class VirtualDERCtrlNode(DERCtrlNode):
         self.set_nameplate()
         self.DGDevice = ["PV", "ESS"]
         self.DGPlant = ["ESSCtrlNode", "PVCtrlNode", "LoadShiftCtrlNode"] #self.DGPlant = ["ESS_PLANT", "PV_PLANT"]
-
+        _log.info("Initializing virtual plant....")
         self.init_attributes()
+
+    def set_config(self):
+        pass
 
     pass
 

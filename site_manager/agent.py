@@ -228,22 +228,29 @@ class SiteManagerAgent(Agent):
             message = compat.unpack_legacy_message(headers, message)
 
         #_log.info("Message length is: "+message.len())
-        _log.debug(str(message))
+        _log.debug("Msg: "+str(message)+"\n")
         if type(message) is dict:  #FIXME temporary fix
             data = message
-        else: data = message[0]
+            meta_data = None
+        else: 
+            data = message[0]
+            meta_data = message[1]
+            #ii = 1
+            #for m in message[1:]:
+            #    _log.debug("Msg: "+str(ii)+" is "+str(m)+"\n")
+            #    ii+=1
         #for k, v in data.items():
         #    _log.info("Message is: "+k+": "+str(v))
 
         try:
-            self.site.populate_endpts(data)
+            self.site.populate_endpts(data, meta_data)
             self.dirtyFlag = 0 # clear dirtyFlag on new read
         except:
             # indicates that agent is still initializing - init_sites has not yet been called.
             # There is possibly a better way to handle this issue
             #FIXME - this should probably look for specific error to trap, right now this is
             # a catch-all....
-            _log.info("Skipped populate end_pts!!!")
+            _log.info("Exception: in populate end_pts!!!")
         pass
 
         
@@ -471,7 +478,7 @@ class SiteManagerAgent(Agent):
             device.set_power_real(val, self)
 
     ##############################################################################
-    @Core.periodic(PMC_WATCHDOG_PD)
+    #@Core.periodic(PMC_WATCHDOG_PD)
     def increment_site_watchdog(self):
         """
         Commands site to increment watchdog counter
