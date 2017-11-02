@@ -87,7 +87,7 @@ import DERDevice
 import json
 
 class SunDialResource():
-    def __init__(self, resource_cfg):
+    def __init__(self, resource_cfg, sites):
         """
 
         1. Read a configuration file that tells what resources to include
@@ -97,29 +97,30 @@ class SunDialResource():
         self.resource_type = resource_cfg["ResourceType"]
         self.resource_id   = resource_cfg["ID"]
         self.virtual_plant = DERDevice.VirtualDERCtrlNode(device_id=self.resource_id, device_list=resource_cfg["DeviceList"])
+        self.sites         = sites
         self.obj_fcns     = []
 
 class ESSResource(SunDialResource):
     def __init__(self, resource_cfg):
-        SunDialResource.__init__(self, resource_cfg)
+        SunDialResource.__init__(self, resource_cfg, sites)
         pass
 
 class PVResource(SunDialResource):
     def __init__(self, resource_cfg):
-        SunDialResource.__init__(self, resource_cfg)
+        SunDialResource.__init__(self, resource_cfg, sites)
         pass
 
 class LoadShiftResource(SunDialResource):
     def __init__(self, resource_cfg):
-        SunDialResource.__init__(self, resource_cfg)
+        SunDialResource.__init__(self, resource_cfg, sites)
         pass
 
 class BaselineLoadResource(SunDialResource):
     def __init__(self, resource_cfg):
-        SunDialResource.__init__(self, resource_cfg)
+        SunDialResource.__init__(self, resource_cfg, sites)
         pass
 
-class SundialSystemResource(SunDialResource):
+class SundialSystemResource(SunDialResource, sites):
     def __init__(self, resource_cfg):
         SunDialResource.__init__(self, resource_cfg)
         self.obj_fcns = [self.obj_fcn_energy, self.obj_fcn_demand]
@@ -140,7 +141,41 @@ class SundialSystemResource(SunDialResource):
         pass
 
 def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW, max_discharge_kW):
+    setpoint_cmd_interval = 300
+    sec_per_hr = 60 * 60
+
+    setpoint = curPwr_kW - targetPwr_kW
+    _log.info("target Setpoint ="+setpoint)
+
+    # check that we are within power limits of the storage system
+    if setpoint < -1 * max_discharge_kW:
+        setpoint = -1 * max_discharge_kW
+    if setpoint > max_charge_kW:
+        setpoint = max_charge_kW
+
+    # now check that the target setpoint is within the energy limits
+    _log.info("Power-limited Setpoint =" + setpoint)
+
+    # calculate what the remaining charge will be at the end of the next period
+    # FIXME - need to correct for losses!!
+    energy_required = setpoint * setpoint_cmd_interval / sec_per_hr
+    discharge_energy_available = min_SOE_kWh - SOE_kWh
+    charge_energy_available = max_SOE_kWh - SOE_kWh
+
+    if energy_required < discharge_energy_available:
+        #
+        setpoint = discharge_energy_available / (setpoint_cmd_interval / sec_per_hr)
+    elif energy_required > charge_energy_available:
+        setpoint = charge_energy_available / (setpoint_cmd_interval / sec_per_hr)
+
+    return setpoint
+
     pass
+
+
+def get_current_forecast(forecast):
+    #cur_time = datetime.now()
+    return forecast["Pwr"][11]
 
 
 
@@ -294,12 +329,14 @@ class ExecutiveAgent(Agent):
         for new_resource in sundial_resource_cfg_list:
 
             # find devices matching the specified device names....
+            sitelist = {} #[]
             for device in new_resource["DeviceList"]:
                 _log.info("New Resource: "+new_resource["ID"]+" of type "+new_resource["ResourceType"])
                 _log.info("Device List entries: ")                
                 for site in sitemgr_list:
                     if site["identity"] == device["AgentID"]:
                         _log.info("Agent name: " + site["identity"] + " is a match!!")
+                        sitelist.update({device["AgentID"]:site})
                         break
                 if site["identity"] != device["AgentID"]:
                     # error trapping - make sure that the agent & associated device are valid entries
@@ -308,13 +345,17 @@ class ExecutiveAgent(Agent):
                     #FIXME: does not check for whether the device exists
 
             if new_resource["ResourceType"] == "ESSCtrlNode":
-                self.sundial_resources.append(ESSResource(new_resource))
+                self.sundial_ess = ESSResource(new_resource, sitelist)
+                self.sundial_resources.append(ESSResource)
             elif new_resource["ResourceType"] == "PVCtrlNode":
-                self.sundial_resources.append(PVResource(new_resource))
+                self.sundial_pv = PVResource(new_resource, sitelist)
+                self.sundial_resources.append(self.sundial_pv)
             elif new_resource["ResourceType"] == "LoadShiftCtrlNode":
-                self.sundial_resources.append(LoadShiftResource(new_resource))
+                self.sundial_loadshift = LoadShiftResource(new_resource, sitelist)
+                self.sundial_resources.append(self.sundial_loadshift)
             elif new_resource["ResourceType"] == "Load":
-                self.sundial_resources.append(BaselineLoadResource(new_resource))
+                self.sundial_baseline = BaselineLoadResource(new_resource, sitelist)
+                self.sundial_resources.append(self.sundial_baseline)
             else:
                 _log.info("Warning: Resoure Type "+new_resource["ResourceType"] +
                           " not found, constructing a generic Sundial Resource")
@@ -327,9 +368,12 @@ class ExecutiveAgent(Agent):
         new_system_resource.update({"ResourceType": "System"})
         new_system_resource.update({"Use": "Y"})
         new_system_resource.update({"DeviceList": [{}]})
+        sitelist = {}
         for resources in self.sundial_resources:
             new_system_resource["DeviceList"].append({"AgentID": resources.resource_id, "DeviceID": resources.resource_id})
-        self.sundial_resources.append(SundialSystemResource(new_system_resource))
+            sitelist.update({resources.resource_id: site})
+        self.sundial_system = SundialSystemResource(new_system_resource, sitelist)
+        self.sundial_resources.append(self.sundial_system)
 
     ##############################################################################
     def build_sundial(self):
@@ -413,13 +457,88 @@ class ExecutiveAgent(Agent):
         """
 
         if self.OptimizerEnable == ENABLED:
-            pass
 
             #self.sundial_resources
 
             # What I was thinking about is this -
             # update each virtual device
             # call calc_setpoint on the sundial system (?)
+
+            # The most simple / hacky version of this:
+            # 1. target power = sum of all baseline forecasts  (update_forecast)
+
+            # I need something that can grab the current forecast ...
+
+            # first I need something that baselines the forecast against today.
+
+
+            curPwr_kW = 0
+            targetPwr_kW = 0
+            # get what time it is
+            for nodes in self.sundial_pv.virtual_plant.device_list:
+                forecast = self.vip.rpc.call(self.sundial_pv.sites[nodes["AgentID"]],
+                                                        "get_device_data",
+                                                        nodes["DeviceID"],
+                                                        "Forecast").get(timeout=5)
+
+                op_status = self.vip.rpc.call(self.sundial_pv.sites[nodes["AgentID"]],
+                                                        "get_device_data",
+                                                        nodes["DeviceID"],
+                                                        "OpStatus").get(timeout=5)
+                targetPwr_kW += get_current_forecast(forecast)
+                curPwr_kW    += op_status["Pwr_kW"]
+            _log.info("Setting Power Inputs: CurPwr="+str(curPwr_kW)+"; TargetPwr="+str(targetPwr_kW))
+
+            SOE_kWh = 0
+            min_SOE_kWh = 0
+            max_SOE_kWh = 0
+            max_charge_kW = 0
+            max_discharge_kW = 0
+            for nodes in self.sundial_ess.virtual_plant.device_list:
+                op_status = self.vip.rpc.call(self.sundial_ess.sites[nodes["AgentID"]],
+                                                        "get_device_data",
+                                                        nodes["DeviceID"],
+                                                        "OpStatus").get(timeout=5)
+                max_SOE_kWh += op_status["FullChargeEnergy_kWh"]
+                max_charge_kW += op_status["MaxChargePwr_kW"]
+                max_discharge_kW += op_status["MaxDischargePwr_kW"]
+                SOE_kWh += op_status["Energy_kWh"]
+
+            _log.info("Setting ESS State: CurSOE="+str(SOE_kWh)+"; MaxChg="+str(max_charge_kW)+"; MaxSOE="+str(max_SOE_kWh))
+
+
+            setpoint = calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW,
+                                         max_discharge_kW)
+
+            _log.info("setpoint = "+str(setpoint))
+
+            for nodes in self.sundial_ess.virtual_plant.device_list:
+                op_status = self.vip.rpc.call(self.sundial_ess.sites[nodes["AgentID"]],
+                                              "get_device_data",
+                                              nodes["DeviceID"],
+                                              "OpStatus").get(timeout=5)
+
+                if (setpoint > 0):                    # charging
+                    pro_rata_share = float(op_status["Energy_kWh"]) / float(SOE_kWh) * float(setpoint)
+                else:
+                    pro_rata_share = float(op_status["FullChargeEnergy_kWh"]-op_status["Energy_kWh"]) / \
+                                     (max_SOE_kWh-float(SOE_kWh)) * float(setpoint)
+
+                _log.info("Sending request for "+str(pro_rata_share)+"to "+nodes["AgentID"])
+                self.vip.rpc.call(self.sundial_ess.sites[nodes["AgentID"]],
+                                  "set_real_pwr_cmd",
+                                  nodes["DeviceID"],
+                                  pro_rata_share)
+
+
+
+            # figure out what time it is right now
+            # extract the right forecast from that time
+
+            # figure out the current power output of the system:
+
+
+            # device list consists of AgentID and DeviceID
 
             #targetPwr_kW = forecast
             #curPwr_kW    = PVVirtualPlant - curPwrOut
