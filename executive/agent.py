@@ -101,28 +101,28 @@ class SunDialResource():
         self.obj_fcns     = []
 
 class ESSResource(SunDialResource):
-    def __init__(self, resource_cfg):
+    def __init__(self, resource_cfg, sites):
         SunDialResource.__init__(self, resource_cfg, sites)
         pass
 
 class PVResource(SunDialResource):
-    def __init__(self, resource_cfg):
+    def __init__(self, resource_cfg, sites):
         SunDialResource.__init__(self, resource_cfg, sites)
         pass
 
 class LoadShiftResource(SunDialResource):
-    def __init__(self, resource_cfg):
+    def __init__(self, resource_cfg, sites):
         SunDialResource.__init__(self, resource_cfg, sites)
         pass
 
 class BaselineLoadResource(SunDialResource):
-    def __init__(self, resource_cfg):
+    def __init__(self, resource_cfg, sites):
         SunDialResource.__init__(self, resource_cfg, sites)
         pass
 
-class SundialSystemResource(SunDialResource, sites):
-    def __init__(self, resource_cfg):
-        SunDialResource.__init__(self, resource_cfg)
+class SundialSystemResource(SunDialResource):
+    def __init__(self, resource_cfg, sites):
+        SunDialResource.__init__(self, resource_cfg, sites)
         self.obj_fcns = [self.obj_fcn_energy, self.obj_fcn_demand]
         pass
 
@@ -145,7 +145,7 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     sec_per_hr = 60 * 60
 
     setpoint = curPwr_kW - targetPwr_kW
-    _log.info("target Setpoint ="+setpoint)
+    _log.info("Optimizer: target Setpoint ="+str(setpoint))
 
     # check that we are within power limits of the storage system
     if setpoint < -1 * max_discharge_kW:
@@ -154,7 +154,7 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
         setpoint = max_charge_kW
 
     # now check that the target setpoint is within the energy limits
-    _log.info("Power-limited Setpoint =" + setpoint)
+    _log.info("Optimizer: Power-limited Setpoint =" + str(setpoint))
 
     # calculate what the remaining charge will be at the end of the next period
     # FIXME - need to correct for losses!!
@@ -210,7 +210,8 @@ class ExecutiveAgent(Agent):
         #FIXME - this should be set up with a configurable path....        
         sys.path.append("/home/matt/sundial/SiteManager")
         #SiteCfgFile = "/home/matt/sundial/SiteManager/ShirleySouthSiteConfiguration.json"
-        SiteCfgFile = "/home/matt/sundial/SiteManager/ShirleySouthSiteConfiguration.json"
+        #SiteCfgFile = "/home/matt/sundial/SiteManager/ShirleySouthSiteConfiguration.json"
+        SiteCfgFile = "/home/matt/sundial/SiteManager/NorthSouthSiteConfiguration.json"
         self.SiteCfgList = json.load(open(SiteCfgFile, 'r'))
 
         SundialCfgFile = "/home/matt/sundial/SiteManager/SundialSystemConfiguration.json"
@@ -341,12 +342,13 @@ class ExecutiveAgent(Agent):
                 if site["identity"] != device["AgentID"]:
                     # error trapping - make sure that the agent & associated device are valid entries
                     _log.info("Error - "+device["AgentID"]+" not found.  Skipping...")
+                    sitelist.update({device["AgentID"]:None})
                     #FIXME: does not actually skip the not-found element
                     #FIXME: does not check for whether the device exists
 
             if new_resource["ResourceType"] == "ESSCtrlNode":
                 self.sundial_ess = ESSResource(new_resource, sitelist)
-                self.sundial_resources.append(ESSResource)
+                self.sundial_resources.append(self.sundial_ess)
             elif new_resource["ResourceType"] == "PVCtrlNode":
                 self.sundial_pv = PVResource(new_resource, sitelist)
                 self.sundial_resources.append(self.sundial_pv)
@@ -419,6 +421,7 @@ class ExecutiveAgent(Agent):
         """
         # TODO: think about whether this should be one method in SiteManager (not one for auto and one for interactive)
         for site in self.sitemgr_list:
+            _log.info("SetPt: sending interactive mode command for "+site["identity"])
             self.vip.rpc.call(site["identity"], "set_interactive_mode").get(timeout=5)
             # check for success ...
 
@@ -430,6 +433,7 @@ class ExecutiveAgent(Agent):
         :return:
         """
         for site in self.sitemgr_list:
+            _log.info("SetPt: sending auto mode command for "+site["identity"])
             self.vip.rpc.call(site["identity"], "set_auto_mode").get(timeout=5)
 
 
@@ -440,6 +444,7 @@ class ExecutiveAgent(Agent):
         :return:
         """
         for site in self.sitemgr_list:
+            _log.info("Checking status for site "+site["identity"])
             site_errors = self.vip.rpc.call(site["identity"], "update_site_status").get(timeout=5)
             for k,v in site_errors.items():
                 if site_errors[k] != 0:
@@ -449,7 +454,7 @@ class ExecutiveAgent(Agent):
 
 
     ##############################################################################
-    @Core.periodic(GS_SCHEDULE)
+    @Core.periodic(5)#GS_SCHEDULE)
     def run_optimizer(self):
         """
         place holder for optimizer
@@ -457,7 +462,7 @@ class ExecutiveAgent(Agent):
         """
 
         if self.OptimizerEnable == ENABLED:
-
+            _log.info("Optimizer: Running Optimizer")
             #self.sundial_resources
 
             # What I was thinking about is this -
@@ -475,60 +480,71 @@ class ExecutiveAgent(Agent):
             curPwr_kW = 0
             targetPwr_kW = 0
             # get what time it is
-            for nodes in self.sundial_pv.virtual_plant.device_list:
-                forecast = self.vip.rpc.call(self.sundial_pv.sites[nodes["AgentID"]],
-                                                        "get_device_data",
-                                                        nodes["DeviceID"],
-                                                        "Forecast").get(timeout=5)
 
-                op_status = self.vip.rpc.call(self.sundial_pv.sites[nodes["AgentID"]],
-                                                        "get_device_data",
-                                                        nodes["DeviceID"],
-                                                        "OpStatus").get(timeout=5)
-                targetPwr_kW += get_current_forecast(forecast)
-                curPwr_kW    += op_status["Pwr_kW"]
-            _log.info("Setting Power Inputs: CurPwr="+str(curPwr_kW)+"; TargetPwr="+str(targetPwr_kW))
+            for nodes in self.sundial_pv.virtual_plant.devices:
+                _log.info("agent ID is "+nodes["AgentID"])
+                if self.sundial_pv.sites[nodes["AgentID"]] != None:
+                    _log.info("or - "+str(self.sundial_pv.sites[nodes["AgentID"]]["identity"]))
+                    forecast = self.vip.rpc.call(str(nodes["AgentID"]),#self.sundial_pv.sites[nodes["AgentID"]],
+                                                            "get_device_data",
+                                                            nodes["DeviceID"],
+                                                            "Forecast").get(timeout=5)
+
+                    op_status = self.vip.rpc.call(str(nodes["AgentID"]),#self.sundial_pv.sites[nodes["AgentID"]],
+                                                            "get_device_data",
+                                                            nodes["DeviceID"],
+                                                            "OpStatus").get(timeout=5)
+                    _log.info("Optimizer: "+nodes["AgentID"]+" CurPwr = "+str(op_status))
+                    _log.debug("Optimizer: forecast = "+str(forecast))                
+                    targetPwr_kW += get_current_forecast(forecast)
+                    curPwr_kW    += op_status["Pwr_kW"]
+            _log.info("Optimizer: Setting Power Inputs: CurPwr="+str(curPwr_kW)+"; TargetPwr="+str(targetPwr_kW))
 
             SOE_kWh = 0
             min_SOE_kWh = 0
             max_SOE_kWh = 0
             max_charge_kW = 0
             max_discharge_kW = 0
-            for nodes in self.sundial_ess.virtual_plant.device_list:
-                op_status = self.vip.rpc.call(self.sundial_ess.sites[nodes["AgentID"]],
-                                                        "get_device_data",
-                                                        nodes["DeviceID"],
-                                                        "OpStatus").get(timeout=5)
-                max_SOE_kWh += op_status["FullChargeEnergy_kWh"]
-                max_charge_kW += op_status["MaxChargePwr_kW"]
-                max_discharge_kW += op_status["MaxDischargePwr_kW"]
-                SOE_kWh += op_status["Energy_kWh"]
+            for nodes in self.sundial_ess.virtual_plant.devices:
+                if self.sundial_ess.sites[nodes["AgentID"]] != None:                
+                    op_status = self.vip.rpc.call(str(nodes["AgentID"]),
+                                                            "get_device_data",
+                                                            nodes["DeviceID"],
+                                                            "OpStatus").get(timeout=5)
+                    max_SOE_kWh += op_status["FullChargeEnergy_kWh"]
+                    max_charge_kW += op_status["MaxChargePwr_kW"]
+                    max_discharge_kW += op_status["MaxDischargePwr_kW"]
+                    SOE_kWh += op_status["Energy_kWh"]
+                    _log.debug("ESS WAS found.")
+                else:
+                    _log.info("Optimizer: ESS "+nodes["AgentID"]+" not found")
 
-            _log.info("Setting ESS State: CurSOE="+str(SOE_kWh)+"; MaxChg="+str(max_charge_kW)+"; MaxSOE="+str(max_SOE_kWh))
+            _log.info("Optimizer: Setting ESS State: CurSOE="+str(SOE_kWh)+"; MaxChg="+str(max_charge_kW)+"; MaxSOE="+str(max_SOE_kWh)+"; MaxDischarge="+str(max_discharge_kW))
 
 
             setpoint = calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW,
                                          max_discharge_kW)
 
-            _log.info("setpoint = "+str(setpoint))
+            _log.info("Optimizer: setpoint = "+str(setpoint))
 
-            for nodes in self.sundial_ess.virtual_plant.device_list:
-                op_status = self.vip.rpc.call(self.sundial_ess.sites[nodes["AgentID"]],
-                                              "get_device_data",
-                                              nodes["DeviceID"],
-                                              "OpStatus").get(timeout=5)
+            for nodes in self.sundial_ess.virtual_plant.devices:
+                if self.sundial_ess.sites[nodes["AgentID"]] != None:                
+                    op_status = self.vip.rpc.call(str(nodes["AgentID"]),
+                                                  "get_device_data",
+                                                  nodes["DeviceID"],
+                                                  "OpStatus").get(timeout=5)
 
-                if (setpoint > 0):                    # charging
-                    pro_rata_share = float(op_status["Energy_kWh"]) / float(SOE_kWh) * float(setpoint)
-                else:
-                    pro_rata_share = float(op_status["FullChargeEnergy_kWh"]-op_status["Energy_kWh"]) / \
-                                     (max_SOE_kWh-float(SOE_kWh)) * float(setpoint)
+                    if (setpoint > 0):                    # charging
+                        pro_rata_share = float(op_status["Energy_kWh"]) / float(SOE_kWh) * float(setpoint)
+                    else:
+                        pro_rata_share = float(op_status["FullChargeEnergy_kWh"]-op_status["Energy_kWh"]) / \
+                                         (max_SOE_kWh-float(SOE_kWh)) * float(setpoint)
 
-                _log.info("Sending request for "+str(pro_rata_share)+"to "+nodes["AgentID"])
-                self.vip.rpc.call(self.sundial_ess.sites[nodes["AgentID"]],
-                                  "set_real_pwr_cmd",
-                                  nodes["DeviceID"],
-                                  pro_rata_share)
+                    _log.info("Optimizer: Sending request for "+str(pro_rata_share)+"to "+nodes["AgentID"])
+                    self.vip.rpc.call(str(nodes["AgentID"]),
+                                      "set_real_pwr_cmd",
+                                      nodes["DeviceID"],
+                                      pro_rata_share)
 
 
 
@@ -584,7 +600,7 @@ class ExecutiveAgent(Agent):
         pass
 
     ##############################################################################
-    @Core.periodic(EXECUTIVE_CLKTIME)
+    @Core.periodic(1)#EXECUTIVE_CLKTIME)
     def run_executive(self):
         """
         Periodically polls system mode and health indicators and transitions system state accordingly
