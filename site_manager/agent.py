@@ -364,8 +364,16 @@ class SiteManagerAgent(Agent):
             CmdPending = 1
             pass
 
-
-
+        for k,v in self.site.op_status.data_dict.items():
+            _log.info("Status-"+self.site.device_id+"-Ops: "+k+": "+str(v))
+        for k,v in self.site.mode_status.data_dict.items():
+            _log.info("Status-"+self.site.device_id+"-Mode: "+k+": "+str(v))
+        for k,v in self.site.health_status.data_dict.items():
+            _log.info("Status-"+self.site.device_id+"-Health: "+k+": "+str(v))
+        for k,v in self.site.pwr_ctrl.data_dict.items():
+            _log.info("Status-"+self.site.device_id+"-PwrCtrl: "+k+": "+str(v))
+        for k,v in self.site.mode_ctrl.data_dict.items():
+            _log.info("Status-"+self.site.device_id+"-ModeCtrl: "+k+": "+str(v))
         # Now check if the site is communicating with the site manager.
         # we check this by seeing if the time interval since the last scrape is > the
         # configured scrape timeout period.  (something like 2x the scrape interval).
@@ -458,7 +466,7 @@ class SiteManagerAgent(Agent):
         """
         sends a real power command to the specified device
         """
-        _log.info("updating site power output!!")
+        _log.info("SetPt: updating site power output for "+self.site.device_id)
 
         # find the device
         #device_id = args[0] #*args
@@ -466,15 +474,16 @@ class SiteManagerAgent(Agent):
         device = self.site.find_device(device_id)
 
         if device == None:
-            _log.info("ERROR! Device "+device_id+" not found in "+self.site.device_id)
+            _log.info("SetPt: ERROR! Device "+device_id+" not found in "+self.site.device_id)
             # FIXME: other error trapping needed?
         elif device.device_type not in self.site.DGPlant:
-            _log.info("ERROR! Pwr dispatch command sent to non-controllable device "+device.device_id)
-            _log.info("Device type = "+device.device_type)
+            _log.info("SetPt: ERROR! Pwr dispatch command sent to non-controllable device "+device.device_id)
+            _log.info("SetPt: Device type = "+device.device_type)
             # FIXME: other error trapping needed?
         else:
             # send the command
             self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
+            _log.info("SetPt: Sending Cmd!")
             device.set_power_real(val, self)
 
     ##############################################################################
@@ -496,13 +505,15 @@ class SiteManagerAgent(Agent):
         """
         sends a real power command to the specified device
         """
-        _log.info("updating site power output!!")
-
+        
         # find the device
-        device = self.site.find_device(device_id)
+        _log.info("FindDevice: device id is "+device_id)
+        device = self.site.find_device(device_id)       
+        #_log.info("attribute is "+attribute)
+        #_log.info("site is "+self.site.device_id)
 
         # return the attribute data dict
-        return device.datagroup_dict_list[attribute].data_dict
+        return device.datagroup_dict_list[attribute].data_dict #self.site.datagroup_dict_list[attribute].data_dict 
 
     ##############################################################################
     @RPC.export
