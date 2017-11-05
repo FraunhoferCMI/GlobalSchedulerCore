@@ -24,7 +24,7 @@ USER_CONTROL = 1
 APPLICATION_CONTROL = 2
 
 EXECUTIVE_CLKTIME = 5 # period, in seconds, at which the executive polls system state
-GS_SCHEDULE = 300 # time, in seconds, for GS to run
+GS_SCHEDULE = 30 # time, in seconds, for GS to run
 
 #FIXME - Placeholder!
 SCRAPE_TIMEOUT = 30 # timeout period in seconds for modbus device to post on the IEB bus
