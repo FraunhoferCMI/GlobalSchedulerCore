@@ -168,9 +168,9 @@ class UIAgent(Agent):
                 cmds = json.load(jsonfile)
             
             for cur_cmd in cmds:
-               _log.info("New incoming command: "+cur_cmd["AgentID"]+"; function - "+cur_cmd["FcnName"])
+               _log.info("UI_CMD: New incoming command: "+cur_cmd["AgentID"]+"; function - "+cur_cmd["FcnName"])
                for arg in cur_cmd["args"]:
-                   _log.info("Args = "+str(arg))
+                   _log.info("UI_CMD: Args = "+str(arg))
                # Not sure why this is required, but vip.rpc.call required me to recast cur_cmd["AgentID"]
                # as a string
                self.vip.rpc.call(str(cur_cmd["AgentID"]), cur_cmd["FcnName"], *cur_cmd["args"])               
