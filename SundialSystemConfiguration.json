@@ -44,6 +44,10 @@
       {
         "AgentID":"ShirleySouth",
         "DeviceID":"ShirleySouth-ESSPlant"
+      },
+      {
+        "AgentID":"ShirleyNorth",
+        "DeviceID":"ShirleyNorth-ESSPlant"
       }
     ]
   }
