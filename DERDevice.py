@@ -122,11 +122,13 @@ class DERDevice():
         """
         #FIXME - this functionality is duplicated elsewhere.  (E.g., in init_device fcns...)  Should reference
         #FIXME - against this method
+	_log.info("FindDevice: "+self.device_id)
         for cur_device in self.devices:
+	    _log.info("FindDevice: "+cur_device.device_id)
             if cur_device.device_id == device_id:
                 return cur_device
             else:
-                child_device = self.find_device(device_id)
+                child_device = cur_device.find_device(device_id)
                 if child_device != None:
                     return child_device
         return None
@@ -220,8 +222,15 @@ class DERDevice():
         To do: how to handle non-opstatus devices?
         """
 
-        for key in self.op_status.key_update_list:
-            self.op_status.data_dict[key] = 0            
+	# FIXME: this really needs to be thought through more carefully.  
+	# this should be a routine that updates higherlevel endpts if they don't
+        # get populated directly by an end point device by summing up the child-device
+        # values....
+
+	# temp fix - assume that end pt dg devices provide the values to be updated...
+	if self.device_type not in self.DGDevice:
+            for key in self.op_status.key_update_list:
+                self.op_status.data_dict[key] = 0            
 	
         for cur_device in self.devices:
             cur_device.update_op_status()            
@@ -246,9 +255,9 @@ class DERDevice():
         #    self.op_status.data_dict["Pwr_kW"] = int(self.op_status.data_dict["Pwr_raw"]) * self.POWERS[
         #        int(self.op_status.data_dict["Pwr_SF"])]
 
-        _log.debug("device id is: " + self.device_id)
+        _log.debug("OpStatus: device id is: " + self.device_id)
         for k, v in self.op_status.data_dict.items():
-            _log.debug(k+": "+str(v))
+            _log.debug("OpStatus:" +k+": "+str(v))
         pass
 
     ##############################################################################
@@ -331,12 +340,30 @@ class DERDevice():
     	        _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
 	if (endpt_units == "ScaledW") and (cur_attribute.units[keyval] == "kW"):
 	    base_name = keyval[:len(keyval)-len("raw")] # assume this has "_raw" on the end of the name               
-            cur_attribute.data_dict[base_name+"kW"] = cur_attribute.data_dict[keyval]*10^cur_attribute.data_dict[base_name+"SF"]
-	    _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
+            cur_attribute.data_dict[base_name+"kW"] = (cur_attribute.data_dict[keyval]*10**cur_attribute.data_dict[base_name+"SF"])/1000
+	    _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[base_name+"kW"]))
 
 	if (endpt_units == "Pct") and (cur_attribute.units[keyval] == "kW"):   # FIXME - make this PctkW?
-	    v = cur_device.get_nameplate()
-	    cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
+	    #_log.info("converting pct to kW")	    
+	    nameplate = cur_device.get_nameplate()
+	    _log.info("val is "+str(nameplate))
+	    #if type(cur_attribute.data_dict[keyval]) is int:
+	    #    cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
+            #elif type(cur_attribute.data_dict[keyval]) is float:
+	    #	cur_attribute.data_dict[keyval] = float((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())	    
+            if type(cur_attribute.data_dict[keyval]) is list:
+		_log.info("converting list from pct to kW")
+		# FIXME - ugh
+                tmplist = [(float(v) / 100) * nameplate for v in cur_attribute.data_dict[keyval]]
+                del cur_attribute.data_dict[keyval][:]
+		cur_attribute.data_dict[keyval] = tmplist[:]
+	    else: # assume int
+		_log.info("converting single pt from pct to kW")
+		_log.info("value is "+str(cur_attribute.data_dict[keyval])+"; nameplate is "+str(nameplate))
+		cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * nameplate)
+		_log.info("new value is "+str(cur_attribute.data_dict[keyval]))
+                #cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
+                #_log.info("Unsupported data type for conversion pct to kW")
 	    _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
 
     ##############################################################################
@@ -358,6 +385,7 @@ class DERDevice():
         """
         This populates DERDevice variables based on the topic list
         """
+	_log.info("PopEndpts: New scrape found")
         for k in incoming_msg:
             try:
                 cur_device = self.extpt_to_device_dict[k].device_id
@@ -369,7 +397,7 @@ class DERDevice():
                 # TODO  correct for units!!!
                 # if cur_attribute.units_dict[k] != incoming_msg[k] units then call convert_units....
 
-                _log.info("PopEndpts: "+cur_device + "." + cur_attribute_name + "." + keyval + "= " + str(
+                _log.debug("PopEndpts: "+cur_device + "." + cur_attribute_name + "." + keyval + "= " + str(
                     cur_attribute.data_dict[keyval]))
 
 		if meta_data != None:
@@ -407,7 +435,7 @@ class DERDevice():
         #FIXME - ID in the RPC call should be the VIP agent identity...
 
         device_prefix = "devices/"  # was /devices/
-        task_id       = "ShirleySouth" #FIXME need to automatically query from sitemgr #"set_point"
+        task_id       = sitemgr.site.device_id #"ShirleySouth" #FIXME need to automatically query from sitemgr #"set_point"
 
         #TODO - make this generic - not tied to mode_ctrl
         #TODO - error trap to make sure that this value is writeable....
@@ -449,8 +477,8 @@ class DERDevice():
 
         if val != self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]:
             # command wasn't written - raise an error
-            _log.info("SetPt: SiteManager.set_point: Command "+str(cmd_path)+" not written. ")
-            _log.info("SetPt: Expected "+self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]+"; Read: "+val)
+            _log.info("SetPt: SiteManager.set_point: Command "+str(cmd_path)+" not written. for "+self.device_id)
+            _log.info("SetPt: Expected "+str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"])+"; Read: "+str(val))
 
 
         self.pending_cmd.append({"Attribute": attribute, "Cmd": cmd})
@@ -567,7 +595,7 @@ class DERSite(DERDevice):
         #self.topics = site_info["Topics"]
         for topics in site_info["Topics"]: #self.topics:
             csv_name = (data_map_dir + self.device_id +"-"+ topics["TopicName"]+"-data-map.csv")
-            _log.debug(csv_name)
+            _log.info(csv_name)
 
             try:
                 with open(csv_name, 'rb') as csvfile:
@@ -576,6 +604,10 @@ class DERSite(DERDevice):
                     for row in data_map:
                         _log.info("row[0] is " + row[0])
                         cur_device = self.init_data_maps(row[1], row[2], row[3], row[0], row[4], row[5], cnt)
+			if cur_device != None:
+				_log.info("cur_device id is "+cur_device.device_id)
+			else:
+				_log.info("no device?")
                         self.extpt_to_device_dict.update({row[0]: cur_device})
             except IOError as e:
                 _log.info("data map file "+csv_name+" not found")
@@ -584,7 +616,8 @@ class DERSite(DERDevice):
 
             for keyval in self.extpt_to_device_dict:
                 #print("Key = " + keyval)
-                _log.debug("Key = " + keyval + ", Val = " + self.extpt_to_device_dict[keyval].device_id)
+		_log.info("keyval is "+keyval);
+                _log.info("Key = " + keyval + ", Val = " + self.extpt_to_device_dict[keyval].device_id)
         self.set_config()
 
 
