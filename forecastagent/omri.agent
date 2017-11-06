@@ -1,0 +1,161 @@
+import logging
+import sys
+import requests
+import pprint,pickle
+import datetime
+from volttron.platform.vip.agent import Agent, PubSub, Core
+from volttron.platform.agent import utils
+from volttron.platform.agent.utils import jsonapi
+from volttron.platform.messaging import topics
+from volttron.platform.messaging import headers as headers_mod
+import xml.etree.ElementTree as ET
+
+_PROD = [4,0,0,0,0,0,0,0,0,68,294,499,666,751,791,787,685,540,
+        717,699,600,580,366,112]
+PROD = [ p* 1500000.0 / max(_PROD) for p in _PROD ]
+
+utils.setup_logging()
+_log = logging.getLogger(__name__)
+
+__version__="0.1"
+
+SAMPLE = """
+<SimulationResponse xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" EnergySiteId="EHmMWnHp-EqzKJx3McTWWg" RequestURL="/SolarAnywhereToolkit/Services/Services.svc/v1/Simulate?EnergySiteId=EHmMWnHp-EqzKJx3McTWWg&amp;StartTime=2011-01-01T09%%3a00%%3a00-08%%3a00&amp;EndTime=2011-01-01T11%%3a00%%3a00-08%%3a00&amp;AmbientTemperature&amp;WindSpeed&amp;key=****EY" Status="Success" xmlns="v3">
+  <SimulationPeriods>
+%s  
+</SimulationPeriods>
+</SimulationResponse>
+"""
+PERIOD = """
+    <SimulationPeriod StartTime="%(start)s" EndTime="%(end)s" Energy_kWh="%(prod)s" ObservationTypes="AD" AmbientTemperature_DegreesC="0" WindSpeed_MetersPerSecond="3" />
+"""
+def CPRPub(config_path, **kwargs):
+    conf = utils.load_config(config_path)
+    query_interval = conf.get("interval",300)
+    topic = conf.get("topic","/cpr/forecast")
+    class CPRAgent(Agent):
+        #
+        """
+        Retrieve locall production forecast for the site, 
+        using the XML-based REST interface.
+
+        At the moment, it will just retrieve a straw sample
+        from the global variables
+TODO: 
+
+        """
+        
+        def __init__(self, config_path, **kwargs):
+            super(CPRAgent, self).__init__(**kwargs)
+            
+            self.default_config = {
+                "interval":1200,
+                "username": "shines",
+                "password":"VolttronShines",
+                "baseurl":"",
+                "topic": "datalogger/cpr/forecast",
+                "horizon":24,
+                "ghi":"/home/schoudhary/volttron/services/contrib/CPRAgent/cpragent/cpr_ghi.pkl",
+                # straw suggestion as this is the only option available.
+                "interval":"PT60M",
+            }
+            self._config = self.default_config.copy()
+            
+            self.vip.config.set_default("config", self.default_config)
+            self.vip.config.subscribe(self.configure, actions=["NEW", "UPDATE"], pattern="config")
+            self.GHI = None
+            self.load_irradiance()
+            _log.warning("loaded GHI on init")
+        def configure(self,config_name, action, contents):
+            self._config.update(contents)
+            self.load_irradiance()
+            # make sure config variables are valid
+            try:
+                pass
+            except ValueError as e:
+                _log.error("ERROR PROCESSING CONFIGURATION: {}".format(e))
+
+        def load_irradiance(self):
+            self.GHI = pickle.load(open(self._config["ghi"])).sort_index().to_period("H")
+            self.GHI *= 1500000 / max(self.GHI.ghi)
+            _log.warning("Loaded irradiance file")
+            
+        def generate_sample(self,
+                            start=None, horizon=24):
+            periods = []
+            
+            start = (datetime.datetime.combine(
+                datetime.date.today(),
+                datetime.time(datetime.datetime.now().hour)) +
+                     datetime.timedelta(minutes=60))
+            _log.warning("START " + start.isoformat())
+            for i in range(horizon):
+                end = start + datetime.timedelta(minutes=60)
+                periods.append(
+                    PERIOD% {
+                        "start":start,
+                        "prod": (
+                            PROD[start.hour]
+                            if self.GHI is None else
+                            self.GHI[start.replace(year=self.GHI.index[0].year):].ghi[0]
+                        ),
+                        "end":end
+                        })
+                start=end
+            return SAMPLE%''.join(periods)
+
+        def parse_query(self,query):
+            """
+            """
+            root = ET.fromstring(query)            
+            ret =  {
+                
+                "CPR" :{
+                    "Readings":[ 
+                         [ child.attrib["StartTime"],
+                           float(child.attrib["Energy_kWh"])]
+                         for child in root[0] ],
+                    "Units":"KWH",
+                    "tz":"UTC",
+                    "data_type":"float"
+                }
+            }
+            return ret
+            
+        @Core.periodic(period = query_interval)
+        def query_cpr(self):
+            """
+            Awaiting account setup:
+
+            a = self._config['LMP']
+            req = requests.get(
+                self._config['baseurl']+a,
+                headers={"Accept":"application/json"},
+                auth=(
+                    self._config['username'],
+                    self._config['password']))            
+            _log.debug("Fetching {}, got {}".format(a, req.status_code))
+
+            if req.status_code == 200:
+"""
+            _log.info("querying for production forecast from CPR")
+            message = self.parse_query(self.generate_sample())
+            self.vip.pubsub.publish(
+                peer="pubsub",
+                topic=self._config['topic'],
+                headers={},
+                message=message)
+    CPRAgent.__name__ = "CPRPub"
+    return CPRAgent(config_path,**kwargs)
+            
+def main(argv=sys.argv):
+    '''Main method called by the platform.'''
+    utils.vip_main(CPRPub)
+
+
+if __name__ == '__main__':
+    # Entry point for script
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        pass
