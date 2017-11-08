@@ -1,0 +1,6 @@
+{
+    "DEFAULT_MESSAGE" :'Executive Message',
+    "DEFAULT_AGENTID": "executive",
+    "DEFAULT_HEARTBEAT_PERIOD": 5,
+    "log-level":"INFO",    
+}
