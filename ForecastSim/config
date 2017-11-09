@@ -1,0 +1,14 @@
+{
+                "interval":290,	
+                "username": "shines",
+                "password":"VolttronShines",
+                "baseurl":"",
+                "topic": "datalogger/cpr/forecast",
+                "horizon":24,	                
+		                "interval":"PT60M",
+                "ghi":"/home/matt/sundial/volttron/services/contrib/ForecastSim/forecast_sim/cpr_ghi.pkl",
+    "agentid": "forecast_sim",
+    "message": "hello"
+
+
+}
