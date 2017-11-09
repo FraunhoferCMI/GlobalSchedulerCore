@@ -1,0 +1,54 @@
+[
+  {
+    "ID": "SystemLoadShift",
+    "ResourceType": "LoadShiftCtrlNode",
+    "Use": "Y",
+    "DeviceList": [
+      {
+        "AgentID":"FLAME",
+        "DeviceID":"FLAME-loadshift"
+      }
+    ]
+  },
+  {
+    "ID": "SystemLoad",
+    "ResourceType": "Load",
+    "Use": "Y",
+    "DeviceList": [
+      {
+        "AgentID":"FLAME",
+        "DeviceID":"FLAME-baseline"
+      }
+    ]
+  },
+  {
+    "ID": "SystemPV",
+    "ResourceType": "PVCtrlNode",
+    "Use": "Y",
+    "DeviceList": [
+      {
+        "AgentID":"ShirleySouth",
+        "DeviceID":"ShirleySouth-PVPlant"
+      },
+      {
+        "AgentID":"ShirleyNorth",
+        "DeviceID":"ShirleyNorth-PVPlant"
+      }
+    ]
+  },
+  {
+    "ID": "SystemESS",
+    "ResourceType": "ESSCtrlNode",
+    "Use": "Y",
+    "DeviceList": [
+      {
+        "AgentID":"ShirleySouth",
+        "DeviceID":"ShirleySouth-ESSPlant"
+      },
+      {
+        "AgentID":"ShirleyNorth",
+        "DeviceID":"ShirleyNorth-ESSPlant"
+      }
+    ]
+  }
+  ]
