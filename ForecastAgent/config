@@ -1,0 +1,27 @@
+{
+                "interval":290,	
+                "userName": "schoudhary@cse.fraunhofer.org",
+                "password":"Shines2017",
+                "querystring":{"key":"FRHR3MXX7"},
+		"url":"https://service.solaranywhere.com/api/v1/BulkSimulate",
+		"payload":"<BulkSimulationRequest xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://service.solaranywhere.com/api/v1">
+                            <EnergySiteIds>
+                                <EnergySiteId>saUCvatIj0S6A5nirHoQIQ</EnergySiteId>
+                            </EnergySiteIds>
+                            <SimulationOptions PVSimulationModel="PVFORM" ShadingModel="ShadeSimulator">
+                                <WeatherDataOptions WeatherDataSource="SolarAnywhere3_2" StartTime=" " EndTime=" "/>
+                             <IntermediateResults>
+                                <IntermediateResult>PowerAC</IntermediateResult>
+                                </IntermediateResults>
+                            </SimulationOptions>
+                        </BulkSimulationRequest>",
+            	"headers": {'content-type': "text/xml; charset=utf-8",
+                        'content-length': "length",},
+                "topic": "devices/cpr",
+                "horizon":24,	                
+		
+    "agentid": "cpr",
+    "message": "hello"
+
+
+}

@@ -13,3 +13,6 @@ Example Web services calls for it:
 
 /fiveminutelmp/current/location/4332
 fiveminutelmp/day/20161003/location/4332
+=======
+# CPRAgent
+Agent for querying Clean Power Research
