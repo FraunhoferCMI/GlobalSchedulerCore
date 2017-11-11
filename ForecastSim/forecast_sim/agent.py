@@ -10,8 +10,10 @@ from volttron.platform.messaging import topics
 from volttron.platform.messaging import headers as headers_mod
 import xml.etree.ElementTree as ET
 
-_PROD = [4,0,0,0,0,0,0,0,0,68,294,499,666,751,791,787,685,540,
-        717,699,600,580,366,112]
+#_PROD = [4,0,0,0,0,0,0,0,0,68,294,499,666,751,791,787,685,540,
+#        717,699,600,580,366,112]
+_PROD = [0,0,0,0,0,0,68,294,499,666,751,791,787,685,540,
+        717,699,600,580,366,112,0,0,0]
 PROD = [ p* 1500000.0 / max(_PROD) for p in _PROD ]
 
 utils.setup_logging()
@@ -112,13 +114,13 @@ TODO:
             root = ET.fromstring(query)
 	    ret =  [ 
                 {
-		    "Forecast": [
-                        float(child.attrib["Energy_kWh"])
-                        for child in root[0] ],
+		    "Forecast": [100*float(v)/1000 for v in _PROD], #[
+                        #float(child.attrib["Energy_kWh"])
+                        #for child in root[0] ],
 		    "Time": [
 			child.attrib["StartTime"] for child in root[0] ]},
 		{ "Forecast":{
-                    "units":"W",
+                    "units":"Pct",#"W",
                     "type":"float"}, 
                   "Time":{
 		    "units":"UTC",
@@ -144,7 +146,7 @@ TODO:
             #        "Units":"KWH",
             #        "tz":"UTC",
             #        "data_type":"float"
-            #    }
+            #    }		
             ]
             return ret
             
