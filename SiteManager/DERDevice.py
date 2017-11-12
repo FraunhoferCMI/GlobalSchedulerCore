@@ -207,13 +207,13 @@ class DERDevice():
 
     ##############################################################################
     def set_config(self):
-	self.config.data_dict.update({"Nameplate_kW": 0})
+        self.config.data_dict.update({"Nameplate_kW": 0})
         _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"]))
         pass
 
     ##############################################################################
     def get_nameplate(self):
-	return self.config.data_dict["Nameplate_kW"]
+        return self.config.data_dict["Nameplate_kW"]
 
 
     ##############################################################################
@@ -222,13 +222,13 @@ class DERDevice():
         To do: how to handle non-opstatus devices?
         """
 
-	# FIXME: this really needs to be thought through more carefully.  
-	# this should be a routine that updates higherlevel endpts if they don't
+        # FIXME: this really needs to be thought through more carefully.
+        #  this should be a routine that updates higherlevel endpts if they don't
         # get populated directly by an end point device by summing up the child-device
         # values....
 
-	# temp fix - assume that end pt dg devices provide the values to be updated...
-	if self.device_type not in self.DGDevice:
+	    # temp fix - assume that end pt dg devices provide the values to be updated...
+	    if self.device_type not in self.DGDevice:
             for key in self.op_status.key_update_list:
                 self.op_status.data_dict[key] = 0            
 	
@@ -319,63 +319,78 @@ class DERDevice():
         Method for converting units between external end points and internal values.
         :return:
         """
-	# if data map units don't match -->
-	# W to kW, kW to W, Wh to kWh, VA to kVA
+        # if data map units don't match -->
+	    # W to kW, kW to W, Wh to kWh, VA to kVA
 	    # in general: (1) if units don't match... ; (2) if no units are included...
 
-	cur_device = self.extpt_to_device_dict[k]
+	    cur_device = self.extpt_to_device_dict[k]
         cur_attribute = self.extpt_to_device_dict[k].datagroup_dict[k]
         keyval = cur_attribute.data_mapping_dict[k]
 
-	if ((endpt_units == "W") and (cur_attribute.units[keyval] == "kW") or
-	    (endpt_units == "Wh") and (cur_attribute.units[keyval] == "kWh")):
+        if ((endpt_units == "W") and
+                (cur_attribute.units[keyval] == "kW")) or\
+                ((endpt_units == "Wh") and
+                     (cur_attribute.units[keyval] == "kWh")):
             if type(cur_attribute.data_dict[keyval]) is list:
-		# FIXME - ugh
+                # FIXME - ugh
                 tmplist = [v/1000 for v in cur_attribute.data_dict[keyval]]
                 del cur_attribute.data_dict[keyval][:]
-		cur_attribute.data_dict[keyval] = tmplist[:]
-                _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
+                cur_attribute.data_dict[keyval] = tmplist[:]
+                _log.info("PopEndpts: converted "+k+"from "+endpt_units+
+                          " to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
             else:
                 cur_attribute.data_dict[keyval] /= 1000
-    	        _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
-	if (endpt_units == "ScaledW") and (cur_attribute.units[keyval] == "kW"):
-	    base_name = keyval[:len(keyval)-len("raw")] # assume this has "_raw" on the end of the name               
-            cur_attribute.data_dict[base_name+"kW"] = (cur_attribute.data_dict[keyval]*10**cur_attribute.data_dict[base_name+"SF"])/1000
-	    _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[base_name+"kW"]))
+                _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+
+                          cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
 
-	if (endpt_units == "Pct") and (cur_attribute.units[keyval] == "kW"):   # FIXME - make this PctkW?
-	    #_log.info("converting pct to kW")	    
-	    nameplate = cur_device.get_nameplate()
-	    _log.info("val is "+str(nameplate))
-	    #if type(cur_attribute.data_dict[keyval]) is int:
-	    #    cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
+        if (endpt_units == "ScaledW") and (cur_attribute.units[keyval] == "kW"):
+            base_name = keyval[:len(keyval)-len("raw")] # assume this has "_raw" on the end of the name
+            cur_attribute.data_dict[base_name+"kW"] = \
+                (cur_attribute.data_dict[keyval]*10**cur_attribute.data_dict[base_name+"SF"])/1000
+            _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+
+                      cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[base_name+"kW"]))
+
+
+        if (endpt_units == "Pct") and (cur_attribute.units[keyval] == "kW"):   # FIXME - make this PctkW?
+            # #_log.info("converting pct to kW")
+            nameplate = cur_device.get_nameplate()
+            _log.info("val is "+str(nameplate))
+
+            #if type(cur_attribute.data_dict[keyval]) is int:
+	        #    cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
             #elif type(cur_attribute.data_dict[keyval]) is float:
-	    #	cur_attribute.data_dict[keyval] = float((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())	    
+	        #	cur_attribute.data_dict[keyval] = float((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
             if type(cur_attribute.data_dict[keyval]) is list:
-		_log.info("converting list from pct to kW")
-		# FIXME - ugh
+                _log.info("converting list from pct to kW")
+                # FIXME - ugh
                 tmplist = [(float(v) / 100) * nameplate for v in cur_attribute.data_dict[keyval]]
                 del cur_attribute.data_dict[keyval][:]
-		cur_attribute.data_dict[keyval] = tmplist[:]
-	    else: # assume int
-		_log.info("converting single pt from pct to kW")
-		_log.info("value is "+str(cur_attribute.data_dict[keyval])+"; nameplate is "+str(nameplate))
-		cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * nameplate)
-		_log.info("new value is "+str(cur_attribute.data_dict[keyval]))
+                cur_attribute.data_dict[keyval] = tmplist[:]
+            else: # assume int
+                _log.info("converting single pt from pct to kW")
+                _log.info("value is "+str(cur_attribute.data_dict[keyval])+"; nameplate is "+str(nameplate))
+                cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * nameplate)
+                _log.info("new value is "+str(cur_attribute.data_dict[keyval]))
                 #cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
                 #_log.info("Unsupported data type for conversion pct to kW")
-	    _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
+	        _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
 
     ##############################################################################
     def convert_units_to_endpt(self, attribute, cmd):
 
         ext_endpt = self.datagroup_dict_list[attribute].map_int_to_ext_endpt[cmd]
         try:
-            _log.info("SetPt: Ext End pt is "+ext_endpt+". Ext units are "+self.datagroup_dict_list[attribute].endpt_units[ext_endpt])
-	    _log.info("SetPt: Int End pt is "+cmd+".  Int units are "+self.datagroup_dict_list[attribute].units[cmd])
-	    if (self.datagroup_dict_list[attribute].endpt_units[ext_endpt] == "Pct") and (self.datagroup_dict_list[attribute].units[cmd] == "kW"):   # FIXME - make this PctkW?
-                self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"] = int((float(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]) / self.get_nameplate()) * 100)
-	        _log.info("SetPt: New val = "+str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
+            _log.info("SetPt: Ext End pt is "+ext_endpt+". Ext units are "+
+                      self.datagroup_dict_list[attribute].endpt_units[ext_endpt])
+            _log.info("SetPt: Int End pt is "+cmd+".  Int units are "+
+                      self.datagroup_dict_list[attribute].units[cmd])
+            if (self.datagroup_dict_list[attribute].endpt_units[ext_endpt] == "Pct") and \
+                    (self.datagroup_dict_list[attribute].units[cmd] == "kW"):   # FIXME - make this PctkW?
+                self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"] = \
+                    int((float(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]) /
+                         self.get_nameplate()) * 100)
+            _log.info("SetPt: New val = "+str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
+
         except KeyError as e:
             _log.info("SetPt: No units found for "+ext_endpt+".  Assume no conversion is needed.")        
 
@@ -385,7 +400,7 @@ class DERDevice():
         """
         This populates DERDevice variables based on the topic list
         """
-	_log.info("PopEndpts: New scrape found")
+        _log.info("PopEndpts: New scrape found")
         for k in incoming_msg:
             try:
                 cur_device = self.extpt_to_device_dict[k].device_id
@@ -400,18 +415,18 @@ class DERDevice():
                 _log.debug("PopEndpts: "+cur_device + "." + cur_attribute_name + "." + keyval + "= " + str(
                     cur_attribute.data_dict[keyval]))
 
-		if meta_data != None:
+                if meta_data != None:
                     #_log.info("PopEndpts: Units - "+meta_data[k]["units"])
                     cur_attribute.endpt_units.update({k: meta_data[k]["units"]})
-		else:
-		    _log.info("PopEndpts: No Meta data found!")
+                else:
+                    _log.info("PopEndpts: No Meta data found!")
 
             except KeyError as e:
                 _log.info("Warning: Key "+k+" not found")
                 pass
 
         for k in incoming_msg:
-	    try:
+            try:
                 self.convert_units_from_endpt(k, meta_data[k]["units"])
             except KeyError as e:
                 _log.info("Skipping: Key "+k+" not found")
@@ -456,10 +471,10 @@ class DERDevice():
             _log.info("SetPt: Error in DERDevice.set_interactive_mode: device type invalid")
 
         #res = reserve_modbus(self, task_id, sitemgr, device_path)
-	res = 0
+	    res = 0
         _log.info("SetPt: path is " + cmd_path + "; end pt = " + str(cmd) + "; val = " + str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
 
-	# convert units if necessary:
+        # convert units if necessary:
         self.convert_units_to_endpt(attribute, cmd)
         ret = sitemgr.vip.rpc.call(
             "platform.actuator",
@@ -604,11 +619,11 @@ class DERSite(DERDevice):
                     for row in data_map:
                         _log.info("row[0] is " + row[0])
                         cur_device = self.init_data_maps(row[1], row[2], row[3], row[0], row[4], row[5], cnt)
-			if cur_device != None:
-				_log.info("cur_device id is "+cur_device.device_id)
-			else:
-				_log.info("no device?")
-                        self.extpt_to_device_dict.update({row[0]: cur_device})
+            if cur_device != None:
+                _log.info("cur_device id is "+cur_device.device_id)
+            else:
+                _log.info("no device?")
+                self.extpt_to_device_dict.update({row[0]: cur_device})
             except IOError as e:
                 _log.info("data map file "+csv_name+" not found")
                 pass
@@ -616,7 +631,7 @@ class DERSite(DERDevice):
 
             for keyval in self.extpt_to_device_dict:
                 #print("Key = " + keyval)
-		_log.info("keyval is "+keyval);
+		        _log.info("keyval is "+keyval);
                 _log.info("Key = " + keyval + ", Val = " + self.extpt_to_device_dict[keyval].device_id)
         self.set_config()
 
@@ -658,14 +673,14 @@ class DERSite(DERDevice):
         """
         for cur_device in self.devices:
             cur_device.set_config()
-	self.config.data_dict.update({"Nameplate_kW": 0})
+        self.config.data_dict.update({"Nameplate_kW": 0})
         _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"]))
-	# TODO: should a site have a nameplate that represents aggregate of children CtrlNodes?
+        # TODO: should a site have a nameplate that represents aggregate of children CtrlNodes?
         pass
 
     ##############################################################################
     def get_nameplate(self):
-	return self.config.data_dict["Nameplate_kW"]
+        return self.config.data_dict["Nameplate_kW"]
 
 
     ##############################################################################
@@ -774,7 +789,7 @@ class DERCtrlNode(DERDevice):
         self.config.data_dict.update({"Nameplate_kW": 0}) # FIXME - charge vs discharge?
         for device in self.devices:
             device.set_config()
-	    self.config.data_dict["Nameplate_kW"] += device.get_nameplate()
+        self.config.data_dict["Nameplate_kW"] += device.get_nameplate()
         _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"]))
 
     ##############################################################################
@@ -838,7 +853,7 @@ class DERCtrlNode(DERDevice):
         # This method has a number of issues -
         #TODO: Limit check
         self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": int(val)})
-	_log.info("Setting Power to "+str(val))
+        _log.info("Setting Power to "+str(val))
         self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
         # where does the actual pwr ctrl live???
 
@@ -866,7 +881,7 @@ class ESSDevice(DERDevice):
         # For PV - configure manually.
         # FIXME: should be done through a config file, not hardcoded
         self.config.data_dict["Mfr"] = "Tesla"
-	self.config.data_dict.update({"Nameplate_kW": 500}) # FIXME - charge vs discharge?
+        self.config.data_dict.update({"Nameplate_kW": 500}) # FIXME - charge vs discharge?
         _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"]))
         _log.info("SetConfig: Mfr = "+self.config.data_dict["Mfr"])
         pass
@@ -886,7 +901,7 @@ class ESSDevice(DERDevice):
         pass
 
     def get_nameplate(self):
-	return self.config.data_dict["Nameplate_kW"]
+        return self.config.data_dict["Nameplate_kW"]
 
 ##############################################################################
 class PVDevice(DERDevice):
@@ -895,13 +910,13 @@ class PVDevice(DERDevice):
         # For PV - configure manually.
         # FIXME: should be done through a config file, not hardcoded
         self.config.data_dict["Mfr"] = "Solectria"
-	self.config.data_dict.update({"Nameplate_kW": 500}) # FIXME - charge vs discharge?
+        self.config.data_dict.update({"Nameplate_kW": 500}) # FIXME - charge vs discharge?
         _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"]))
         _log.info("SetConfig: Mfr = "+self.config.data_dict["Mfr"])
         pass
 
     def get_nameplate(self):
-	return self.config.data_dict["Nameplate_kW"]
+        return self.config.data_dict["Nameplate_kW"]
 
 ##############################################################################
 class VirtualDERCtrlNode(DERCtrlNode):
