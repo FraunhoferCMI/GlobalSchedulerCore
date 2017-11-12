@@ -1,0 +1,15 @@
+{
+    "driver_config": {"device_address": "127.0.0.1", "port":5020, "slave_id":1},
+    #"driver_config": {"device_address": "192.168.10.124", "port":502, "slave_id":1}, 
+    #"driver_config": {"device_address": "192.168.10.195", "port":5020, "slave_id":1},
+    "campus": "",
+    "building": "",
+    "unit": "",
+    "interval": 5,
+    "driver_type": "modbus",
+    "registry_config": "config://registry_configs/site1_registry.csv",
+    "timezone": "UTC",
+    "publish_breadth_first_all":false,
+    "publish_depth_first":false,
+    "publish_breadth_first":false
+}
