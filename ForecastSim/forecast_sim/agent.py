@@ -3,6 +3,7 @@ import sys
 import requests
 import pprint,pickle
 import datetime
+import os
 from volttron.platform.vip.agent import Agent, PubSub, Core
 from volttron.platform.agent import utils
 from volttron.platform.agent.utils import jsonapi
@@ -10,8 +11,10 @@ from volttron.platform.messaging import topics
 from volttron.platform.messaging import headers as headers_mod
 import xml.etree.ElementTree as ET
 
-_PROD = [4,0,0,0,0,0,0,0,0,68,294,499,666,751,791,787,685,540,
-        717,699,600,580,366,112]
+#_PROD = [4,0,0,0,0,0,0,0,0,68,294,499,666,751,791,787,685,540,
+#        717,699,600,580,366,112]
+_PROD = [0,0,0,0,0,0,68,294,499,666,751,791,787,685,540,
+        717,699,600,580,366,112,0,0,0]
 PROD = [ p* 1500000.0 / max(_PROD) for p in _PROD ]
 
 utils.setup_logging()
@@ -47,7 +50,8 @@ TODO:
         
         def __init__(self, config_path, **kwargs):
             super(CPRAgent, self).__init__(**kwargs)
-            
+            self.volttron_root = os.getcwd()
+            self.volttron_root = self.volttron_root+"/../../../../"
             self.default_config = {
                 "interval":1200,
                 "username": "shines",
@@ -55,7 +59,7 @@ TODO:
                 "baseurl":"",
                 "topic": "datalogger/cpr/forecast",
                 "horizon":24,
-                "ghi":"/home/matt/sundial/volttron/services/contrib/ForecastSim/forecast_sim/cpr_ghi.pkl",
+                "ghi":self.volttron_root+"gs_cfg/cpr_ghi.pkl",
                 # straw suggestion as this is the only option available.
                 "interval":"PT60M",
             }
@@ -112,13 +116,13 @@ TODO:
             root = ET.fromstring(query)
 	    ret =  [ 
                 {
-		    "Forecast": [
-                        float(child.attrib["Energy_kWh"])
-                        for child in root[0] ],
+		    "Forecast": [100*float(v)/1000 for v in _PROD], #[
+                        #float(child.attrib["Energy_kWh"])
+                        #for child in root[0] ],
 		    "Time": [
 			child.attrib["StartTime"] for child in root[0] ]},
 		{ "Forecast":{
-                    "units":"W",
+                    "units":"Pct",#"W",
                     "type":"float"}, 
                   "Time":{
 		    "units":"UTC",
@@ -144,7 +148,7 @@ TODO:
             #        "Units":"KWH",
             #        "tz":"UTC",
             #        "data_type":"float"
-            #    }
+            #    }		
             ]
             return ret
             

@@ -4,7 +4,7 @@
       "Topics":[
          {
             "TopicName":"Modbus",
-            "TopicPath":"devices/Shirley-MA/South/PMC"
+            "TopicPath":"devices/Site1"
          },
          {
             "TopicName":"Forecast",
