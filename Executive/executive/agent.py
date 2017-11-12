@@ -208,15 +208,20 @@ class ExecutiveAgent(Agent):
             pattern="config")
         
         #FIXME - this should be set up with a configurable path....        
-        sys.path.append("/home/matt/sundial/SiteManager")
+        #sys.path.append("/home/matt/sundial/SiteManager")
         #SiteCfgFile = "/home/matt/sundial/SiteManager/ShirleySouthSiteConfiguration.json"
         #SiteCfgFile = "/home/matt/sundial/SiteManager/ShirleySouthSiteConfiguration.json"
-        SiteCfgFile = "/home/matt/sundial/SiteManager/NorthSouthSiteConfiguration.json"
+        self.volttron_root = os.getcwd()
+        self.volttron_root = self.volttron_root+"/../../../../"
+        #SiteCfgFile = "/home/matt/sundial/SiteManager/NorthSouthSiteConfiguration.json"
+        SiteCfgFile = self.volttron_root+"gs_cfg/SiteConfiguration.json"
         self.SiteCfgList = json.load(open(SiteCfgFile, 'r'))
 
-        SundialCfgFile = "/home/matt/sundial/SiteManager/SundialSystemConfiguration.json"
+        #SundialCfgFile = "/home/matt/sundial/SiteManager/SundialSystemConfiguration.json"
+        SundialCfgFile = self.volttron_root+"gs_cfg/SundialSystemConfiguration.json"
         self.sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
-
+        _log.info("SiteConfig is "+SiteCfgFile)
+        _log.info("SundialConfig is"+SundialCfgFile)
         self.cnt = 0
 
         self.OptimizerEnable = DISABLED
@@ -274,7 +279,8 @@ class ExecutiveAgent(Agent):
             # FIXME - path to site manager.....
             # FIXME - needs error trapping: (1) is agent already installed? (2) does site mgr agent exist?
             # FIXME - (3) did it start successfully?
-            fname = "/home/matt/.volttron/packaged/site_manageragent-1.0-py2-none-any.whl"
+            fname = self.volttron_root+"packaged/site_manageragent-1.0-py2-none-any.whl"
+            # was "/home/matt/.volttron/packaged/site_manageragent-1.0-py2-none-any.whl"
             uuid = self.vip.rpc.call(CONTROL,
                                      "install_agent_local",
                                      fname,
@@ -669,15 +675,13 @@ class ExecutiveAgent(Agent):
         """
         This method writes an end point to a specified DER Device path
         """
-        fname = "/home/matt/sundial/Executive/cmdfile.txt"
-        #cmd_agentid = cmd["AgentID"]
-        #cmd_method = cmd["FcnName"]
+        #fname = "/home/matt/sundial/Executive/cmdfile.txt"
         mode_val = args[0]
         self.OperatingMode_set = int(mode_val) #self.OperatingModes[self.OperatingModeInd]
 
-        with open(fname, 'a') as datafile:
-            datafile.write(str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
-            _log.info("wrote: "+str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
+        #with open(fname, 'a') as datafile:
+        #    datafile.write(str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
+        _log.info("wrote: "+str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
 
     ##############################################################################
     @Core.receiver('onstop')

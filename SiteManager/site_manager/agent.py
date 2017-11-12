@@ -105,9 +105,12 @@ class SiteManagerAgent(Agent):
         }
         #FIXME - shouldn't be hard-coded!!!
         #FIXME - need to (1) add mapping of topic in the device mapping file; (2) parse this in on_match
-        self.path = ['Shirley-MA/South/PMC'] # was 'devices/Shirley-MA/South/PMC/all'
-        self.data_map_dir = "/home/matt/sundial/SiteManager/data/" #"./data/"
-
+        #self.path = ['Shirley-MA/South/PMC'] # was 'devices/Shirley-MA/South/PMC/all'
+        self.volttron_root = os.getcwd()
+        self.volttron_root = self.volttron_root+"/../../../../"
+        self.data_map_dir = self.volttron_root+"gs_cfg/"
+        _log.info("data dir is "+self.data_map_dir)
+        #self.data_map_dir = "/home/matt/sundial/SiteManager/data/" #"./data/"
         self.cnt = 0
         self._config = self.default_config.copy()
         self._agent_id = self._config.get("DEFAULT_AGENTID")
@@ -162,7 +165,7 @@ class SiteManagerAgent(Agent):
 
         self.topics = cursite["Topics"]
 
-        _log.info("old topic was: "+'devices/'+self.path[0]+'/all')
+        #_log.info("old topic was: "+'devices/'+self.path[0]+'/all')
 
         for topics in self.topics:
             self.vip.pubsub.subscribe(peer='pubsub',prefix=topics["TopicPath"],callback=self.on_match) #+'/all'
