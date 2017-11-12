@@ -122,9 +122,9 @@ class DERDevice():
         """
         #FIXME - this functionality is duplicated elsewhere.  (E.g., in init_device fcns...)  Should reference
         #FIXME - against this method
-	_log.info("FindDevice: "+self.device_id)
+        _log.info("FindDevice: "+self.device_id)
         for cur_device in self.devices:
-	    _log.info("FindDevice: "+cur_device.device_id)
+            _log.info("FindDevice: "+cur_device.device_id)
             if cur_device.device_id == device_id:
                 return cur_device
             else:
@@ -227,8 +227,8 @@ class DERDevice():
         # get populated directly by an end point device by summing up the child-device
         # values....
 
-	    # temp fix - assume that end pt dg devices provide the values to be updated...
-	    if self.device_type not in self.DGDevice:
+        # temp fix - assume that end pt dg devices provide the values to be updated...
+        if self.device_type not in self.DGDevice:
             for key in self.op_status.key_update_list:
                 self.op_status.data_dict[key] = 0            
 	
@@ -320,10 +320,10 @@ class DERDevice():
         :return:
         """
         # if data map units don't match -->
-	    # W to kW, kW to W, Wh to kWh, VA to kVA
-	    # in general: (1) if units don't match... ; (2) if no units are included...
+        #  W to kW, kW to W, Wh to kWh, VA to kVA
+        #  in general: (1) if units don't match... ; (2) if no units are included...
 
-	    cur_device = self.extpt_to_device_dict[k]
+        cur_device = self.extpt_to_device_dict[k]
         cur_attribute = self.extpt_to_device_dict[k].datagroup_dict[k]
         keyval = cur_attribute.data_mapping_dict[k]
 
@@ -467,13 +467,13 @@ class DERDevice():
             _log.info("SetPt: Device path: "+device_path)
             cmd_path = device_path+"/"+self.datagroup_dict_list[attribute].map_int_to_ext_endpt[cmd]
             _log.info("SetPt: Cmd Path: "+cmd_path)
+            _log.info("SetPt: path is " + cmd_path + "; end pt = " + str(cmd) + "; val = " + str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
         else:
             _log.info("SetPt: Error in DERDevice.set_interactive_mode: device type invalid")
 
         #res = reserve_modbus(self, task_id, sitemgr, device_path)
 	    res = 0
-        _log.info("SetPt: path is " + cmd_path + "; end pt = " + str(cmd) + "; val = " + str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
-
+        #FIXME check for exceptions
         # convert units if necessary:
         self.convert_units_to_endpt(attribute, cmd)
         ret = sitemgr.vip.rpc.call(
@@ -619,11 +619,11 @@ class DERSite(DERDevice):
                     for row in data_map:
                         _log.info("row[0] is " + row[0])
                         cur_device = self.init_data_maps(row[1], row[2], row[3], row[0], row[4], row[5], cnt)
-            if cur_device != None:
-                _log.info("cur_device id is "+cur_device.device_id)
-            else:
-                _log.info("no device?")
-                self.extpt_to_device_dict.update({row[0]: cur_device})
+                        if cur_device != None:
+                            _log.info("cur_device id is "+cur_device.device_id)
+                        else:
+                            _log.info("no device?")
+                        self.extpt_to_device_dict.update({row[0]: cur_device})
             except IOError as e:
                 _log.info("data map file "+csv_name+" not found")
                 pass
@@ -789,6 +789,7 @@ class DERCtrlNode(DERDevice):
         self.config.data_dict.update({"Nameplate_kW": 0}) # FIXME - charge vs discharge?
         for device in self.devices:
             device.set_config()
+        #FIXME - exception handle for no device
         self.config.data_dict["Nameplate_kW"] += device.get_nameplate()
         _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"]))
 
