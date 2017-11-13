@@ -630,8 +630,6 @@ class DERSite(DERDevice):
             cnt += 1
 
             for keyval in self.extpt_to_device_dict:
-                #print("Key = " + keyval)
-		        _log.info("keyval is "+keyval);
                 _log.info("Key = " + keyval + ", Val = " + self.extpt_to_device_dict[keyval].device_id)
         self.set_config()
 
