@@ -4,17 +4,18 @@ This is the top-level repository for the core Global Scheduler code.  It is is i
 Detailed information about the code base can be found in the Software Design Document. 
 
 Overview of GlobalSchedulerCore Repository - 
-cfg / Modbus -- Modbus device and registry configuration files 
-cfg / SiteCfg -- SiteConfiguration json files
-cfg / DataMap -- Data Map file repository
-cfg / SystemCfg -- SystemConfiguration repository
-build - location for some automatic recompile scripts
-Executive/ - Executive Agent
-SiteManager/ - SiteManager Agent
-UI/ - UI Agent
-ForecastSim/ - Forecast Simulation Agent
-ISONE_API/ - ISONE API Agent
-lib/ - holds shared libraries for the GS code
+
+	cfg / Modbus -- Modbus device and registry configuration files 
+	cfg / SiteCfg -- SiteConfiguration json files
+	cfg / DataMap -- Data Map file repository
+	cfg / SystemCfg -- SystemConfiguration repository
+	build - location for some automatic recompile scripts
+	Executive/ - Executive Agent
+	SiteManager/ - SiteManager Agent
+	UI/ - UI Agent
+	ForecastSim/ - Forecast Simulation Agent
+	ISONE_API/ - ISONE API Agent
+	lib/ - holds shared libraries for the GS code
 
 
 INSTRUCTIONS for BUILDING & USING
