@@ -1,4 +1,4 @@
-# Copyright © 2017, The Fraunhofer Center for Sustainable Energy
+# Copyright (c) 2017, The Fraunhofer Center for Sustainable Energy
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
