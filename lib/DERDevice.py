@@ -1,3 +1,50 @@
+# Copyright © 2017, The Fraunhofer Center for Sustainable Energy
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in
+#    the documentation and/or other materials provided with the
+#    distribution.
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# This material was prepared as an account of work sponsored by an agency
+# of the United States Government.  Neither the United States Government
+# nor any agency thereof, nor Fraunhofer, nor any of their employees,
+# makes any warranty, express or implied, or assumes any legal liability
+# or responsibility for the accuracy, completeness, or usefulness of any
+# information, apparatus, product, or process disclosed, or represents
+# that its use would not infringe privately owned rights.
+#
+# Reference herein to any specific commercial product, process, or service
+# by trade name, trademark, manufacturer, or otherwise does not necessarily
+# constitute or imply its endorsement, recommendation, or favoring by the
+# United States Government or any agency thereof, or Fraunhofer.  The
+# views and opinions of authors expressed herein do not necessarily state
+# or reflect those of the United States Government or any agency thereof.
+
+
+
+
 from datetime import datetime, timedelta
 import logging
 import sys
@@ -219,16 +266,25 @@ class DERDevice():
     ##############################################################################
     def update_op_status(self):
         """
-        To do: how to handle non-opstatus devices?
+        Summarizes the "operational" status of DERDevices - i.e., power output, state of energy, etc
+        Right now, it sums characteristics from child nodes together and applies the total to the
+        parent node.
+        Right now, this has a baked in assumption that ONLY end point devices (i.e., ESSDevice, PVDevice)
+        are metered, and that parent devices get data from these end points.
+        BUT there are typically meters elsewhere in the system. So there should be some indicator as to
+        whether a device is metered, or whether it's relying on lower order devices for metering.
+        Future implementation would use redundancy to do sanity checks, calculate losses, etc  - i.e.,
+        compare sum of devices power output to metered PCCs....
+
         """
 
         # FIXME: this really needs to be thought through more carefully.
-        #  this should be a routine that updates higherlevel endpts if they don't
+        #  this should be a routine that updates higher level endpts if they don't
         # get populated directly by an end point device by summing up the child-device
         # values....
 
         # temp fix - assume that end pt dg devices provide the values to be updated...
-        if self.device_type not in self.DGDevice:
+        if self.device_type not in self.DGDevice: # this is not an end point device
             for key in self.op_status.key_update_list:
                 self.op_status.data_dict[key] = 0            
 	
@@ -236,24 +292,6 @@ class DERDevice():
             cur_device.update_op_status()            
             for key in self.op_status.key_update_list:
                 self.op_status.data_dict[key] += int(cur_device.op_status.data_dict[key])
-
-        # IF the current device is an actual generator (as opposed to a virtualized aggregation),
-        # it should:
-        #     convert to pwr = pwr_raw x sf
-        #     if it's of type ess, it should ? populate energy?
-        #     What about power available -- ? should be nameplate for PV
-        #     should be charge power for ESS, discharge power for ESS
-        #     import power available, export power available.
-
-        # for now: do this in the very dumb brute force way, and then later, can fix it for
-        # scalability
-
-        #if self.device_type in self.DGDevice:
-            # this device is an end point generator
-            # FIXME: could automate the below / error trap the below in a number of ways
-            # FIXME: SF should be referenced to a 10^SF power, not multiplication
-        #    self.op_status.data_dict["Pwr_kW"] = int(self.op_status.data_dict["Pwr_raw"]) * self.POWERS[
-        #        int(self.op_status.data_dict["Pwr_SF"])]
 
         _log.debug("OpStatus: device id is: " + self.device_id)
         for k, v in self.op_status.data_dict.items():
@@ -302,7 +340,8 @@ class DERDevice():
     ##############################################################################
     def update_mode_status(self):
         """
-        Dummy fcn
+        Dummy fcn - this function only does something for DERCtrlNodes.  Otherwise it just
+        traverses the site tree to find a DERCtrlNodes
         """
         for cur_device in self.devices:
             cur_device.update_mode_status()
@@ -317,11 +356,13 @@ class DERDevice():
     def convert_units_from_endpt(self, k, endpt_units):
         """
         Method for converting units between external end points and internal values.
+        Only a few conversions are implemented -
+        - W to kW, Wh to kWh.
+        - SunSpec scale factors
+        - Pct to kW
+        This is a bit kludgy but it works...
         :return:
         """
-        # if data map units don't match -->
-        #  W to kW, kW to W, Wh to kWh, VA to kVA
-        #  in general: (1) if units don't match... ; (2) if no units are included...
 
         cur_device = self.extpt_to_device_dict[k]
         cur_attribute = self.extpt_to_device_dict[k].datagroup_dict[k]
@@ -444,7 +485,14 @@ class DERDevice():
     def set_point(self, attribute, cmd, sitemgr):
         """
         sets an arbitrary point to this device's command space.
-        Reserves modbus, strips out "device from the data path, ...
+        Reserves modbus, strips out "device" from the data path (required by actuator/set_point),
+        converts units from internal context to external context, and then issues an RPC call
+        to actuator/set_point.
+        Immediately reads the end point to ensure that the read was successfully completed.
+        FIXME: Currently this method is explicitly for modbus devices.  There should be a generic version.
+        This should get moved to a DERModbus Class.
+        FIXME: Possibly need to include some latency / retry / or timeout period for the "check read" portion
+        of this routine.  (i.e., in case there is some command latency...)
         """
         #FIXME - this should either be a standalone method or it should be part of a "ModbusDevice Class"
         #FIXME - ID in the RPC call should be the VIP agent identity...
@@ -935,121 +983,3 @@ class VirtualDERCtrlNode(DERCtrlNode):
 
     def set_config(self):
         pass
-
-    pass
-
-
-
-##############################################################################
-class Deprecated_DERDevice():
-    """
-    Obsolete Object model for defining a DER Device
-    """
-
-    ##############################################################################
-    def __init__(self, device_id="site1", device_type="Site", parent_device=None):
-        print("Device ID = " + str(device_id))
-        print("Device Type = " + device_type)
-        # print("Parent Device = "+parent_device)
-        self.device_id = device_id
-        self.device_type = device_type
-        self.parent_device = parent_device
-        self.devices = []
-        self.set_nameplate()
-        self.DGDevice = ["PV", "ESS"]
-        self.DGPlant = ["ESS_PLANT", "PV_PLANT"]
-
-        # First, build a logical model of the site - starting with the top-level
-        # "site", and then building a tree of one or more child devices.
-        # The device-list file naming convention and syntax is as follows:
-        # filename = "fullDeviceNamePath-device-list.csv"
-        # children devices are listed within the file as "UniqueDeviceID,device_type"
-        # The site is built recursively, with each child device corresponding to a new
-        # DERDevice instance
-        csv_dir = "./data/"
-        csv_name = (csv_dir + device_id + "-device-list.csv")
-        print(csv_name)
-        try:
-            with open(csv_name, 'rb') as csvfile:
-                self.device_list = csv.reader(csvfile)
-                for row in self.device_list:
-                    print(row[0] + " " + row[1])
-                    if row[1] == 'ESS':
-                        self.devices.append(
-                            ESSDevice(device_id=(device_id + "-" + row[0]), device_type=row[1], parent_device=self))
-                    elif (row[1] in self.DGPlant):
-                        self.devices.append(
-                            DERCtrlNode(device_id=(device_id + "-" + row[0]), device_type=row[1], parent_device=self))
-                    else:
-                        self.devices.append(
-                            DERDevice(device_id=(device_id + "-" + row[0]), device_type=row[1], parent_device=self))
-        except IOError as e:
-            # file name not found implies that the device does not have any children
-            print(device_id + " is a TERMINAL DEVICE")
-            pass
-
-        # Several different dictionaries are created from the config file -
-        # extpt_to_device_dict maps the modbus end point to a device within the current site
-        # On __init__, each device is initialized with several DeviceAttribute objects (config,
-        # op_status, health_status, etc).  A second dictionary (datagropu_dict) is created that
-        # maps the "logical
-        # group" column in the config file to the corresponding DeviceAttribute object
-        # Each DeviceAttribute object then includes two different mapping dictionaries.  The first
-        # (DeviceAttribute.data_mapping_dict) maps modbus endpoint to a key in the DeviceAttribute
-        # namespace.  The second dictionary (DeviceAttribute.data_dict) maps the local key to actual
-        # data payload.
-        # In combination, these dictionaries are used to map incoming modbus values to logical end
-        # points within site's data model.
-        # An example "mapping chain" is as follows -
-        # SiteEndPtDeviceObject = vpt_to_device["ModbusEndPt"]
-        # SiteEndPtDataGroup    = ModbusEndPtDeviceObject.datagroup_dict["ModbusEndPt"]
-        # SiteEndPtDataLabel    = ModbusEndPtDataGroup.data_mapping_dict["ModbusEndPt"]
-        # SiteEndPtData         = ModbusEndPtDataGroup.data_mapping_dict["SiteEndPtDataLabel"]
-
-        self.datagroup_dict = {}
-        self.config = self.DeviceAttributes("Config")
-        self.op_status = self.DeviceAttributes("OpStatus")
-        self.health_status = self.DeviceAttributes("HealthStatus")
-        self.mode_status = self.DeviceAttributes("ModeStatus")
-        self.mode_ctrl = self.DeviceAttributes("ModeControl")
-        self.pwr_ctrl = self.DeviceAttributes("RealPwrCtrl")
-
-        print("device is ..." + self.device_id)
-        self.datagroup_dict_list = {}
-        self.datagroup_dict_list.update({"Config": self.config})
-        self.datagroup_dict_list.update({"OpStatus": self.op_status})
-        self.datagroup_dict_list.update({"HealthStatus": self.health_status})
-        self.datagroup_dict_list.update({"ModeStatus": self.mode_status})
-        self.datagroup_dict_list.update({"ModeControl": self.mode_ctrl})
-        self.datagroup_dict_list.update({"RealPwrCtrl": self.pwr_ctrl})
-
-
-    ##############################################################################
-    def populate_device(self):
-        """
-        This populates DERDevice variables based on a dummy topic message from a data file
-        """
-        self.lock = 1  # indicates that values are updating / need to wait
-
-        pubsub_msg_fname = ("test-msg.csv")
-
-        try:
-            with open(pubsub_msg_fname, 'rb') as csvfile:
-                incoming_msg = csv.reader(csvfile)
-                for endpt in incoming_msg:
-                    print(str(endpt[0]))
-                    cur_device = self.extpt_to_device_dict[endpt[0]].device_id
-                    cur_attribute = self.extpt_to_device_dict[endpt[0]].datagroup_dict[endpt[0]]
-                    cur_attribute_name = cur_attribute.data_mapping_dict["GrpName"]
-                    keyval = cur_attribute.data_mapping_dict[endpt[0]]
-                    cur_attribute.data_dict[keyval] = endpt[1]
-                    print("Keyval is " + cur_device + "." + cur_attribute_name + "." + keyval + "; value is " +
-                          cur_attribute.data_dict[keyval])
-
-                    # update_endpoint(endpt, self.vpt_to_datagroup_dict, self.vpt_to_device_endpoint_dict)
-        except IOError as e:
-            print("No Msg Found!")
-
-        self.update_op_status()
-        self.update_health_status()
-        self.update_mode_status()
