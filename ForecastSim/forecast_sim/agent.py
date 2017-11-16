@@ -101,7 +101,7 @@ TODO:
                 "username": "shines",
                 "password":"VolttronShines",
                 "baseurl":"",
-                "topic": "datalogger/cpr/forecast",
+                "topic": "devices/cpr/forecast/all",
                 "horizon":24,
                 "ghi":self.volttron_root+"gs_cfg/cpr_ghi.pkl",
                 # straw suggestion as this is the only option available.

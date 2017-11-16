@@ -8,7 +8,7 @@
          },
          {
             "TopicName":"Forecast",
-            "TopicPath":"datalogger/cpr/forecast"
+            "TopicPath":"devices/cpr/forecast"
          }
       ],
       "Use" :"Y",
