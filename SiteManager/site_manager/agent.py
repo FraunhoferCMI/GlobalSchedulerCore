@@ -265,6 +265,41 @@ class SiteManagerAgent(Agent):
         # self.summarize(out,headers)
 
     ##############################################################################
+    def publish_data(self, TimeStamp_str):
+        """
+        method for publishing database topics.  First publishes data for SiteManager
+        agent itself, then it publishes it for the associated DERSite
+        this is a very rough first cut - note that the code is basically replicated 
+        with what is in the DERSite version of this routine - need to figure out how
+        to modularize.  Probably move to a library...
+
+        Input is a timestamp that has been converted to a string
+        """
+        # 1. build the path:
+        # publish to a root topic that is "datalogger/<agentname>Agent":
+        topic = "datalogger/"+self.site.device_id+"Agent"
+        
+        # 2. build a datalogger-compatible msg:
+        msg = {
+            "Mode": {
+                "Readings":[TimeStamp_str, self.mode], 
+                "Units": "",
+                "tz":"UTC",    #FIXME: timezone ?????
+                "data_type":"uint"} #FIXME: data type????
+               }
+        _log.info("Publish: "+"Mode"+": "+str(msg["Mode"])+" on "+ topic)
+
+        # 3. publish:
+        self.vip.pubsub.publish('pubsub', 
+                                 topic, 
+                                 headers={}, 
+                                 message=msg).get(timeout=10.0)
+
+        self.site.publish_device_data(TimeStamp_str, self)
+
+
+
+    ##############################################################################
     @RPC.export
     def update_site_status(self):
         """
@@ -396,8 +431,7 @@ class SiteManagerAgent(Agent):
         for k, v in self.SiteErrors.items():
             _log.info(k+": "+str(v))
  
-        self.site.publish_device_data(TimeStamp.strftime("%Y-%m-%dT%H:%M:%S"), self)
-
+        self.publish_data(TimeStamp.strftime("%Y-%m-%dT%H:%M:%S"))
 
         return self.SiteErrors
 

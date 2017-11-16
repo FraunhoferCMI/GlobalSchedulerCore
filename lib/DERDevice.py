@@ -586,9 +586,6 @@ class DERDevice():
         and for each var, it would write the site/attribute/value.     
         """
 
-        _log.info("Publish: "+self.device_id)
- 
-        
         for attribute in self.datagroup_dict_list:
             for k,v in self.datagroup_dict_list[attribute].data_dict.items():
                 # 1. build the path:
@@ -596,12 +593,8 @@ class DERDevice():
                 device_path_str = self.device_id.replace('-', '/')
                 topic = "datalogger/"+device_path_str+"/"+attribute
 
-	        _log.info("Publish: "+topic)
-                _log.info("Publish: k="+k+" v="+str(v))
-
                 try:
                     units = self.datagroup_dict_list[attribute].units[k]
-                    _log.info("Publish: "+units)
                 except KeyError:
                     units = ""
 
@@ -613,7 +606,7 @@ class DERDevice():
                         "tz":"UTC",    #FIXME: timezone ?????
                         "data_type":"int"} #FIXME: data type????
                     }
-	        _log.info("Publish: "+str(msg[k]))
+	        _log.debug("Publish: "+k+": "+str(msg[k])+" on "+ topic)
 
                 # 3. publish:
                 SiteMgr.vip.pubsub.publish('pubsub', 
