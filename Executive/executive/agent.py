@@ -126,6 +126,10 @@ class SundialSystemResource(SunDialResource):
         pass
 
 def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW, max_discharge_kW):
+    
+    # setpoint_cmd_interval indicates how frequently the target setpoint is recalculated.
+    # it is used to determine what the max sustainable charge / discharge rate is for the
+    # battery before the next time that we receive a high level schedule request.
     setpoint_cmd_interval = 300
     sec_per_hr = 60 * 60
 
@@ -148,9 +152,10 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     charge_energy_available = max_SOE_kWh - SOE_kWh
 
     if energy_required < discharge_energy_available:
-        #
+        # (discharge) set point needs to be adjusted to meet a min_SOE_kWh constraint 
         setpoint = discharge_energy_available / (setpoint_cmd_interval / sec_per_hr)
     elif energy_required > charge_energy_available:
+        # (charge) set point needs to be adjusted to meet a max_SOE_kWh constraint
         setpoint = charge_energy_available / (setpoint_cmd_interval / sec_per_hr)
 
     return setpoint
