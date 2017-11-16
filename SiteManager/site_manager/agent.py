@@ -395,6 +395,9 @@ class SiteManagerAgent(Agent):
 
         for k, v in self.SiteErrors.items():
             _log.info(k+": "+str(v))
+ 
+        self.site.publish_device_data(TimeStamp.strftime("%Y-%m-%dT%H:%M:%S"), self)
+
 
         return self.SiteErrors
 

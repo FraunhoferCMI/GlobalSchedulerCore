@@ -576,6 +576,57 @@ class DERDevice():
 	#self.pending_cmd = []
         return cmd_failure
 
+
+    ##############################################################################
+    #@RPC.export
+    def publish_device_data(self, TimeStamp, SiteMgr):
+        """
+        This method publishes DERDevice data to a specific topic
+        the way this should probably work is that you should traverse the site tree
+        and for each var, it would write the site/attribute/value.     
+        """
+
+        _log.info("Publish: "+self.device_id)
+ 
+        
+        for attribute in self.datagroup_dict_list:
+            for k,v in self.datagroup_dict_list[attribute].data_dict.items():
+                # 1. build the path:
+                # change "-" to "/" in the device_id:
+                device_path_str = self.device_id.replace('-', '/')
+                topic = "datalogger/"+device_path_str+"/"+attribute
+
+	        _log.info("Publish: "+topic)
+                _log.info("Publish: k="+k+" v="+str(v))
+
+                try:
+                    units = self.datagroup_dict_list[attribute].units[k]
+                    _log.info("Publish: "+units)
+                except KeyError:
+                    units = ""
+
+                # 2. build a datalogger-compatible msg:
+                msg = {
+                    k: {
+                        "Readings":[TimeStamp, v], 
+                        "Units": units,
+                        "tz":"UTC",    #FIXME: timezone ?????
+                        "data_type":"int"} #FIXME: data type????
+                    }
+	        _log.info("Publish: "+str(msg[k]))
+
+                # 3. publish:
+                SiteMgr.vip.pubsub.publish('pubsub', 
+                                 topic, 
+                                 headers={}, 
+                                 message=msg).get(timeout=10.0)
+
+        # now recursively call for each child device:
+        for cur_device in self.devices:
+            child_device = cur_device.publish_device_data(TimeStamp, SiteMgr)        
+
+
+
 ##############################################################################
 def reserve_modbus(device, task_id, sitemgr, device_path):
     #request_status = "FAILURE"
