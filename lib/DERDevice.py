@@ -50,6 +50,7 @@ import logging
 import sys
 import os
 import csv
+import HistorianTools
 from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
 from volttron.platform.agent import utils
 from volttron.platform.messaging import headers as headers_mod
@@ -579,10 +580,10 @@ class DERDevice():
 
     ##############################################################################
     #@RPC.export
-    def publish_device_data(self, TimeStamp, SiteMgr):
+    def publish_device_data(self, TimeStamp_str, SiteMgr):
         """
         This method publishes DERDevice data to a specific topic
-        the way this should probably work is that you should traverse the site tree
+        it traverses the site tree
         and for each var, it would write the site/attribute/value.     
         """
 
@@ -590,33 +591,24 @@ class DERDevice():
             for k,v in self.datagroup_dict_list[attribute].data_dict.items():
                 # 1. build the path:
                 # change "-" to "/" in the device_id:
-                device_path_str = self.device_id.replace('-', '/')
-                topic = "datalogger/"+device_path_str+"/"+attribute
+                device_path_str = self.device_id.replace('-', '/')+"/"+attribute
+
+                #topic = "datalogger/"+device_path_str+"/"+attribute
 
                 try:
                     units = self.datagroup_dict_list[attribute].units[k]
                 except KeyError:
                     units = ""
 
-                # 2. build a datalogger-compatible msg:
-                msg = {
-                    k: {
-                        "Readings":[TimeStamp, v], 
-                        "Units": units,
-                        "tz":"UTC",    #FIXME: timezone ?????
-                        "data_type":"int"} #FIXME: data type????
-                    }
-	        _log.debug("Publish: "+k+": "+str(msg[k])+" on "+ topic)
-
-                # 3. publish:
-                SiteMgr.vip.pubsub.publish('pubsub', 
-                                 topic, 
-                                 headers={}, 
-                                 message=msg).get(timeout=10.0)
+                HistorianTools.publish_data(SiteMgr, 
+                                            device_path_str, 
+                                            TimeStamp_str, 
+                                            k, 
+                                            v)
 
         # now recursively call for each child device:
         for cur_device in self.devices:
-            child_device = cur_device.publish_device_data(TimeStamp, SiteMgr)        
+            child_device = cur_device.publish_device_data(TimeStamp_str, SiteMgr)        
 
 
 

@@ -51,6 +51,7 @@ import os
 import csv
 import json
 import DERDevice
+import HistorianTools
 from volttron.platform.messaging.health import STATUS_GOOD
 from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
 from volttron.platform.agent import utils
@@ -269,32 +270,16 @@ class SiteManagerAgent(Agent):
         """
         method for publishing database topics.  First publishes data for SiteManager
         agent itself, then it publishes it for the associated DERSite
-        this is a very rough first cut - note that the code is basically replicated 
-        with what is in the DERSite version of this routine - need to figure out how
-        to modularize.  Probably move to a library...
+        this is a very rough first cut
 
         Input is a timestamp that has been converted to a string
         """
-        # 1. build the path:
-        # publish to a root topic that is "datalogger/<agentname>Agent":
-        topic = "datalogger/"+self.site.device_id+"Agent"
-        
-        # 2. build a datalogger-compatible msg:
-        msg = {
-            "Mode": {
-                "Readings":[TimeStamp_str, self.mode], 
-                "Units": "",
-                "tz":"UTC",    #FIXME: timezone ?????
-                "data_type":"uint"} #FIXME: data type????
-               }
-        _log.info("Publish: "+"Mode"+": "+str(msg["Mode"])+" on "+ topic)
 
-        # 3. publish:
-        self.vip.pubsub.publish('pubsub', 
-                                 topic, 
-                                 headers={}, 
-                                 message=msg).get(timeout=10.0)
-
+        HistorianTools.publish_data(self, 
+                                    self.site.device_id+"Agent", 
+                                    TimeStamp_str, 
+                                    "Mode", 
+                                    self.mode)
         self.site.publish_device_data(TimeStamp_str, self)
 
 
