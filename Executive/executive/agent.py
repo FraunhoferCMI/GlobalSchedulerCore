@@ -59,7 +59,7 @@ from volttron.platform.agent.known_identities import (
     VOLTTRON_CENTRAL, VOLTTRON_CENTRAL_PLATFORM, CONTROL, CONFIGURATION_STORE)
 
 from . import settings
-
+import HistorianTools
 
 import DERDevice
 from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLED, DISABLED)
@@ -251,6 +251,13 @@ class ExecutiveAgent(Agent):
         if self._heartbeat_period != 0:
             self.vip.heartbeat.start_with_period(self._heartbeat_period)
             self.vip.health.set_status(STATUS_GOOD, self._message)
+
+        TimeStamp = datetime.now()
+        HistorianTools.publish_data(self, 
+                                    "Executive", 
+                                    TimeStamp.strftime("%Y-%m-%dT%H:%M:%S"), 
+                                    "OperatingMode", 
+                                    self.OperatingMode)
 
         # I think right here is where I want to do my "init"-type functions...
         # one thought is to instantiate a new DERDevice right here and see if that works!
@@ -450,7 +457,7 @@ class ExecutiveAgent(Agent):
 
 
     ##############################################################################
-    @Core.periodic(5)#GS_SCHEDULE)
+    @Core.periodic(GS_SCHEDULE)
     def run_optimizer(self):
         """
         place holder for optimizer
@@ -596,7 +603,7 @@ class ExecutiveAgent(Agent):
         pass
 
     ##############################################################################
-    @Core.periodic(1)#EXECUTIVE_CLKTIME)
+    @Core.periodic(EXECUTIVE_CLKTIME)
     def run_executive(self):
         """
         Periodically polls system mode and health indicators and transitions system state accordingly
@@ -604,7 +611,6 @@ class ExecutiveAgent(Agent):
         """
 
         _log.info("Running Executive.  Curent Mode = "+self.OperatingModes[self.OperatingMode])
-
 
         self.check_site_statuses()
 
@@ -614,12 +620,12 @@ class ExecutiveAgent(Agent):
 
             self.OperatingMode = self.OperatingMode_set
 
-            self.vip.pubsub.publish('pubsub',
-                                    'data/Executive/all',
-                                    headers={},
-                                    message=[self.OperatingModes[self.OperatingMode]]).get(timeout=10.0)
-
-
+            TimeStamp = datetime.now()
+            HistorianTools.publish_data(self, 
+                                        "Executive", 
+                                        TimeStamp.strftime("%Y-%m-%dT%H:%M:%S"), 
+                                        "OperatingMode", 
+                                        self.OperatingMode)
 
             if self.OperatingMode == IDLE:
                 # change sites to AUTO mode
