@@ -70,7 +70,7 @@ __version__ = '1.0'
 ##############################################################################
 class UIAgent(Agent):
     """
-    Runs SunDial Executive state machine
+    Interface for sending instructions from command line to GS
     """
 
     def __init__(self, config_path, **kwargs):
@@ -171,26 +171,6 @@ class UIAgent(Agent):
             cwd = os.getcwd()
             _log.info("Current directory: "+cwd)
             pass
-
-
-    @PubSub.subscribe('pubsub', 'devices/Shirley-MA/South/PMC/all')
-    def ieb_scrape_to_datafile(self, peer, sender, bus,  topic, headers, message):
-
-        if sender == 'pubsub.compat':
-            message = compat.unpack_legacy_message(headers, message)
-        data = message[0]
-
-        TimeStamp = datetime.strptime(
-            headers["TimeStamp"][:19],
-            "%Y-%m-%dT%H:%M:%S"
-        )
-
-        fname = "/home/matt/sundial/UI/testlogfile.txt"
-        with open(fname, 'a') as datafile:
-            for k, v in data.items():
-                datafile.write(str(TimeStamp)+" "+str(k)+" "+str(v)+"\n")
-
-
 
 def main(argv=sys.argv):
     '''Main method called by the eggsecutable.'''
