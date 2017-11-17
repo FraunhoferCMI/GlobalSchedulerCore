@@ -422,9 +422,9 @@ class DERDevice():
 
         ext_endpt = self.datagroup_dict_list[attribute].map_int_to_ext_endpt[cmd]
         try:
-            _log.info("SetPt: Ext End pt is "+ext_endpt+". Ext units are "+
+            _log.debug("SetPt: Ext End pt is "+ext_endpt+". Ext units are "+
                       self.datagroup_dict_list[attribute].endpt_units[ext_endpt])
-            _log.info("SetPt: Int End pt is "+cmd+".  Int units are "+
+            _log.debug("SetPt: Int End pt is "+cmd+".  Int units are "+
                       self.datagroup_dict_list[attribute].units[cmd])
             if (self.datagroup_dict_list[attribute].endpt_units[ext_endpt] == "Pct") and \
                     (self.datagroup_dict_list[attribute].units[cmd] == "kW"):   # FIXME - make this PctkW?
@@ -503,8 +503,8 @@ class DERDevice():
 
         #TODO - make this generic - not tied to mode_ctrl
         #TODO - error trap to make sure that this value is writeable....
-        _log.info("SetPt: Cmd - "+str(cmd)+"; attribute - "+str(attribute)+"; topic # = " + str(self.datagroup_dict_list[attribute].topic_map[cmd]))
-        _log.info("SetPt: topic = "+sitemgr.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"])
+        _log.debug("SetPt: Cmd - "+str(cmd)+"; attribute - "+str(attribute)+"; topic # = " + str(self.datagroup_dict_list[attribute].topic_map[cmd]))
+        _log.debug("SetPt: topic = "+sitemgr.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"])
 
         # indicates that a command has been sent to the target device, but target device has not
         # been re-read with updated values since the command was issued.
@@ -513,10 +513,13 @@ class DERDevice():
         device_topic = sitemgr.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"]
         if device_topic.startswith(device_prefix) == True:
             device_path = device_topic[len(device_prefix):]
-            _log.info("SetPt: Device path: "+device_path)
+            _log.debug("SetPt: Device path: "+device_path)
             cmd_path = device_path+"/"+self.datagroup_dict_list[attribute].map_int_to_ext_endpt[cmd]
-            _log.info("SetPt: Cmd Path: "+cmd_path)
-            _log.info("SetPt: path is " + cmd_path + "; end pt = " + str(cmd) + "; val = " + str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
+            _log.debug("SetPt: Cmd Path: "+cmd_path)
+            _log.debug("SetPt: path is " + cmd_path + "; end pt = " + str(cmd) + "; val = " + str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
+            _log.debug("SetPt: Setting " + str(cmd) + "= " + str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
+
+
         else:
             _log.info("SetPt: Error in DERDevice.set_interactive_mode: device type invalid")
 
