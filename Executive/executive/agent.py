@@ -62,7 +62,7 @@ from . import settings
 import HistorianTools
 
 import DERDevice
-from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLED, DISABLED)
+from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -217,6 +217,11 @@ class ExecutiveAgent(Agent):
         self.OptimizerEnable = DISABLED
         self.UICtrlEnable = DISABLED
  
+        self.optimizer_info = {}
+        self.optimizer_info.update({"setpoint": 0})
+        self.optimizer_info.update({"targetPwr_kW": 0})
+        self.optimizer_info.update({"curPwr_kW": 0})
+
 
 
     ##############################################################################
@@ -549,8 +554,9 @@ class ExecutiveAgent(Agent):
                                       nodes["DeviceID"],
                                       pro_rata_share)
 
-
-
+            self.optimizer_info["setpoint"]     = setpoint
+            self.optimizer_info["targetPwr_kW"] = targetPwr_kW
+            self.optimizer_info["curPwr_kW"]    = curPwr_kW
             # figure out what time it is right now
             # extract the right forecast from that time
 
@@ -601,6 +607,27 @@ class ExecutiveAgent(Agent):
 
             # we know the agent_id for each ctrl device.
         pass
+
+    ##############################################################################
+    @Core.periodic(STATUS_MSG_PD)
+    def print_status_msg(self):
+        """
+        prints status to log file and to database
+        :return:
+        """
+
+        _log.info("ExecutiveStatus: Mode = "+self.OperatingModes[self.OperatingMode])
+
+        TimeStamp = datetime.now()
+
+        for k,v in self.optimizer_info.items():
+            _log.info("ExecutiveStatus: " + k + "=" + str(v))
+  
+            HistorianTools.publish_data(self, 
+                                        "Executive", 
+                                        TimeStamp.strftime("%Y-%m-%dT%H:%M:%S"), 
+                                        k, 
+                                        v)
 
     ##############################################################################
     @Core.periodic(EXECUTIVE_CLKTIME)
