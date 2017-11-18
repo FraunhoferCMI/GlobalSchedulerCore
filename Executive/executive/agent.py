@@ -51,6 +51,7 @@ import os
 import csv
 import json
 import gevent
+from pytz import timezone
 from volttron.platform.messaging.health import STATUS_GOOD
 from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
 from volttron.platform.agent import utils
@@ -557,6 +558,7 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["setpoint"]     = setpoint
             self.optimizer_info["targetPwr_kW"] = targetPwr_kW
             self.optimizer_info["curPwr_kW"]    = curPwr_kW
+
             # figure out what time it is right now
             # extract the right forecast from that time
 
@@ -617,15 +619,14 @@ class ExecutiveAgent(Agent):
         """
 
         _log.info("ExecutiveStatus: Mode = "+self.OperatingModes[self.OperatingMode])
-
-        TimeStamp = datetime.now()
+        TimeStamp = utils.get_aware_utc_now() # datetime.now()
 
         for k,v in self.optimizer_info.items():
             _log.info("ExecutiveStatus: " + k + "=" + str(v))
   
             HistorianTools.publish_data(self, 
                                         "Executive", 
-                                        TimeStamp.strftime("%Y-%m-%dT%H:%M:%S"), 
+                                        TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"), 
                                         k, 
                                         v)
 
@@ -647,10 +648,10 @@ class ExecutiveAgent(Agent):
 
             self.OperatingMode = self.OperatingMode_set
 
-            TimeStamp = datetime.now()
+            TimeStamp = utils.get_aware_utc_now()
             HistorianTools.publish_data(self, 
                                         "Executive", 
-                                        TimeStamp.strftime("%Y-%m-%dT%H:%M:%S"), 
+                                        TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"), 
                                         "OperatingMode", 
                                         self.OperatingMode)
 

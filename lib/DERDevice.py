@@ -603,6 +603,10 @@ class DERDevice():
                 except KeyError:
                     units = ""
 
+                TimeStamp = utils.get_aware_utc_now() # datetime.now() 
+                TimeStamp_str = TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
+
+
                 HistorianTools.publish_data(SiteMgr, 
                                             device_path_str, 
                                             TimeStamp_str, 

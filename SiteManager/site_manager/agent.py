@@ -416,7 +416,9 @@ class SiteManagerAgent(Agent):
         for k, v in self.SiteErrors.items():
             _log.info(k+": "+str(v))
  
-        self.publish_data(TimeStamp.strftime("%Y-%m-%dT%H:%M:%S"))
+        TimeStamp = utils.get_aware_utc_now() 
+        #_log.info("SiteManagerStatus: " +TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f %Z%z"))
+        self.publish_data(TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"))
 
         return self.SiteErrors
 
