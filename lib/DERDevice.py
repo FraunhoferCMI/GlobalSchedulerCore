@@ -583,7 +583,7 @@ class DERDevice():
 
     ##############################################################################
     #@RPC.export
-    def publish_device_data(self, TimeStamp_str, SiteMgr):
+    def publish_device_data(self, SiteMgr):
         """
         This method publishes DERDevice data to a specific topic
         it traverses the site tree
@@ -596,26 +596,20 @@ class DERDevice():
                 # change "-" to "/" in the device_id:
                 device_path_str = self.device_id.replace('-', '/')+"/"+attribute
 
-                #topic = "datalogger/"+device_path_str+"/"+attribute
-
                 try:
                     units = self.datagroup_dict_list[attribute].units[k]
                 except KeyError:
                     units = ""
 
-                TimeStamp = utils.get_aware_utc_now() # datetime.now() 
-                TimeStamp_str = TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
-
-
                 HistorianTools.publish_data(SiteMgr, 
                                             device_path_str, 
-                                            TimeStamp_str, 
+                                            units, 
                                             k, 
                                             v)
 
         # now recursively call for each child device:
         for cur_device in self.devices:
-            child_device = cur_device.publish_device_data(TimeStamp_str, SiteMgr)        
+            child_device = cur_device.publish_device_data(SiteMgr)        
 
 
 

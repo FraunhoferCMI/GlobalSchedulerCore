@@ -59,7 +59,7 @@ __version__ = '1.0'
 
 
 ##############################################################################
-def publish_data(agent_object, base_topic, TimeStamp_str, endpt_label, val):
+def publish_data(agent_object, base_topic, units, endpt_label, val):
     """
     method for publishing database topics.  
     Input is a timestamp that has been converted to a string
@@ -69,11 +69,14 @@ def publish_data(agent_object, base_topic, TimeStamp_str, endpt_label, val):
     # publish to a root topic that is "datalogger/base_topic":
     topic = "datalogger/"+base_topic
 
+    TimeStamp = utils.get_aware_utc_now() # datetime.now() 
+    TimeStamp_str = TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
+
     # 2. build a datalogger-compatible msg:
     msg = {
         endpt_label: {
             "Readings":[TimeStamp_str, val], 
-            "Units": "",
+            "Units": units,
             "tz":"UTC",    #FIXME: timezone ?????
             "data_type":"uint"} #FIXME: data type????
         }

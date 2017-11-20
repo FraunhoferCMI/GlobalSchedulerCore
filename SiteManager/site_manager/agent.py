@@ -266,7 +266,7 @@ class SiteManagerAgent(Agent):
         # self.summarize(out,headers)
 
     ##############################################################################
-    def publish_data(self, TimeStamp_str):
+    def publish_data(self):
         """
         method for publishing database topics.  First publishes data for SiteManager
         agent itself, then it publishes it for the associated DERSite
@@ -277,10 +277,10 @@ class SiteManagerAgent(Agent):
 
         HistorianTools.publish_data(self, 
                                     self.site.device_id+"Agent", 
-                                    TimeStamp_str, 
+                                    "", 
                                     "Mode", 
                                     self.mode)
-        self.site.publish_device_data(TimeStamp_str, self)
+        self.site.publish_device_data(self)
 
 
 
@@ -416,9 +416,7 @@ class SiteManagerAgent(Agent):
         for k, v in self.SiteErrors.items():
             _log.info(k+": "+str(v))
  
-        TimeStamp = utils.get_aware_utc_now() 
-        #_log.info("SiteManagerStatus: " +TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f %Z%z"))
-        self.publish_data(TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"))
+        self.publish_data()
 
         return self.SiteErrors
 

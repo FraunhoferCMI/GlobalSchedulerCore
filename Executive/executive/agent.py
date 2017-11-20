@@ -258,10 +258,9 @@ class ExecutiveAgent(Agent):
             self.vip.heartbeat.start_with_period(self._heartbeat_period)
             self.vip.health.set_status(STATUS_GOOD, self._message)
 
-        TimeStamp = datetime.now()
         HistorianTools.publish_data(self, 
                                     "Executive", 
-                                    TimeStamp.strftime("%Y-%m-%dT%H:%M:%S"), 
+                                    "", 
                                     "OperatingMode", 
                                     self.OperatingMode)
 
@@ -619,14 +618,13 @@ class ExecutiveAgent(Agent):
         """
 
         _log.info("ExecutiveStatus: Mode = "+self.OperatingModes[self.OperatingMode])
-        TimeStamp = utils.get_aware_utc_now() # datetime.now()
 
         for k,v in self.optimizer_info.items():
             _log.info("ExecutiveStatus: " + k + "=" + str(v))
-  
+            #FIXME need units for optimizer_info!!!
             HistorianTools.publish_data(self, 
                                         "Executive", 
-                                        TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"), 
+                                        "", 
                                         k, 
                                         v)
 
@@ -648,10 +646,9 @@ class ExecutiveAgent(Agent):
 
             self.OperatingMode = self.OperatingMode_set
 
-            TimeStamp = utils.get_aware_utc_now()
             HistorianTools.publish_data(self, 
                                         "Executive", 
-                                        TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"), 
+                                        "", 
                                         "OperatingMode", 
                                         self.OperatingMode)
 
