@@ -138,6 +138,10 @@ class SiteManagerAgent(Agent):
         # for each topic in the SiteConfiguration json object, subscribe to the designated
         # topic ID on the msg bus
         self.topics = cursite["Topics"]
+        self.topics.update({"isValid": "N"})
+        self.topics.update({"last_read_time": -1})
+        self.topics.update({"SCRAPE_TIMEOUT": SCRAPE_TIMEOUT})
+
         for topics in self.topics:
             self.vip.pubsub.subscribe(peer='pubsub', prefix=topics["TopicPath"], callback=self.parse_IEB_msgs) #+'/all'
             _log.info("SiteManagerConfig: Subscribing to new topic: "+topics["TopicPath"]+'/all')
@@ -215,7 +219,11 @@ class SiteManagerAgent(Agent):
             _log.info("Exception: in populate end_pts!!!")
         pass
 
-        self.last_scrape_time = datetime.now() #TimeStamp# datetime.now()  #FIXME - need to separate by topic...
+        # update the current topic's last read time to indicate data is fresh
+        for topic_obj in self.topics:
+            if topic_obj["TopicPath"] == topic:
+                topic_obj["last_read_time"] = datetime.now() #TimeStamp# datetime.now()  #FIXME - need to separate by topic...
+                break
 
 
     ##############################################################################
@@ -341,23 +349,25 @@ class SiteManagerAgent(Agent):
 
         # FIXME - need to do this for each topic -
 
-        TimeStamp = datetime.now()
-        #datetime.strftime(
-        #    datetime.now(),
-        #    "%Y-%m-%dT%H:%M:%S"
-        #)      
-        _log.info("Current Time = " + datetime.strftime(TimeStamp, "%Y-%m-%dT%H:%M:%S") + 
-        "; Last Scrape = " + datetime.strftime(self.last_scrape_time, "%Y-%m-%dT%H:%M:%S"))
 
-        deltaT = TimeStamp - self.last_scrape_time
-        _log.info("delta T "+str(deltaT)) 
-        tot_sec = deltaT.total_seconds()
+        # check if any of the assigned topics have exceeded their timeout period.
+        # if so - set a readError
+        # TODO: eventually make it so that each data end point has meta data that
+        # TODO: links it to a topic so that you can mark individual data points as dirty
+        for topic_obj in self.topics:
+            TimeStamp = datetime.now()
+            _log.info("Current Time = " + datetime.strftime(TimeStamp, "%Y-%m-%dT%H:%M:%S") +
+            "; Last Scrape = " + datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
 
-        _log.info("Delta T = "+str(deltaT)+"; SCRAPE_TIMEOUT = "+ str(SCRAPE_TIMEOUT)+"; tot sec = "+str(tot_sec))
+            deltaT = TimeStamp - topic_obj["last_read_time"]
+            _log.info("delta T "+str(deltaT))
+            tot_sec = deltaT.total_seconds()
+
+            _log.info("Delta T = "+str(deltaT)+"; SCRAPE_TIMEOUT = "+ str(SCRAPE_TIMEOUT)+"; tot sec = "+str(tot_sec))
 
 
-        if tot_sec > SCRAPE_TIMEOUT:
-            ReadError = 1
+            if tot_sec > topic_obj["SCRAPE_TIMEOUT"]:
+                ReadError = 1
 
         self.SiteStatus.update({"ReadError": ReadError})
         self.SiteStatus.update({"WriteError": WriteError})
