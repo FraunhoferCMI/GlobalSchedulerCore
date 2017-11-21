@@ -497,7 +497,7 @@ class SiteManagerAgent(Agent):
             device.set_power_real(val, self)
 
     ##############################################################################
-    #@Core.periodic(PMC_WATCHDOG_PD)
+    @Core.periodic(5) #PMC_WATCHDOG_PD)
     def increment_site_watchdog(self):
         """
         Commands site to increment watchdog counter
