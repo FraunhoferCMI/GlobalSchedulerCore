@@ -102,6 +102,11 @@ class DERDevice():
         # (2) DERDevice object names are formed by concatenating parents to the deviceID
         # (3) for site devices, you have something called
 
+        self.comms_status   = 0
+        self.device_status  = 0
+        self.isDataValid    = 0
+        self.isControllable = 0
+
 
         for device in device_info["DeviceList"]:
             _log.info(device["ResourceType"] + " " + device["ID"])
@@ -187,12 +192,13 @@ class DERDevice():
         This is a class that constructs an "attribute" object for a device
         """
         def __init__(self, attribute_name):
-            self.data_mapping_dict = {"GrpName": attribute_name}
-            self.data_dict = {"GrpName": attribute_name}
-            self.map_int_to_ext_endpt = {"GrpName": attribute_name}
-            self.units = {"GrpName": attribute_name}
-            self.topic_map = {"GrpName": attribute_name}
-            self.endpt_units = {"GrpName": attribute_name}
+            self.name = attribute_name
+            self.data_mapping_dict = {}
+            self.data_dict = {}
+            self.map_int_to_ext_endpt = {}
+            self.units = {}
+            self.topic_map = {}
+            self.endpt_units = {}
 
             # initialize certain known key word values that are inherited between parent/children devices
             if attribute_name == "OpStatus":
@@ -238,7 +244,7 @@ class DERDevice():
 
         for key in self.datagroup_dict_list:
             datagroup = self.datagroup_dict_list[key]
-            print("Device is: " + self.device_id + "; group name is: " + datagroup.data_mapping_dict["GrpName"])
+            print("Device is: " + self.device_id + "; group name is: " + datagroup.name)
             for vals in datagroup.data_mapping_dict:
                 print(
                     "Device ID: " + self.device_id + ": Key = " + vals + " Val = " + datagroup.data_mapping_dict[
@@ -447,7 +453,7 @@ class DERDevice():
             try:
                 cur_device = self.extpt_to_device_dict[k].device_id
                 cur_attribute = self.extpt_to_device_dict[k].datagroup_dict[k]
-                cur_attribute_name = cur_attribute.data_mapping_dict["GrpName"]
+                cur_attribute_name = cur_attribute.name
                 keyval = cur_attribute.data_mapping_dict[k]
                 cur_attribute.data_dict[keyval] = incoming_msg[k]
 
@@ -766,18 +772,6 @@ class DERSite(DERDevice):
         return self.config.data_dict["Nameplate_kW"]
 
 
-    ##############################################################################
-    #@RPC.export
-    def set_watchdog_timeout_enable(self, val, sitemgr):
-        """
-        Sets mode to interactive
-        1. changes system op mode to "running"
-        2. changes system ctrl mode to "interactive"
-        """
-
-        # set internal commands to new operating state:
-        self.mode_ctrl_cmd.data_dict.update({"WatchDogTimeoutEnable_cmd": val})
-        self.set_point("ModeControl", "WatchDogTimeoutEnable", sitemgr)
 
 
 
@@ -863,6 +857,30 @@ class DERModbusSite(DERSite):
             self.mode_ctrl_cmd.data_dict["PMCWatchDog_cmd"] = 0
         self.set_point("ModeControl", "PMCWatchDog", sitemgr)
 
+    ##############################################################################
+    #@RPC.export
+    def set_watchdog_timeout_enable(self, val, sitemgr):
+        """
+        Sets mode to interactive
+        1. changes system op mode to "running"
+        2. changes system ctrl mode to "interactive"
+        """
+
+        # set internal commands to new operating state:
+        self.mode_ctrl_cmd.data_dict.update({"WatchDogTimeoutEnable_cmd": val})
+        self.set_point("ModeControl", "WatchDogTimeoutEnable", sitemgr)
+
+
+
+    def check_for_errors(self):
+        # Modbus site checks for:
+        # 1. does mode status = mode ctrl?
+        # 2. Are there any write errors?
+        # 3. Heartbeat errors?
+        # 4. Device errors?
+        pass
+
+
 
 ##############################################################################
 class DERCtrlNode(DERDevice):
@@ -896,34 +914,10 @@ class DERCtrlNode(DERDevice):
             _log.info(k+": "+str(v))
         pass
 
+
     ##############################################################################
-    def get_forecast_lowresolution(self):
-        """
-        Not sure this is needed!!!!
-        Retrieves a time-series resource forecast for a specified location and stores
-        in a data model associated with that location / resource.
-
-        This forecast looks for topics under the /lowres category, and timing parameters etc
-        under the _lowres identifier.
-
-        For the current implementation, it is assumed that the forecast is published on a set
-        schedule.  A future modification could change this model to have this function actually
-        send an active request to query a forecast service.
-        So The resource forecast is published on a topic specified in the xxx configuration
-        file.  This function just subscribes to that topic and updates the associated data
-        structure.
-
-        FIXME: revisit this: should this function REQUEST a forecast
-        or should the forecast be published synchronously?
-
-        Format for forecasts:
-            time_horizon_lowres -- indicates the expected time horizon of the forecast
-            resolution_lowres -- indicates the expected time resolution of the forecast
-            The forecast data structure is a time series of time - power_kWh pairs,
-            with length = time_horizon x resolution
-        """
+    def check_for_errors(self):
         pass
-
 
     ##############################################################################
     def set_power_real(self, val, sitemgr):

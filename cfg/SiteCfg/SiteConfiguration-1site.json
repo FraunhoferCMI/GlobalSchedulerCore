@@ -12,14 +12,20 @@
          }
       ],
       "Use" :"Y",
+      "Metered": "Y",
       "DeviceList":[
          {
             "ID":"ESSPlant",
             "ResourceType":"ESSCtrlNode",
+            "Metered":"N",
             "DeviceList":[
                {
                   "ID":"ESS1",
                   "ResourceType":"ESS",
+                  "Mfr": "Tesla",
+                  "kW_rating": "500",
+                  "kWh_rating": "1000",
+                  "Metered":"Y",
                   "DeviceList":[]
                }
             ]
@@ -27,10 +33,14 @@
          {
             "ID":"PVPlant",
             "ResourceType":"PVCtrlNode",
+            "Metered":"N",
             "DeviceList":[
                {
                   "ID":"Inverter1",
                   "ResourceType":"PV",
+                  "Mfr": "Solectria",
+                  "kW_rating": "500",
+                  "Metered":"Y",
                   "DeviceList":[]
                }
             ]

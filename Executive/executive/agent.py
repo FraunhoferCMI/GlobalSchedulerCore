@@ -72,7 +72,10 @@ __version__ = '1.0'
 import DERDevice
 import json
 
+
+##############################################################################
 class SunDialResource():
+    ##############################################################################
     def __init__(self, resource_cfg, sites):
         """
 
@@ -86,26 +89,36 @@ class SunDialResource():
         self.sites         = sites
         self.obj_fcns     = []
 
+
+##############################################################################
 class ESSResource(SunDialResource):
     def __init__(self, resource_cfg, sites):
         SunDialResource.__init__(self, resource_cfg, sites)
         pass
 
+
+##############################################################################
 class PVResource(SunDialResource):
     def __init__(self, resource_cfg, sites):
         SunDialResource.__init__(self, resource_cfg, sites)
         pass
 
+
+##############################################################################
 class LoadShiftResource(SunDialResource):
     def __init__(self, resource_cfg, sites):
         SunDialResource.__init__(self, resource_cfg, sites)
         pass
 
+
+##############################################################################
 class BaselineLoadResource(SunDialResource):
     def __init__(self, resource_cfg, sites):
         SunDialResource.__init__(self, resource_cfg, sites)
         pass
 
+
+##############################################################################
 class SundialSystemResource(SunDialResource):
     def __init__(self, resource_cfg, sites):
         SunDialResource.__init__(self, resource_cfg, sites)
@@ -126,8 +139,24 @@ class SundialSystemResource(SunDialResource):
         """
         pass
 
+
+##############################################################################
 def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW, max_discharge_kW):
-    
+    """
+    Calculates a setpoint command to an ESS resource to bridge the gap between forecast and actual generation
+    (1) first determines delta between forecast and actual.
+    (2) Checks for power constraint
+    (3) Checks for energy constraint
+    and adjusts accordingly
+    :param targetPwr_kW: expected amount of generation, in kW
+    :param curPwr_kW: actual generation, in kW
+    :param SOE_kWh: current ESS state of energy, in kWh
+    :param min_SOE_kWh: minimum allowable SOE, in kWh
+    :param max_SOE_kWh: max allowable SOE, in kWh
+    :param max_charge_kW: max charge power available, in kW (ALWAYS POSITIVE!)
+    :param max_discharge_kW: max discharge available, in kW (ALWAYS POSITIVE!)
+    :return: ESS setpoint, in kW.  Negative = discharge, positive value = charge
+    """
     # setpoint_cmd_interval indicates how frequently the target setpoint is recalculated.
     # it is used to determine what the max sustainable charge / discharge rate is for the
     # battery before the next time that we receive a high level schedule request.
@@ -164,7 +193,12 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     pass
 
 
+##############################################################################
 def get_current_forecast(forecast):
+    """
+    figure out what time it is right now
+    extract the right forecast from that time
+    """
     #cur_time = datetime.now()
     return forecast["Pwr"][11]
 
@@ -177,47 +211,53 @@ class ExecutiveAgent(Agent):
     """
     OperatingModes = ["IDLE", "USER_CONTROL", "APPLICATION_CONTROL"]
 
+    ##############################################################################
     def __init__(self, config_path, **kwargs):
         super(ExecutiveAgent, self).__init__(**kwargs)
+
+        # Configuration Set Up
         self.default_config = {
             "DEFAULT_MESSAGE" :'Executive Message',
             "DEFAULT_AGENTID": "executive",
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "log-level":"INFO"
         }
-
-        self.OperatingMode_set = IDLE
-        self.OperatingMode     = self.OperatingMode_set
-        self._config = self.default_config.copy()
         self._agent_id = self._config.get("DEFAULT_AGENTID")
         self._message = self._config.get("DEFAULT_MESSAGE")
-        self._heartbeat_period = self._config.get('DEFAULT_HEARTBEAT_PERIOD')        
-        #self.configure(None,None,self.default_config)
+        self._heartbeat_period = self._config.get('DEFAULT_HEARTBEAT_PERIOD')
+        # self.configure(None,None,self.default_config)
         self.vip.config.subscribe(
             self.configure,
             actions=["NEW", "UPDATE"],
             pattern="config")
-        
-        #FIXME - this should be set up with a configurable path....        
-        #sys.path.append("/home/matt/sundial/SiteManager")
-        #SiteCfgFile = "/home/matt/sundial/SiteManager/ShirleySouthSiteConfiguration.json"
-        #SiteCfgFile = "/home/matt/sundial/SiteManager/ShirleySouthSiteConfiguration.json"
+
+        # Initialize State Machine
+        # OperatingMode tracks the state of the Executive's state machine
+        # OperatingMode_set is where you write to change the state.  Once
+        # state has actually changed, OperatingMode gets updated
+        # OptimizerEnable - toggles optimizer process on / off
+        # UICtrlEnables   - toggles control from the User Interface on / off
+        # refer to Executive state machine documentation
+        self.OperatingMode_set = IDLE
+        self.OperatingMode     = self.OperatingMode_set
+        self.OptimizerEnable   = DISABLED
+        self.UICtrlEnable      = DISABLED
+        self._config = self.default_config.copy()
+
+        # Initialize Configuration Files
+        #FIXME - this should be set up with a configurable path....
+        # Set up paths for config files.
         self.volttron_root = os.getcwd()
         self.volttron_root = self.volttron_root+"/../../../../"
-        #SiteCfgFile = "/home/matt/sundial/SiteManager/NorthSouthSiteConfiguration.json"
-        SiteCfgFile = self.volttron_root+"gs_cfg/SiteConfiguration.json"
-        self.SiteCfgList = json.load(open(SiteCfgFile, 'r'))
-
-        #SundialCfgFile = "/home/matt/sundial/SiteManager/SundialSystemConfiguration.json"
-        SundialCfgFile = self.volttron_root+"gs_cfg/SundialSystemConfiguration.json"
+        SiteCfgFile        = self.volttron_root+"gs_cfg/SiteConfiguration.json"
+        SundialCfgFile     = self.volttron_root+"gs_cfg/SundialSystemConfiguration.json"
+        self.packaged_site_manager_fname = self.volttron_root + "packaged/site_manageragent-1.0-py2-none-any.whl"
+        self.SiteCfgList   = json.load(open(SiteCfgFile, 'r'))
         self.sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
         _log.info("SiteConfig is "+SiteCfgFile)
         _log.info("SundialConfig is"+SundialCfgFile)
-        self.cnt = 0
 
-        self.OptimizerEnable = DISABLED
-        self.UICtrlEnable = DISABLED
- 
+        # FIXME: Temporary!  Used to track status of optimizer
         self.optimizer_info = {}
         self.optimizer_info.update({"setpoint": 0})
         self.optimizer_info.update({"targetPwr_kW": 0})
@@ -258,34 +298,29 @@ class ExecutiveAgent(Agent):
             self.vip.heartbeat.start_with_period(self._heartbeat_period)
             self.vip.health.set_status(STATUS_GOOD, self._message)
 
+        # publish OperatingMode on start up to the historian
         HistorianTools.publish_data(self, 
                                     "Executive", 
                                     "", 
                                     "OperatingMode", 
                                     self.OperatingMode)
 
-        # I think right here is where I want to do my "init"-type functions...
-        # one thought is to instantiate a new DERDevice right here and see if that works!
-        _log.info("**********INSTANTIATING NEW SITES*******************")
-
 
         # The following reads a json site configuration file and installs / starts a new site
         # manager for each site identified in the configuration file.
         # agents are stored in an object list called "self.sitemgr_list"
+        _log.info("SiteMgrConfig: **********INSTANTIATING NEW SITES*******************")
         self.sitemgr_list = []
         for site in self.SiteCfgList:
-            _log.info(str(site["ID"]))
-            _log.info(str(site))
+            _log.info("SiteMgr Config: "+str(site["ID"]))
+            _log.info("SiteMgr Config: "+str(site))
             
             # start a new SiteManager agent 
-            # FIXME - path to site manager.....
             # FIXME - needs error trapping: (1) is agent already installed? (2) does site mgr agent exist?
             # FIXME - (3) did it start successfully?
-            fname = self.volttron_root+"packaged/site_manageragent-1.0-py2-none-any.whl"
-            # was "/home/matt/.volttron/packaged/site_manageragent-1.0-py2-none-any.whl"
             uuid = self.vip.rpc.call(CONTROL,
                                      "install_agent_local",
-                                     fname,
+                                     self.packaged_site_manager_fname,
                                      vip_identity=site["ID"],secretkey=None,publickey=None).get(timeout=30)
             _log.info("Agent uuid is:" + uuid) 
             self.vip.rpc.call(CONTROL,
@@ -296,13 +331,14 @@ class ExecutiveAgent(Agent):
             # can't figure out how to pass a parameter to an Agent constructor, so instead we call
             # an init routine ("init_site") that is supposed to follow the SiteManager __init__ function
             # which provides configuration data for the actual site.
+
             # the following sleep message is supposed to pause operation for long enough for site manager
-            # to finish its initialization, but it does not work.
+            # to finish its initialization.
+            # FIXME: There is probably a more robust way to do this, but this seems to work ok
+            gevent.sleep(0.5)
 
-            gevent.sleep(0.5)  # try without this?
-
-            # The idea of the below is to get a handle to the agent that we've just created
-            # Not done in a very efficient way though - get a list of agents and find one that
+            # The following gets a handle to the agent that we've just created.
+            # It's not done very efficiently though - It gets a list of agents and find one that
             # matches to the uuid, then break
             agents = self.vip.rpc.call(CONTROL, "list_agents").get(timeout=5)
             for cur_agent in agents:
@@ -455,9 +491,11 @@ class ExecutiveAgent(Agent):
             _log.info("Checking status for site "+site["identity"])
             site_errors = self.vip.rpc.call(site["identity"], "update_site_status").get(timeout=5)
             for k,v in site_errors.items():
-                if site_errors[k] != 0:
+                if k=="Mode":
+                    pass
+                elif site_errors[k] != 0:
                     #self.OperatingMode_set = IDLE
-                    _log.info("Warning: Error detected - " +k+".  Transition to IDLE Mode")
+                    _log.info("ExecutiveStatus: Warning: Error detected - " +k+".  Transition to IDLE Mode")
 
 
 
@@ -465,30 +503,22 @@ class ExecutiveAgent(Agent):
     @Core.periodic(GS_SCHEDULE)
     def run_optimizer(self):
         """
-        place holder for optimizer
+        place holder for a more sophisticated optimizer process
+        This method retrieves (1) the solar generation that was forecast (across all sites);
+        (2) the actual solar generation (across all sites); and then generates a battery
+        dispatch command to make up the difference, subject to ESS constraints.
         :return:
         """
 
         if self.OptimizerEnable == ENABLED:
             _log.info("Optimizer: Running Optimizer")
-            #self.sundial_resources
 
-            # What I was thinking about is this -
-            # update each virtual device
-            # call calc_setpoint on the sundial system (?)
-
-            # The most simple / hacky version of this:
-            # 1. target power = sum of all baseline forecasts  (update_forecast)
-
-            # I need something that can grab the current forecast ...
-
-            # first I need something that baselines the forecast against today.
-
-
+            # Go through each solar resource in the system and calculate:
+            # 1. target power_kW = sum of all baseline forecasts  (update_forecast)
+            # 2. curPwr_kW    = sum of current solar generation
             curPwr_kW = 0
             targetPwr_kW = 0
-            # get what time it is
-
+            # need to get what time it is
             for nodes in self.sundial_pv.virtual_plant.devices:
                 _log.info("agent ID is "+nodes["AgentID"])
                 if self.sundial_pv.sites[nodes["AgentID"]] != None:
@@ -503,11 +533,14 @@ class ExecutiveAgent(Agent):
                                                             nodes["DeviceID"],
                                                             "OpStatus").get(timeout=5)
                     _log.info("Optimizer: "+nodes["AgentID"]+" CurPwr = "+str(op_status))
-                    _log.debug("Optimizer: forecast = "+str(forecast))                
+                    _log.debug("Optimizer: forecast = "+str(forecast))
                     targetPwr_kW += get_current_forecast(forecast)
                     curPwr_kW    += op_status["Pwr_kW"]
             _log.info("Optimizer: Setting Power Inputs: CurPwr="+str(curPwr_kW)+"; TargetPwr="+str(targetPwr_kW))
 
+            # Go through each ESS resource in the system and calculate:
+            # the total SOE available, total charge and discharge available, and the min
+            # and max allowable SOE.
             SOE_kWh = 0
             min_SOE_kWh = 0
             max_SOE_kWh = 0
@@ -529,12 +562,14 @@ class ExecutiveAgent(Agent):
 
             _log.info("Optimizer: Setting ESS State: CurSOE="+str(SOE_kWh)+"; MaxChg="+str(max_charge_kW)+"; MaxSOE="+str(max_SOE_kWh)+"; MaxDischarge="+str(max_discharge_kW))
 
-
+            # figure out set point command to send to sites
             setpoint = calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW,
                                          max_discharge_kW)
 
             _log.info("Optimizer: setpoint = "+str(setpoint))
 
+            # Divide the set point command across the available ESS sites.
+            # currently divided pro rata based on kWh available.
             for nodes in self.sundial_ess.virtual_plant.devices:
                 if self.sundial_ess.sites[nodes["AgentID"]] != None:                
                     op_status = self.vip.rpc.call(str(nodes["AgentID"]),
@@ -557,57 +592,6 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["setpoint"]     = setpoint
             self.optimizer_info["targetPwr_kW"] = targetPwr_kW
             self.optimizer_info["curPwr_kW"]    = curPwr_kW
-
-            # figure out what time it is right now
-            # extract the right forecast from that time
-
-            # figure out the current power output of the system:
-
-
-            # device list consists of AgentID and DeviceID
-
-            #targetPwr_kW = forecast
-            #curPwr_kW    = PVVirtualPlant - curPwrOut
-
-            #for resources in self.sundial_resources:
-            #    new_system_resource["DeviceList"].append(
-            #        {"AgentID": resources.resource_id, "DeviceID": resources.resource_id})
-            #self.sundial_resources.append(SundialSystemResource(new_system_resource))
-
-            # What -should- happen is this:
-            # 1. sundial resources all update, aggregate their data - forecasts, power ,etc.
-            # THEN, we have a function who has target pwr = resource forecast.  Cur pwr = baseline pwr
-            #
-            #
-            #
-            #
-
-
-            #targetPwr_kW =
-            #curPwr_kW
-            #SOE_kWh
-            #min_SOE_kWh,
-            #max_SOE_kWh,
-            #max_charge_kW,
-            #max_discharge_kW
-
-
-            #calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW,
-            #                      max_discharge_kW)
-
-
-            # need a series of methods to retrieve site's ctrl node data
-            # 1. target power = sum of all baseline forecasts  (update_forecast)
-            #
-            # 2. cur_pwr_kW = sum of all baseline generation (update_op_status?)
-            # 3. SOE - go to battery
-            # 4. min_SOE
-            # 5. max_SOE
-            # 6. max_charge
-            # 7. min_charge
-
-            # we know the agent_id for each ctrl device.
-        pass
 
     ##############################################################################
     @Core.periodic(STATUS_MSG_PD)
@@ -636,13 +620,13 @@ class ExecutiveAgent(Agent):
         :return:
         """
 
-        _log.info("Running Executive.  Curent Mode = "+self.OperatingModes[self.OperatingMode])
+        _log.info("ExecutiveStatus: Running Executive.  Curent Mode = "+self.OperatingModes[self.OperatingMode])
 
         self.check_site_statuses()
 
         if self.OperatingMode_set != self.OperatingMode:
             # indicates that a mode change has been requested
-            _log.info("Changing operating mode to: " + self.OperatingModes[self.OperatingMode_set])
+            _log.info("ExecutiveStatus: Changing operating mode to: " + self.OperatingModes[self.OperatingMode_set])
 
             self.OperatingMode = self.OperatingMode_set
 
@@ -657,7 +641,6 @@ class ExecutiveAgent(Agent):
                 self.disable_site_interactive_mode()
                 self.OptimizerEnable = DISABLED # shut down optimizer
                 self.UICtrlEnable = DISABLED # placeholder
-                pass
             elif self.OperatingMode == APPLICATION_CONTROL:
                 # change sites to interactive mode
                 self.enable_site_interactive_mode()
@@ -668,27 +651,11 @@ class ExecutiveAgent(Agent):
                 # (re)start optimizer - would call "build_sundial"
                 # instead, this can just be implied by checking op mode in the scheduled 'optimizer'
                 # routine
-                pass
             elif self.OperatingMode == USER_CONTROL:
                 # change sites to interactive mode
                 self.enable_site_interactive_mode()
                 self.OptimizerEnable = DISABLED # shut down optimizer
                 self.UICtrlEnable = ENABLED
-                pass
-
-
-
-
-
-        pass
-
-    ##############################################################################
-    @PubSub.subscribe('pubsub', 'data/NewSite/all')
-    def add_site(self, peer, sender, bus,  topic, headers, message):
-        _log.info("New Site found!!")
-        data = message[0]
-        _log.info("message is "+data) #str(dir(data)))
-
 
     ##############################################################################
     @RPC.export
@@ -707,6 +674,12 @@ class ExecutiveAgent(Agent):
     ##############################################################################
     @Core.receiver('onstop')
     def onstop(self, sender, **kwargs):
+        """
+        removes each SiteManager agent that was installed / initialized on Executive start
+        :param sender:
+        :param kwargs:
+        :return:
+        """
         for site in self.sitemgr_list:
             self.vip.rpc.call(CONTROL, "remove_agent", site["uuid"]).get(timeout=5)
         pass
