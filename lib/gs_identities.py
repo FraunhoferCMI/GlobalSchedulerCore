@@ -66,8 +66,8 @@ IDLE = 0
 USER_CONTROL = 1
 APPLICATION_CONTROL = 2
 
-EXECUTIVE_CLKTIME = 5 # period, in seconds, at which the executive polls system state
-GS_SCHEDULE       = 5  # time, in seconds, for GS to run
+EXECUTIVE_CLKTIME = 1 # period, in seconds, at which the executive polls system state
+GS_SCHEDULE       = 1  # time, in seconds, for GS to run
 STATUS_MSG_PD     = 20 # update rate for status messages
 
 #FIXME - Placeholder!
