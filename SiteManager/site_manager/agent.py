@@ -107,7 +107,7 @@ class SiteManagerAgent(Agent):
 
 
         # Initialize mode, settings for the SiteManager Agent's state machine
-        self.mode = AUTO
+        self.mode = STARTING
         TimeStamp = datetime.strftime(
             datetime.now(),
             "%Y-%m-%dT%H:%M:%S"
@@ -138,19 +138,19 @@ class SiteManagerAgent(Agent):
         # for each topic in the SiteConfiguration json object, subscribe to the designated
         # topic ID on the msg bus
         self.topics = cursite["Topics"]
-        self.topics.update({"isValid": "N"})
-        self.topics.update({"last_read_time": -1})
-        self.topics.update({"SCRAPE_TIMEOUT": SCRAPE_TIMEOUT})
-
         for topics in self.topics:
             self.vip.pubsub.subscribe(peer='pubsub', prefix=topics["TopicPath"], callback=self.parse_IEB_msgs) #+'/all'
+            topics.update({"isValid": "N"})
+            topics.update({"last_read_time": utils.get_aware_utc_now()})
+            topics.update({"SCRAPE_TIMEOUT": SCRAPE_TIMEOUT})
             _log.info("SiteManagerConfig: Subscribing to new topic: "+topics["TopicPath"]+'/all')
 
         self.site = DERDevice.DERModbusSite(cursite, None, self.data_map_dir)
         self.vip.pubsub.publish('pubsub', 
                                 'data/NewSite/all', 
                                 headers={}, 
-                                message=[self.site.device_id]).get(timeout=10.0)        
+                                message=[self.site.device_id]).get(timeout=10.0)
+        self.mode = AUTO # site is initialized - transition to auto        
 
     ##############################################################################
     def configure(self,config_name, action, contents):
@@ -221,8 +221,10 @@ class SiteManagerAgent(Agent):
 
         # update the current topic's last read time to indicate data is fresh
         for topic_obj in self.topics:
-            if topic_obj["TopicPath"] == topic:
-                topic_obj["last_read_time"] = datetime.now() #TimeStamp# datetime.now()  #FIXME - need to separate by topic...
+            cur_topic_str = topic_obj["TopicPath"]+"/all"
+            if cur_topic_str == topic:
+                topic_obj["last_read_time"] = utils.get_aware_utc_now()
+                _log.info("SiteManagerStatus: Topic "+topic+" read at "+datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
                 break
 
 
@@ -243,6 +245,58 @@ class SiteManagerAgent(Agent):
                                     self.mode)
         self.site.publish_device_data(self)
 
+
+
+    ##############################################################################
+    @RPC.export
+    def update_site_status2(self):
+
+        # check if any of the assigned topics have exceeded their timeout period.
+        # if so - set a readError
+        # TODO: eventually make it so that each data end point has meta data that
+        # TODO: links it to a topic so that you can mark individual data points as dirty
+        cnt = 0
+        read_status = 1
+        for topic_obj in self.topics:
+            TimeStamp = utils.get_aware_utc_now() # datetime.now() 
+
+            _log.info("Topic "+topic_obj["TopicPath"]+": Current Time = " + datetime.strftime(TimeStamp, "%Y-%m-%dT%H:%M:%S") +
+            "; Last Scrape = " + datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
+
+            deltaT = TimeStamp - topic_obj["last_read_time"]
+            _log.info("delta T "+str(deltaT))
+            tot_sec = deltaT.total_seconds()
+
+            _log.info("Delta T = "+str(deltaT)+"; SCRAPE_TIMEOUT = "+ str(SCRAPE_TIMEOUT)+"; tot sec = "+str(tot_sec))
+
+
+            if tot_sec > topic_obj["SCRAPE_TIMEOUT"]:
+                # need to set data as invalid.  
+                # in theory, this should be done by topic, but for right now, I can just do it for the whole topic 
+                # topic tree.
+                #self.site.set_read_error(cnt)
+                read_status = 0
+
+            cnt += 1
+
+        self.site.set_read_status(cnt,read_status)
+
+        self.site.print_site_status()
+
+        self.SiteStatus.update({"ReadSTatus": self.site.read_status})
+        #self.SiteStatus.update({"WriteError": WriteError})
+        self.SiteStatus.update({"DeviceStatus": self.site.device_status})
+        #self.SiteStatus.update({"CmdError": CmdError})
+        self.SiteStatus.update({"CommStatus": self.site.comms_status})
+        self.SiteStatus.update({"CtrlMode": self.site.control_mode})
+        self.SiteStatus.update({"DataAvailable": self.site.isDataValid})
+        self.SiteStatus.update({"CtrlAvailable": self.site.isControlAvailable})
+        return self.SiteStatus
+
+    ##############################################################################
+    @RPC.export
+    def check_site_errors(self):
+        pass
 
 
     ##############################################################################
@@ -355,7 +409,8 @@ class SiteManagerAgent(Agent):
         # TODO: eventually make it so that each data end point has meta data that
         # TODO: links it to a topic so that you can mark individual data points as dirty
         for topic_obj in self.topics:
-            TimeStamp = datetime.now()
+            TimeStamp = utils.get_aware_utc_now() # datetime.now() 
+
             _log.info("Current Time = " + datetime.strftime(TimeStamp, "%Y-%m-%dT%H:%M:%S") +
             "; Last Scrape = " + datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
 
