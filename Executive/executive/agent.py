@@ -63,7 +63,7 @@ from . import settings
 import HistorianTools
 
 import DERDevice
-from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD)
+from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, STARTING, EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -209,7 +209,7 @@ class ExecutiveAgent(Agent):
     """
     Runs SunDial Executive state machine
     """
-    OperatingModes = ["IDLE", "USER_CONTROL", "APPLICATION_CONTROL"]
+    OperatingModes = ["IDLE", "USER_CONTROL", "APPLICATION_CONTROL", "STARTING"]
 
     ##############################################################################
     def __init__(self, config_path, **kwargs):
@@ -222,6 +222,7 @@ class ExecutiveAgent(Agent):
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "log-level":"INFO"
         }
+        self._config = self.default_config.copy()
         self._agent_id = self._config.get("DEFAULT_AGENTID")
         self._message = self._config.get("DEFAULT_MESSAGE")
         self._heartbeat_period = self._config.get('DEFAULT_HEARTBEAT_PERIOD')
@@ -238,11 +239,10 @@ class ExecutiveAgent(Agent):
         # OptimizerEnable - toggles optimizer process on / off
         # UICtrlEnables   - toggles control from the User Interface on / off
         # refer to Executive state machine documentation
-        self.OperatingMode_set = IDLE
+        self.OperatingMode_set = STARTING #IDLE
         self.OperatingMode     = self.OperatingMode_set
         self.OptimizerEnable   = DISABLED
         self.UICtrlEnable      = DISABLED
-        self._config = self.default_config.copy()
 
         # Initialize Configuration Files
         #FIXME - this should be set up with a configurable path....
@@ -352,6 +352,7 @@ class ExecutiveAgent(Agent):
             self.vip.rpc.call(cur_agent["identity"], "init_site", site)
 
         self.init_resources(self.sundial_resource_cfg_list, self.sitemgr_list)
+        self.OperatingMode_set = IDLE
 
 
     ##############################################################################
@@ -497,6 +498,21 @@ class ExecutiveAgent(Agent):
                     #self.OperatingMode_set = IDLE
                     _log.info("ExecutiveStatus: Warning: Error detected - " +k+".  Transition to IDLE Mode")
 
+    ##############################################################################
+    def check_site_statuses2(self):
+        """
+        Updates the site status for each active site
+        :return:
+        """
+        for site in self.sitemgr_list:
+            _log.info("Checking status for site "+site["identity"])
+            site_status = self.vip.rpc.call(site["identity"], "update_site_status2").get(timeout=5)
+            #for k,v in site_errors.items():
+            #    if k=="Mode":
+            #        pass
+            #    elif site_errors[k] != 1:
+            #        #self.OperatingMode_set = IDLE
+            #        _log.info("ExecutiveStatus: Warning: Error detected - " +k+".  Transition to IDLE Mode")
 
 
     ##############################################################################
@@ -622,7 +638,9 @@ class ExecutiveAgent(Agent):
 
         _log.info("ExecutiveStatus: Running Executive.  Curent Mode = "+self.OperatingModes[self.OperatingMode])
 
-        self.check_site_statuses()
+        # Wait until initialization has completed before checking on sites
+        if self.OperatingMode != STARTING:
+            self.check_site_statuses2()
 
         if self.OperatingMode_set != self.OperatingMode:
             # indicates that a mode change has been requested
@@ -656,6 +674,9 @@ class ExecutiveAgent(Agent):
                 self.enable_site_interactive_mode()
                 self.OptimizerEnable = DISABLED # shut down optimizer
                 self.UICtrlEnable = ENABLED
+            elif self.OperatingMode == STARTING:
+                # should not ever transition INTO starting mode.  don't know how you'd get here.
+                pass
 
     ##############################################################################
     @RPC.export
