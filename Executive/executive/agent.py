@@ -63,7 +63,7 @@ from . import settings
 import HistorianTools
 
 import DERDevice
-from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, STARTING, EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD)
+from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXEC_STARTING, EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -209,7 +209,7 @@ class ExecutiveAgent(Agent):
     """
     Runs SunDial Executive state machine
     """
-    OperatingModes = ["IDLE", "USER_CONTROL", "APPLICATION_CONTROL", "STARTING"]
+    OperatingModes = ["IDLE", "USER_CONTROL", "APPLICATION_CONTROL", "EXEC_STARTING"]
 
     ##############################################################################
     def __init__(self, config_path, **kwargs):
@@ -239,7 +239,7 @@ class ExecutiveAgent(Agent):
         # OptimizerEnable - toggles optimizer process on / off
         # UICtrlEnables   - toggles control from the User Interface on / off
         # refer to Executive state machine documentation
-        self.OperatingMode_set = STARTING #IDLE
+        self.OperatingMode_set = EXEC_STARTING #IDLE
         self.OperatingMode     = self.OperatingMode_set
         self.OptimizerEnable   = DISABLED
         self.UICtrlEnable      = DISABLED
@@ -639,7 +639,7 @@ class ExecutiveAgent(Agent):
         _log.info("ExecutiveStatus: Running Executive.  Curent Mode = "+self.OperatingModes[self.OperatingMode])
 
         # Wait until initialization has completed before checking on sites
-        if self.OperatingMode != STARTING:
+        if self.OperatingMode != EXEC_STARTING:
             self.check_site_statuses2()
 
         if self.OperatingMode_set != self.OperatingMode:
@@ -674,7 +674,7 @@ class ExecutiveAgent(Agent):
                 self.enable_site_interactive_mode()
                 self.OptimizerEnable = DISABLED # shut down optimizer
                 self.UICtrlEnable = ENABLED
-            elif self.OperatingMode == STARTING:
+            elif self.OperatingMode == EXEC_STARTING:
                 # should not ever transition INTO starting mode.  don't know how you'd get here.
                 pass
 

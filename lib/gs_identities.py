@@ -68,6 +68,7 @@ PMC_WATCHDOG_RESET    = 24 * 60 * 60 # watchdog reset frequency, in seconds
 IDLE = 0
 USER_CONTROL = 1
 APPLICATION_CONTROL = 2
+EXEC_STARTING = 3
 
 EXECUTIVE_CLKTIME = 5 # period, in seconds, at which the executive polls system state
 GS_SCHEDULE       = 5  # period, in seconds, at which the GS optimizer runs
