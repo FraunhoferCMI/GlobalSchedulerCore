@@ -481,7 +481,6 @@ class ExecutiveAgent(Agent):
             _log.info("SetPt: sending auto mode command for "+site["identity"])
             self.vip.rpc.call(site["identity"], "set_auto_mode").get(timeout=5)
 
-
     ##############################################################################
     def check_site_statuses(self):
         """
@@ -490,23 +489,7 @@ class ExecutiveAgent(Agent):
         """
         for site in self.sitemgr_list:
             _log.info("Checking status for site "+site["identity"])
-            site_errors = self.vip.rpc.call(site["identity"], "update_site_status").get(timeout=5)
-            for k,v in site_errors.items():
-                if k=="Mode":
-                    pass
-                elif site_errors[k] != 0:
-                    #self.OperatingMode_set = IDLE
-                    _log.info("ExecutiveStatus: Warning: Error detected - " +k+".  Transition to IDLE Mode")
-
-    ##############################################################################
-    def check_site_statuses2(self):
-        """
-        Updates the site status for each active site
-        :return:
-        """
-        for site in self.sitemgr_list:
-            _log.info("Checking status for site "+site["identity"])
-            site_status = self.vip.rpc.call(site["identity"], "update_site_status2").get(timeout=5)
+            site_status = self.vip.rpc.call(site["identity"], "update_site_status").get(timeout=5)
             #for k,v in site_errors.items():
             #    if k=="Mode":
             #        pass
@@ -640,7 +623,7 @@ class ExecutiveAgent(Agent):
 
         # Wait until initialization has completed before checking on sites
         if self.OperatingMode != EXEC_STARTING:
-            self.check_site_statuses2()
+            self.check_site_statuses()
 
         if self.OperatingMode_set != self.OperatingMode:
             # indicates that a mode change has been requested
