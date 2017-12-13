@@ -166,15 +166,15 @@ class DERDevice():
         #FIXME - this functionality is duplicated elsewhere.  (E.g., in init_device fcns...)  Should reference
         #FIXME - against this method
         _log.info("FindDevice: "+self.device_id)
-        for cur_device in self.devices:
-            _log.info("FindDevice: "+cur_device.device_id)
-            if cur_device.device_id == device_id:
-                return cur_device
-            else:
+        if self.device_id == device_id:
+            return self
+        else:
+            for cur_device in self.devices:
+                _log.info("FindDevice: "+cur_device.device_id)
                 child_device = cur_device.find_device(device_id)
                 if child_device != None:
                     return child_device
-        return None
+            return None
 
     ##############################################################################
     class DeviceAttributes():
@@ -603,6 +603,16 @@ class DERDevice():
 	    
         self.update_status()
 
+    ##############################################################################
+    def write_cmd(self, attribute, pt, val, sitemgr):
+        """
+        writes an arbitrary point to the target location
+        """
+        cmd_pt = pt+"_cmd"
+        cmd_attribute = attribute+"Cmd"
+        #FIXME - right now, this is only writing int data types..
+        self.datagroup_dict_list[cmd_attribute].data_dict.update({cmd_pt: int(val)})
+        self.set_point(attribute, pt, sitemgr)
 
     ##############################################################################
     #@RPC.export

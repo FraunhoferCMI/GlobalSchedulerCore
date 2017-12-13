@@ -371,6 +371,28 @@ class SiteManagerAgent(Agent):
             device.set_power_real(val, self)
 
     ##############################################################################
+    @RPC.export
+    def set_arbitrary_pt(self, device_id, attribute, pt, val):
+        """
+        sends a real power command to the specified device
+        """
+        _log.info("SetPt: setting "+self.site.device_id+"."+attribute+"."+pt)
+
+        # find the device
+        device = self.site.find_device(str(device_id))
+
+        if device == None:
+            _log.info("SetPt: ERROR! Device "+device_id+" not found in "+self.site.device_id)            
+        else:
+            # FIXME: other error trapping needed?
+            # send the command
+            self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
+            _log.info("SetPt: Sending Cmd!")
+            device.write_cmd(str(attribute), str(pt), val, self)
+
+
+
+    ##############################################################################
     @Core.periodic(PMC_WATCHDOG_PD)
     def increment_site_watchdog(self):
         """
