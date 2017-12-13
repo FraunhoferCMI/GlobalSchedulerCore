@@ -60,7 +60,7 @@ from volttron.platform.agent.known_identities import (
     VOLTTRON_CENTRAL, VOLTTRON_CENTRAL_PLATFORM, CONTROL, CONFIGURATION_STORE)
 
 from . import settings
-from gs_identities import (INTERACTIVE, AUTO, STARTING, SCRAPE_TIMEOUT, ENABLED, DISABLED, PMC_WATCHDOG_PD)
+from gs_identities import (INTERACTIVE, AUTO, STARTING, SCRAPE_TIMEOUT, ENABLED, DISABLED, PMC_WATCHDOG_PD, PMC_HEARTBEAT_PD)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -122,6 +122,7 @@ class SiteManagerAgent(Agent):
         self.SiteStatus.update({"CmdPending": 0})
         # FIXME - need to have dirty flag for each topic!
         self.dirtyFlag = 1 
+        self.updating  = 0
         self.write_error_count = 0
 
     ##############################################################################
@@ -211,8 +212,10 @@ class SiteManagerAgent(Agent):
         #    _log.info("Message is: "+k+": "+str(v))
 
         try:
+            self.updating = 1  # indicates that data is updating - do not trust until populate end pts is complete
             self.site.populate_endpts(data, meta_data)
             self.dirtyFlag = 0 # clear dirtyFlag on new read
+            self.updating = 0
         except:
             #FIXME - this should probably look for specific error to trap, right now this is
             # a catch-all for any errors in parsing incoming msg
@@ -497,7 +500,7 @@ class SiteManagerAgent(Agent):
             device.set_power_real(val, self)
 
     ##############################################################################
-    @Core.periodic(5) #PMC_WATCHDOG_PD)
+    @Core.periodic(PMC_WATCHDOG_PD)
     def increment_site_watchdog(self):
         """
         Commands site to increment watchdog counter
@@ -508,6 +511,15 @@ class SiteManagerAgent(Agent):
         #FIXME - also is it assumed that only the "site" has a heartbeat? (i.e., not the forecast device?)
         self.site.send_watchdog(self)
 
+    ##############################################################################
+    @Core.periodic(PMC_HEARTBEAT_PD)
+    def check_heartbeat(self):
+        """
+        Checks hearbeat from the site
+        :return:
+        """
+        if self.mode != STARTING:
+            self.site.check_site_heartbeat()
 
     ##############################################################################
     @RPC.export

@@ -92,8 +92,9 @@ class DERDevice():
         self.device_status  = 0
         self.read_status    = 0
         self.control_mode   = 0
+        self.mode_state_mismatch = 0
         self.isDataValid    = 0
-        self.isControllable = 1
+        self.isControllable = 1    # FIXME: currently set all devices to controllable. this should be device-specific.
         self.isControlAvailable = 0
 
 
@@ -202,7 +203,9 @@ class DERDevice():
             if attribute_name == "HealthStatus":
                 self.data_dict["status"] = 1
                 self.fail_state = {"status": 0}
-
+            if attribute_name == "ModeStatus":
+                self.data_dict["GSHeartBeat"] = 0
+                self.data_dict["GSHeartBeat_prev"] = 0 
         def update_fail_states(self, int_endpt, fail_state, grp_name):
             if grp_name == "HealthStatus":
                 print("int endpt = " + int_endpt + " fail state = " + fail_state)
@@ -314,7 +317,6 @@ class DERDevice():
         # ...
         try:
             if (self.health_status.data_dict["CommsStatus"] == 0):
-            #FIXME - CommsStatus:
                 self.comms_status = 0
         except KeyError:
             pass
@@ -341,11 +343,22 @@ class DERDevice():
         if self.isDataValid == 1:
             pass
 
+        # if this is an end point device and data is marked as invalid, 
+        # then zero out all of the operational status indicators.  Data is not 
+        # to be trusted.
         if (self.device_type in self.DGDevice) & (self.isDataValid == 0):
-            # this is an end point device
             for key in self.op_status.key_update_list:
                 self.op_status.data_dict[key] = 0
 
+        # if this is not an end point device, set data that gets propagated upward from 
+        # children devices to 0.  These registers are recalculated as the sum of all children
+        if self.device_type not in self.DGDevice: # this is not an end point device
+            for key in self.op_status.key_update_list:
+                self.op_status.data_dict[key] = 0            
+                #FIXME - move some of these to control?
+
+        # Calculate all registers in the key update list
+        # as the sum of the children devices.
         for cur_device in self.devices: 
             for key in self.op_status.key_update_list:
                 if self.isDataValid == 1:
@@ -367,15 +380,8 @@ class DERDevice():
         Dummy fcn - this function only does something for DERCtrlNodes.  Otherwise it just
         traverses the site tree to find a DERCtrlNodes
         """
-
-        self.control_mode   = self.parent_device.control_mode
-        #for cur_device in self.devices:
-        #    mode_failure = cur_device.check_mode2()
-
-        # print("device id is: " + self.device_id)
-        # for k, v in self.mode_status.data_dict.items():
-        #    print k, v
-
+        self.control_mode        = self.parent_device.control_mode
+        self.mode_state_mismatch = self.parent_device.mode_state_mismatch
         pass
 
     ##############################################################################
@@ -404,7 +410,7 @@ class DERDevice():
     def print_site_status(self):
         _log.info("DERDevice Status: "+self.device_id)
         _log.info("DERDevice Status: isControllable="+str(self.isControllable)+"; isDataValid="+str(self.isDataValid)+"; isControlAvailable="+str(self.isControlAvailable))  
-        _log.info("DERDevice Status: comms="+str(self.comms_status)+"; device_status="+str(self.device_status)+"; control mode="+str(self.control_mode)+"; read_status="+str(self.read_status))      
+        _log.info("DERDevice Status: comms="+str(self.comms_status)+"; device_status="+str(self.device_status)+"; control mode="+str(self.control_mode)+"; read_status="+str(self.read_status)+"; mode_mismatch="+str(self.mode_state_mismatch))      
 
         opstatus_str = ""
         for key in self.op_status.key_update_list:
@@ -418,26 +424,44 @@ class DERDevice():
     ##############################################################################
     def update_status(self):
         """
-        This traverses the site tree and checks (1) device_status and (2) comm_status for each device.
-        Different classes of device may have different things that they pull
-
-        To consider: (1) startup states; (2) modes; (3) mode changes from 3rd party sources; (4) readerror; (5) writeerror...
-        For mode changes - (1) when user switches mode (from executive) - this should change controllability; (2) if
-        we read (after a scrape) that mode is changed to an auto mdoe, it should also do so.
+        Called after populate end points has completed.  Traverses the site tree to do the following:
+        (1) checks the latest modbus scrape to interpret the current status of the site and all its devices.  
+            It checks for whether device end points have reported any errors, if communications between devices 
+            are functioning, and the mode of devices
+            - comms_status: tracks whether the device is communicating with upstream components
+            - device_status: tracks whether the device has triggered any alarms
+            - mode_status: tracks whether the device is in an interactive (GS control-enabled) state
+            - mode_failure: FIXME - to do
+ 
+        (2) propagates device properties up or down the device tree: 
+            - op_status properties are propagated "upward" such that the power output and energy available from
+              parent devices reflects the sum of associated children.  If device data is invalid (e.g., comms_status=0)
+              then op_status data is zero-ed out.
+            - device and comms status are propagated upward such that the parent knows whether to, e.g., trust data
+              reported from children.
+            - mode_status is propagated "downward" such that if control is disabled for the parent device, it will also
+              be disabled for that device's children.
+           
+        (3) based on status indicators, determines whether:
+            - data stored in the GS's device registers is valid ("isDataValid") - if 0, this indicates that the device is 
+              offline, so data is stale
+            - GS can control the device - if 0, this could indicate that it is set in a non GS-enabled mode, that the device
+              is offline, that there is an error with the device, or that the device is not controllable.
 
         """
+
+        # To start, assume that data is valid and control is available.  
+        # then check for whether there is anything to indicate that this assumption is invalid
         self.isDataValid = 1
         self.isControlAvailable = self.isControllable
 
         self.comms_status = 1
         self.device_status = 1
 
-        # set data that is meant to be updated to 0.
-        if self.device_type not in self.DGDevice: # this is not an end point device
-            for key in self.op_status.key_update_list:
-                self.op_status.data_dict[key] = 0            
-
-        mode_failure = self.check_mode2()         # need to propagate to children
+       # update mode_status for this device before recursing down the site tree.
+        # this lets us propagate this property to the children devices 
+        mode_failure = self.check_mode2()
+        # FIXME - do something with mode failure.
 
         # call this routine for each child:
         for cur_device in self.devices:
@@ -447,37 +471,31 @@ class DERDevice():
         self.check_comm_status()
         self.check_device_status()
 
-        # check reg_mismatch - (either check specific registers associated with a derDevice, or
+        # FIXME: check reg_mismatch - (either check specific registers associated with a derDevice, or
         # make a descriptor that links ctrl --> status registers in the datamap file)
         # check meter mismatch - should happen inside the op_status routine?
-
-        # do we need to first go remake the key update lists?
-
-       # what is the model for checking other errors?
-
+        
         if self.comms_status == 0:
-            # read data is invalid
+            # read data from a device is invalid
             self.isDataValid = 0
             self.isControlAvailable = 0
         if self.device_status == 0:
+            # device status --> probably should be handled on a case-by-case basis.
+            # for now, assume this only affects controllability.
             self.isControlAvailable = 0
-        if self.read_status ==0:
+        if self.read_status == 0:
+            # indicates that communications with the site has timed out
             self.isDataValid = 0
             self.isControlAvailable = 0
         if self.control_mode == 0:
             self.isControlAvailable = 0
-
-        # should this happen outside of this fcn (once recursion is complete...)
+        if self.mode_state_mismatch == 1:
+            self.isControlAvailable = 0
+        # update power, energy registers
         self.update_op_status2()
 
-
-        _log.info("UpdateStatus: data valid = "+str(self.isDataValid))
+        _log.info("UpdateStatus: "+self.device_id+": data valid = "+str(self.isDataValid)+"; ControlAvailable = "+str(self.isControlAvailable))
     
-        #for cur_device in self.devices:
-        #    cur_device.update_op_status()            
-        #    for key in self.op_status.key_update_list:
-        #        self.op_status.data_dict[key] += int(cur_device.op_status.data_dict[key])
-
 
 
     ##############################################################################
@@ -654,15 +672,8 @@ class DERDevice():
             except KeyError as e:
                 _log.info("Skipping: Key "+k+" not found")
 	    
-
-
-        self.dirtyFlag = 0  # indicates that end points have finished updating.
-
         self.update_status()
 
-        #self.update_op_status()
-        #self.update_health_status()
-        #self.update_mode_status()
 
     ##############################################################################
     #@RPC.export
@@ -688,10 +699,6 @@ class DERDevice():
         #TODO - error trap to make sure that this value is writeable....
         _log.debug("SetPt: Cmd - "+str(cmd)+"; attribute - "+str(attribute)+"; topic # = " + str(self.datagroup_dict_list[attribute].topic_map[cmd]))
         _log.debug("SetPt: topic = "+sitemgr.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"])
-
-        # indicates that a command has been sent to the target device, but target device has not
-        # been re-read with updated values since the command was issued.
-        self.dirtyFlag = 1
 
         device_topic = sitemgr.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"]
         if device_topic.startswith(device_prefix) == True:
@@ -874,7 +881,6 @@ class DERSite(DERDevice):
 
         self.extpt_to_device_dict = {}
         cnt = 0
-        self.dirtyFlag = 0
         #self.topics = site_info["Topics"]
         for topics in site_info["Topics"]: #self.topics:
             csv_name = (data_map_dir + self.device_id +"-"+ topics["TopicName"]+"-data-map.csv")
@@ -926,11 +932,11 @@ class DERSite(DERDevice):
 
         mode_failure = 0
         #self.isControllable = 1
-
+        self.mode_state_mismatch = 0
         if self.mode_ctrl.data_dict["OpModeCtrl"] != self.mode_status.data_dict["OpModeStatus"]:
-            mode_failure += 1
+            self.mode_state_mismatch = 1
         if self.mode_ctrl.data_dict["SysModeCtrl"] != self.mode_status.data_dict["SysModeStatus"]:
-            mode_failure += 1
+            self.mode_state_mismatch = 1
 
         if self.mode_status.data_dict["SysModeStatus"] == 0:
             self.control_mode   = 0
@@ -938,8 +944,6 @@ class DERSite(DERDevice):
             self.control_mode   = 0
         else:
             self.control_mode = 1
-
-        return mode_failure
 
 
     ##############################################################################
@@ -1004,14 +1008,6 @@ class DERModbusSite(DERSite):
 
 
     ##############################################################################
-    def check_comm_status(self):
-        # ...
-        # if pmcwatchdog enable then ...
-        self.check_site_heartbeat()
-        self.comm_status = 1
-
-
-    ##############################################################################
     #@RPC.export
     def set_interactive_mode(self, sitemgr):
         """
@@ -1047,30 +1043,23 @@ class DERModbusSite(DERSite):
         self.set_point("ModeControl", "SysModeCtrl", sitemgr)
 
     ##############################################################################
-    #@core.periodic(10)
     def check_site_heartbeat(self):
-        # function for making sure that heartbeat is incrementing within specified timeout period
-        # this should get called at a set interval
-        # it should make sure counter is incrementing
-        # it should raise a warning if # of misses
+        """
+        function for making sure that heartbeat is incrementing within specified timeout period
+        This is called at the designated heartbeat interval.  It registers a comms error wtih the 
+        site if the heartbeat has not incremented.
+        TODO - should a single miss trigger a timeout?
+        """
+        if int(self.mode_status.data_dict["GSHeartBeat"]) != self.mode_status.data_dict["GSHeartBeat_prev"]+1:
+            # heartbeat has not updated.  Indicates that the site controller may not be functioning properly.
+            self.health_status.data_dict["CommsStatus"] = 0
+            _log.info("Heartbeat Error: GS Heart Beat = "+str(self.mode_status.data_dict["GSHeartBeat"])+"; prev = "+str(self.mode_status.data_dict["GSHeartBeat_prev"]))
+        else:
+            self.health_status.data_dict["CommsStatus"] = 1
+            _log.info("Heartbeat OK: GS Heart Beat = "+str(self.mode_status.data_dict["GSHeartBeat"])+"; prev = "+str(self.mode_status.data_dict["GSHeartBeat_prev"]))
 
-        # read current heartbeat counter value
-        # compare to previous heartbeat counter value (should be n+1)
-        # if not n+1
-        #  increment heartbeat_timeout_count (raise warning?)
-        # increment total_heartbeat_errors --> just a variable for tracking if heartbeats miss frequently
-        # if heartbeat_timeout_count * heartbeat_period >= heartbeat_timeout period
-        #    raise heartbeat_timeout_error --> should trigger mode changes, etc in the executive
-        #
-
-        #todo -
-
-        #if self.health_status.data_dict["heartbeat_counter"] - self.prev_heartbeat
-
-        #self.prev_heartbeat = self.health_status.data_dict["heartbeat_counter"]
-
-        #self.health_status.data_dict["total_heartbeat_errors"] = \
-        #    self.health_status.data_dict["total_heartbeat_errors"]+1
+        self.mode_status.data_dict["GSHeartBeat_prev"] = int(self.mode_status.data_dict["GSHeartBeat"])
+        
         pass
 
     ##############################################################################
