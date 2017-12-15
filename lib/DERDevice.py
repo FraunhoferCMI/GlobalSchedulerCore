@@ -287,12 +287,13 @@ class DERDevice():
         """
         generalized function for checking the communications status of a device.
         The current implementation simply checks the CommsStatus field associated
-        with the current device.
+        with the parent device and the current device.
         Still to do - need to handle devices that have separate meters
         (which have their own comms status, but which are not represented as a discrete
         device in the site data model).
         :return:
         """
+        self.comms_status = self.parent_device.comms_status
         try:
             if (self.health_status.data_dict["CommsStatus"] == 0):
                 self.comms_status = 0
@@ -443,18 +444,16 @@ class DERDevice():
         self.comms_status = 1
         self.device_status = 1
 
-       # update mode_status for this device before recursing down the site tree.
-        # this lets us propagate this property to the children devices 
+        # update mode_status for this device before recursing down the site tree.
+        # this lets us propagate this property to the children devices
         self.check_mode()
-        # FIXME - do something with mode failure.
+        # check for comms & device failures
+        self.check_comm_status()
+        self.check_device_status()
 
         # call this routine for each child:
         for cur_device in self.devices:
             cur_device.update_status()
-
-        # check for comms & device failures
-        self.check_comm_status()
-        self.check_device_status()
 
         # FIXME: check reg_mismatch - (either check specific registers associated with a derDevice, or
         # make a descriptor that links ctrl --> status registers in the datamap file)
