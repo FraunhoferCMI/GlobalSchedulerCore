@@ -47,8 +47,11 @@ SITE_IDLE    = 0
 SITE_RUNNING = 1
 
 # Site System Control Modes
-AUTO = 0
+AUTO        = 0
 INTERACTIVE = 1
+STARTING    = 2
+READY       = 3
+
 
 DISABLED = 0
 ENABLED  = 1
@@ -65,10 +68,12 @@ PMC_WATCHDOG_RESET    = 24 * 60 * 60 # watchdog reset frequency, in seconds
 IDLE = 0
 USER_CONTROL = 1
 APPLICATION_CONTROL = 2
+EXEC_STARTING = 3
 
-EXECUTIVE_CLKTIME = 1 # period, in seconds, at which the executive polls system state
-GS_SCHEDULE       = 1  # time, in seconds, for GS to run
-STATUS_MSG_PD     = 20 # update rate for status messages
+EXECUTIVE_CLKTIME = 5 # period, in seconds, at which the executive polls system state
+GS_SCHEDULE       = 5  # period, in seconds, at which the GS optimizer runs
+STATUS_MSG_PD     = 20 # update rate for various status messages
+UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
 
 #FIXME - Placeholder!
 SCRAPE_TIMEOUT = 30 # timeout period in seconds for modbus device to post on the IEB bus

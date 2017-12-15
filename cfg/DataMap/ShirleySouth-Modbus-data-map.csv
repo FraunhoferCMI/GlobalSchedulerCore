@@ -2,7 +2,7 @@ ESS.Status.FullChargeEnergy,ShirleySouth-ESSPlant-ESS1,OpStatus,FullChargeEnergy
 ESS.Status.ExpectedEnergy,ShirleySouth-ESSPlant-ESS1,OpStatus,Energy_kWh,,kWh
 ESS.Status.MaxChargePower,ShirleySouth-ESSPlant-ESS1,OpStatus,MaxChargePwr_kW,,kW
 ESS.Status.MaxDischargePower,ShirleySouth-ESSPlant-ESS1,OpStatus,MaxDischargePwr_kW,,kW
-ESS.Device.CommSt,ShirleySouth-ESSPlant-ESS1,HealthStatus,CommsStatusDevice,0,
+ESS.Device.CommSt,ShirleySouth-ESSPlant-ESS1,HealthStatus,CommsStatus,0,
 ESS.Meter.W,ShirleySouth-ESSPlant-ESS1,OpStatus,Pwr_raw,,kW
 ESS.Meter.W_SF,ShirleySouth-ESSPlant-ESS1,OpStatus,Pwr_SF,,
 PMC.ModeCtrl.OpModeCtrl,ShirleySouth,ModeControl,OpModeCtrl,,

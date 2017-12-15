@@ -60,6 +60,7 @@ from volttron.platform.agent.known_identities import (
     VOLTTRON_CENTRAL, VOLTTRON_CENTRAL_PLATFORM, CONTROL, CONFIGURATION_STORE)
 
 from . import settings
+from gs_identities import (UI_CMD_POLLING_FREQUENCY)
 
 
 utils.setup_logging()
@@ -73,6 +74,7 @@ class UIAgent(Agent):
     Interface for sending instructions from command line to GS
     """
 
+    ##############################################################################
     def __init__(self, config_path, **kwargs):
         super(UIAgent, self).__init__(**kwargs)
         self.default_config = {
@@ -91,7 +93,12 @@ class UIAgent(Agent):
             actions=["NEW", "UPDATE"],
             pattern="config")
 
- 
+        # configure path for UI command file.
+        cwd = os.getcwd()
+        cwd = cwd + "/../../../../"
+        _log.info("UI_CMD: Current directory is: " + cwd)
+        self.ui_fname = cwd + "UI_cmd.json"
+
 
 
     ##############################################################################
@@ -113,12 +120,14 @@ class UIAgent(Agent):
         except ValueError as e:
             _log.error("ERROR PROCESSING CONFIGURATION: {}".format(e))
     
+    ##############################################################################
     @Core.receiver('onsetup')
     def onsetup(self, sender, **kwargs):
         # Demonstrate accessing a value from the config file
         _log.info(self._message)
         self._agent_id = self._config.get('agentid')
 
+    ##############################################################################
     @Core.receiver('onstart')
     def onstart(self, sender, **kwargs):
         if self._heartbeat_period != 0:
@@ -126,30 +135,22 @@ class UIAgent(Agent):
             self.vip.health.set_status(STATUS_GOOD, self._message)
 
 
-    @Core.periodic(10)
+    ##############################################################################
+    @Core.periodic(UI_CMD_POLLING_FREQUENCY)
     def set_point(self):
         """
         This is a method that periodically polls a designated file for a command to set a point for a
-        SiteManager via an RPC call.
-        Could be altered so that it is instead polling a database, or just issuing a command
+        SiteManager via an RPC call.  Could be altered so that it is instead polling a database, or just issuing a command
         based on a specific set of internal variables / values.
 
-        assume csv file is rows with:
-        agentID, siteDERDevicepath, Attribute, EndPt, value
-        e.g.,
-        ShirleySouth,ShirleySouth,ModeCtrl,OpModeCtrl,1
-
+        It is configured to look for a json object in the file ~/.volttron/UI_cmd.json
+        If present, it executes an RPC call based on the json object(s) in the file, and then deletes UI_cmd.json
+        If no file is present, it implies that there is no command waiting.
         :return:
         """
 
-        cwd = os.getcwd()
-        cwd = cwd+"/../../../../"
-        _log.info("Current directory is: "+cwd)
-        fname = cwd+"UI_cmd.json" #"/home/matt/sundial/UI/system_cmds.csv"
         try:
-            #ret = self.vip.rpc.call("executiveagent-1.0_1", "set_mode", 2).get()
-
-            with open(fname, 'rb') as jsonfile:
+            with open(self.ui_fname, 'rb') as jsonfile:
                 cmds = json.load(jsonfile)
             
             for cur_cmd in cmds:
@@ -161,12 +162,12 @@ class UIAgent(Agent):
                self.vip.rpc.call(str(cur_cmd["AgentID"]), cur_cmd["FcnName"], *cur_cmd["args"])               
 
             try:
-                os.remove(fname) # delete after commands have been issued
+                os.remove(self.ui_fname) # delete UI_cmd.json after commands have been issued
             except OSError:
                 pass
 
         except IOError as e:
-            # file name not found implies that the device does not have any children
+            # file name not found implies that there is no new command waiting
             print("NO Site Manager Cmd found!! Skipping!")
             cwd = os.getcwd()
             _log.info("Current directory: "+cwd)

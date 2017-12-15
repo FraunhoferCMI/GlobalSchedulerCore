@@ -60,7 +60,7 @@ from volttron.platform.agent.known_identities import (
     VOLTTRON_CENTRAL, VOLTTRON_CENTRAL_PLATFORM, CONTROL, CONFIGURATION_STORE)
 
 from . import settings
-from gs_identities import (INTERACTIVE, AUTO, SCRAPE_TIMEOUT, ENABLED, DISABLED, PMC_WATCHDOG_PD)
+from gs_identities import (INTERACTIVE, AUTO, STARTING, SCRAPE_TIMEOUT, ENABLED, DISABLED, PMC_WATCHDOG_PD, PMC_HEARTBEAT_PD)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -73,37 +73,21 @@ class SiteManagerAgent(Agent):
     ...
     """
 
+    ##############################################################################
     def __init__(self, config_path, **kwargs):
         super(SiteManagerAgent, self).__init__(**kwargs)
+
+        # Agent Configuration - legacy code
         self.default_config = {
             "DEFAULT_MESSAGE" :'SM Message',
             "DEFAULT_AGENTID": "site_manager",
             "DEFAULT_HEARTBEAT_PERIOD": 5,
-            "log-level":"DEBUG",
-            "moving_averages" :{
-	        "length" : 12,
-                "keys":[
-                    "analysis/Shirley-MA/PV/RealPower",
-                    "analysis/Shirley-MA/RealPower",
-                ]
-            }
-
+            "log-level":"DEBUG"
         }
-        #FIXME - shouldn't be hard-coded!!!
-        #FIXME - need to (1) add mapping of topic in the device mapping file; (2) parse this in on_match
-        #self.path = ['Shirley-MA/South/PMC'] # was 'devices/Shirley-MA/South/PMC/all'
-        self.volttron_root = os.getcwd()
-        self.volttron_root = self.volttron_root+"/../../../../"
-        self.data_map_dir = self.volttron_root+"gs_cfg/"
-        _log.info("data dir is "+self.data_map_dir)
-        #self.data_map_dir = "/home/matt/sundial/SiteManager/data/" #"./data/"
-        self.cnt = 0
         self._config = self.default_config.copy()
         self._agent_id = self._config.get("DEFAULT_AGENTID")
         self._message = self._config.get("DEFAULT_MESSAGE")
         self._heartbeat_period = self._config.get('DEFAULT_HEARTBEAT_PERIOD')
-        
-        self.setpoint = 0 
         self.cache = {}
         self.moving_averages = {}
         self.configure(None,None,self.default_config)
@@ -112,62 +96,62 @@ class SiteManagerAgent(Agent):
             actions=["NEW", "UPDATE"],
             pattern="config")
 
-        _log.info("Agent ID is "+self._agent_id)
-        _log.debug("TEST Debug message!!")
+        # set location for data map files.
+        # FIXME - shouldn't be hard-coded!!!
+        self.volttron_root = os.getcwd()
+        self.volttron_root = self.volttron_root+"/../../../../"
+        self.data_map_dir = self.volttron_root+"gs_cfg/"
+        _log.info("SiteManagerConfig: **********INITIALIIZING SITE MANAGER*******************")
+        _log.info("SiteManagerConfig: Agent ID is "+self._agent_id)
+        _log.info("SiteManagerConfig: data dir is "+self.data_map_dir)
 
-        #for topics in self.path:
-        #    self.vip.pubsub.subscribe(peer='pubsub',prefix='devices/'+topics+'/all',callback=self.on_match)
 
+        # Initialize mode, settings for the SiteManager Agent's state machine
+        self.mode = STARTING
         TimeStamp = datetime.strftime(
             datetime.now(),
             "%Y-%m-%dT%H:%M:%S"
         )      
         self.last_scrape_time = datetime.now() #TimeStamp
-        self.SiteErrors = {}
-        self.SiteErrors.update({"ReadError": 0})
-        self.SiteErrors.update({"WriteError": 0})
-        self.SiteErrors.update({"DeviceError": 0})
-        self.SiteErrors.update({"CmdError": 0})
-        self.SiteErrors.update({"HeartbeatError": 0})
-        self.SiteErrors.update({"CmdPending": 0})
-
-        self.mode = AUTO
-        self.write_error_count = 0
+        self.SiteStatus = {}
+        self.SiteStatus.update({"ReadError": 0})
+        self.SiteStatus.update({"WriteError": 0})
+        self.SiteStatus.update({"DeviceError": 0})
+        self.SiteStatus.update({"CmdError": 0})
+        self.SiteStatus.update({"HeartbeatError": 0})
+        self.SiteStatus.update({"CmdPending": 0})
         # FIXME - need to have dirty flag for each topic!
         self.dirtyFlag = 1 
-        _log.info("**********INITIALIIZING SITE MANAGER*******************")
-
+        self.updating  = 0
+        self.write_error_count = 0
 
     ##############################################################################
     @RPC.export
     def init_site(self,cursite):
         """
-        Instantiates a new site. Publishes an example message.
+        Instantiates / initializes a new site.
         Called by the Executive
         cursite is a site constructor JSON object (from a SiteConfiguration.json file)
         """
-        _log.info("**********INSTANTIATING A NEW SITE*******************")
-        _log.info("Site name is: "+cursite["ID"])
+        _log.info("SiteManagerConfig: **********INITIALIZING A NEW SITE*******************")
+        _log.info("SiteManagerConfig: Site name is: "+cursite["ID"])
 
+        # for each topic in the SiteConfiguration json object, subscribe to the designated
+        # topic ID on the msg bus
         self.topics = cursite["Topics"]
-
-        #_log.info("old topic was: "+'devices/'+self.path[0]+'/all')
-
         for topics in self.topics:
-            self.vip.pubsub.subscribe(peer='pubsub',prefix=topics["TopicPath"],callback=self.on_match) #+'/all'
-            _log.info("Subscribing to new topic: "+topics["TopicPath"]+'/all')
-
-        #self.vip.pubsub.subscribe(peer='pubsub',prefix=topics["TopicPath"],callback=self.on_match)
-
+            self.vip.pubsub.subscribe(peer='pubsub', prefix=topics["TopicPath"], callback=self.parse_IEB_msgs) #+'/all'
+            topics.update({"isValid": "N"})
+            topics.update({"last_read_time": utils.get_aware_utc_now()})
+            topics.update({"SCRAPE_TIMEOUT": SCRAPE_TIMEOUT})
+            _log.info("SiteManagerConfig: Subscribing to new topic: "+topics["TopicPath"]+'/all')
 
         self.site = DERDevice.DERModbusSite(cursite, None, self.data_map_dir)
         self.vip.pubsub.publish('pubsub', 
                                 'data/NewSite/all', 
                                 headers={}, 
-                                message=[self.site.device_id]).get(timeout=10.0)        
-   
-        #ret = self.vip.rpc.call("executiveagent-1.0_1", "set_mode", 1).get()
-        #_log.info(str(dir(ret)))
+                                message=[self.site.device_id]).get(timeout=10.0)
+        self.mode = AUTO # site is initialized - transition to auto        
 
     ##############################################################################
     def configure(self,config_name, action, contents):
@@ -203,16 +187,12 @@ class SiteManagerAgent(Agent):
             self.vip.health.set_status(STATUS_GOOD, self._message)
 
     ##############################################################################
-    #@PubSub.subscribe('pubsub', 'devices/Shirley-MA/South/PMC/all')
-    def on_match(self, peer, sender, bus,  topic, headers, message):
+    def parse_IEB_msgs(self, peer, sender, bus, topic, headers, message):
         """
         parses message on IEB published to the SiteManager's specified path, and 
         populates endpts (populate_endpts) based on message contents
-
-        TODO: keep track fo complete time stamps. 
-
         """
-        _log.info("Topic found - "+str(topic))
+        _log.info("SiteManagerStatus: Topic found - "+str(topic))
         if sender == 'pubsub.compat':
             message = compat.unpack_legacy_message(headers, message)
 
@@ -232,38 +212,24 @@ class SiteManagerAgent(Agent):
         #    _log.info("Message is: "+k+": "+str(v))
 
         try:
+            self.updating = 1  # indicates that data is updating - do not trust until populate end pts is complete
             self.site.populate_endpts(data, meta_data)
             self.dirtyFlag = 0 # clear dirtyFlag on new read
+            self.updating = 0
         except:
-            # indicates that agent is still initializing - init_sites has not yet been called.
-            # There is possibly a better way to handle this issue
             #FIXME - this should probably look for specific error to trap, right now this is
-            # a catch-all....
+            # a catch-all for any errors in parsing incoming msg
             _log.info("Exception: in populate end_pts!!!")
         pass
 
-        
+        # update the current topic's last read time to indicate data is fresh
+        for topic_obj in self.topics:
+            cur_topic_str = topic_obj["TopicPath"]+"/all"
+            if cur_topic_str == topic:
+                topic_obj["last_read_time"] = utils.get_aware_utc_now()
+                _log.info("SiteManagerStatus: Topic "+topic+" read at "+datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
+                break
 
-        # FIXME: This is legacy code, should be reintegrated.  Not currently doing anything
-        # with timestamps.
-        if 0:
-            TimeStamp = datetime.strptime(
-                headers["TimeStamp"][:19],            
-                "%Y-%m-%dT%H:%M:%S"
-            )      
-            self.cache[TimeStamp] = self.cache.get(
-                TimeStamp,{})
-
-            out = self.cache.pop(TimeStamp)
-            print(str(TimeStamp)+ " " + str(out.items))
-
-        #if str(topic) == self.topics[0]["TopicPath"]: # FIXME temporary
-        self.last_scrape_time = datetime.now() #TimeStamp# datetime.now()  #FIXME - need to separate by topic...
-        #else:
-        #    _log.info("topic is "+topic)
-        #    _log.info("topic[0] is "+self.topics[0]["TopicPath"])
-
-        # self.summarize(out,headers)
 
     ##############################################################################
     def publish_data(self):
@@ -287,153 +253,64 @@ class SiteManagerAgent(Agent):
     ##############################################################################
     @RPC.export
     def update_site_status(self):
-        """
-        Used to poll the status of the site
-        Detects errors that impact the validity of data being monitored from the site and recalculates values
-        Periodically called by Executive
 
-        :return: SiteError - dictionary of errors associated with the site:
-        1. DeviceError: Issues with downstream DERDevices are captured within the "health_status" dictionary associated
-        with each DERDevice.  site.update_health_status() aggregates this information.  if health_status["status"] = 0,
-        it indicates an exception occurred with a downstream device
+        # check if any of the assigned topics have exceeded their timeout period.
+        # if so - set a readError
+        # TODO: eventually make it so that each data end point has meta data that
+        # TODO: links it to a topic so that you can mark individual data points as dirty
+        cnt = 0
+        read_status = 1
+        for topic_obj in self.topics:
+            TimeStamp = utils.get_aware_utc_now() # datetime.now() 
 
-        2. ReadError: Detected by checking that the time interval since the last time SiteManager received an
-        incoming pub/sub message on the IEB from the site communication agent is < the configured timeout period
+            _log.info("Topic "+topic_obj["TopicPath"]+": Current Time = " + datetime.strftime(TimeStamp, "%Y-%m-%dT%H:%M:%S") +
+            "; Last Scrape = " + datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
 
-        3. WriteError: Indicates that a command was written to the site, but does not appear to have been received.
+            deltaT = TimeStamp - topic_obj["last_read_time"]
+            _log.info("delta T "+str(deltaT))
+            tot_sec = deltaT.total_seconds()
 
-        4. CmdError: Indicates that the site has not responded as expected to a command that it has received.
-
-        5. HeartbeatError: Indicates that the site has not updated its heartbeat counter within the expected timeout
-        period
-
-        6. CmdPending: Indicates that the site has not been scraped since the last command was sent.
-
-        """
-
-        # 1. when was the last scrape?
-        # 2. do _cmd registers = base registers?
-        # 3. do base registers = base status registers?
-
-        ReadError      = 0
-        CmdError       = 0
-        WriteError     = 0
-        DeviceError    = 0
-        HeartbeatError = 0
-        CmdPending     = 0
-
-        _log.info("Checking Site Status.  Curent Site Mode = "+str(self.mode))
-
-        if self.dirtyFlag == 0:
-            # FIXME: needs to be a different flag for each topic <?>
-            # indicates that site has been scraped since the last command was posted.
-
-            #WriteError = self.site.check_command()
-
-            self.site.update_op_status()
-            self.site.update_health_status()
-            self.site.update_mode_status()
-
-            if self.site.health_status.data_dict["status"] == 0:
-                DeviceError = 1
-
-            CmdError = self.site.check_mode()
+            _log.info("Delta T = "+str(deltaT)+"; SCRAPE_TIMEOUT = "+ str(SCRAPE_TIMEOUT)+"; tot sec = "+str(tot_sec))
 
 
-            if (self.mode != self.site.mode_ctrl.data_dict["SysModeCtrl"]):
-                # Indicates that the site is in a different mode than the SiteMgr thinks
-                # it should be.
+            if tot_sec > topic_obj["SCRAPE_TIMEOUT"]:
+                # need to set data as invalid.  
+                # in theory, this should be done by topic, but for right now, I can just do it for the whole topic 
+                # topic tree.
+                #self.site.set_read_error(cnt)
+                read_status = 0
 
-                # check reason - possible reasons include:
-                # (1) changed by non-GS 3rd party.  (Not an error, but needs to be communicated to Executive
-                # (2) GS failed to send
-                # (3) Site failed to receive
-                #TODO - need to check status code, etc...
-                #if self.write_error_count == 0:
-                # Try to resend.
-                #    self.write_error_count += 1
-                #else:
-                    # Has previously failed, assume that there is a problem
-                    # try to resend
+            cnt += 1
 
-                if self.write_error_count < 2:
-                    # Try to resend.
-                    _log.info("Retrying write mode")
-                    self.set_SiteManager_mode(self.mode)
-                WriteError = 1 #self.site.check_command()
-                self.write_error_count += 1
-
-            else:
-                self.write_error_count = 0
-
-        else:
-            # the site has not been scraped since the last command was posted.
-            # Assume data from the site is suspect, and set "CmdPending" to 1
-            CmdPending = 1
-            pass
-
-        for k,v in self.site.op_status.data_dict.items():
-            _log.info("Status-"+self.site.device_id+"-Ops: "+k+": "+str(v))
-        for k,v in self.site.mode_status.data_dict.items():
-            _log.info("Status-"+self.site.device_id+"-Mode: "+k+": "+str(v))
-        for k,v in self.site.health_status.data_dict.items():
-            _log.info("Status-"+self.site.device_id+"-Health: "+k+": "+str(v))
-        for k,v in self.site.pwr_ctrl.data_dict.items():
-            _log.info("Status-"+self.site.device_id+"-PwrCtrl: "+k+": "+str(v))
-        for k,v in self.site.mode_ctrl.data_dict.items():
-            _log.info("Status-"+self.site.device_id+"-ModeCtrl: "+k+": "+str(v))
-        # Now check if the site is communicating with the site manager.
-        # we check this by seeing if the time interval since the last scrape is > the
-        # configured scrape timeout period.  (something like 2x the scrape interval).
-
-        # FIXME - need to do this for each topic -
-
-        TimeStamp = datetime.now()
-        #datetime.strftime(
-        #    datetime.now(),
-        #    "%Y-%m-%dT%H:%M:%S"
-        #)      
-        _log.info("Current Time = " + datetime.strftime(TimeStamp, "%Y-%m-%dT%H:%M:%S") + 
-        "; Last Scrape = " + datetime.strftime(self.last_scrape_time, "%Y-%m-%dT%H:%M:%S"))
-
-        deltaT = TimeStamp - self.last_scrape_time
-        _log.info("delta T "+str(deltaT)) 
-        tot_sec = deltaT.total_seconds()
-
-        _log.info("Delta T = "+str(deltaT)+"; SCRAPE_TIMEOUT = "+ str(SCRAPE_TIMEOUT)+"; tot sec = "+str(tot_sec))
-
-
-        if tot_sec > SCRAPE_TIMEOUT:
-            ReadError = 1
-
-        self.SiteErrors.update({"ReadError": ReadError})
-        self.SiteErrors.update({"WriteError": WriteError})
-        self.SiteErrors.update({"DeviceError": DeviceError})
-        self.SiteErrors.update({"CmdError": CmdError})
-        self.SiteErrors.update({"HeartbeatError": HeartbeatError})
-        self.SiteErrors.update({"CmdPending": CmdPending})
-
-        for k, v in self.SiteErrors.items():
-            _log.info(k+": "+str(v))
- 
+        self.site.set_read_status(cnt,read_status)
+        self.site.print_site_status()
         self.publish_data()
 
-        return self.SiteErrors
+        for k,v in self.site.op_status.data_dict.items():
+            _log.debug("Status-"+self.site.device_id+"-Ops: "+k+": "+str(v))
+        for k,v in self.site.mode_status.data_dict.items():
+            _log.debug("Status-"+self.site.device_id+"-Mode: "+k+": "+str(v))
+        for k,v in self.site.health_status.data_dict.items():
+            _log.debug("Status-"+self.site.device_id+"-Health: "+k+": "+str(v))
+        for k,v in self.site.pwr_ctrl.data_dict.items():
+            _log.debug("Status-"+self.site.device_id+"-PwrCtrl: "+k+": "+str(v))
+        for k,v in self.site.mode_ctrl.data_dict.items():
+            _log.debug("Status-"+self.site.device_id+"-ModeCtrl: "+k+": "+str(v))
 
+        self.SiteStatus.update({"ReadStatus": self.site.read_status})
+        #self.SiteStatus.update({"WriteError": WriteError})
+        self.SiteStatus.update({"DeviceStatus": self.site.device_status})
+        #self.SiteStatus.update({"CmdError": CmdError})
+        self.SiteStatus.update({"CommStatus": self.site.comms_status})
+        self.SiteStatus.update({"CtrlMode": self.site.control_mode})
+        self.SiteStatus.update({"DataAvailable": self.site.isDataValid})
+        self.SiteStatus.update({"CtrlAvailable": self.site.isControlAvailable})
+        return self.SiteStatus
 
     ##############################################################################
-    #@Core.periodic(20)
-    def test_write(self):
-        """
-        example method to demonstrate a write operation.  Just incrementing periodically increments a counter
-        assumes a valid end point (consumer) of this command is running.
-        """
-        _log.info("updating op mode!!")
-        val = self.site.mode_ctrl.data_dict["OpModeCtrl"]+1
-        self.site.set_point("OpModeCtrl",val, self)
-        #self.cnt += 1
-        #print("Cnt = "+str(self.cnt))
-
+    @RPC.export
+    def check_site_errors(self):
+        pass
 
     ##############################################################################
     @RPC.export
@@ -467,9 +344,6 @@ class SiteManagerAgent(Agent):
         self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
         val = self.site.set_watchdog_timeout_enable(int(val), self)
 
-
-
-
     ##############################################################################
     @RPC.export
     def set_real_pwr_cmd(self, device_id, val):
@@ -497,7 +371,29 @@ class SiteManagerAgent(Agent):
             device.set_power_real(val, self)
 
     ##############################################################################
-    #@Core.periodic(PMC_WATCHDOG_PD)
+    @RPC.export
+    def set_arbitrary_pt(self, device_id, attribute, pt, val):
+        """
+        sends a real power command to the specified device
+        """
+        _log.info("SetPt: setting "+self.site.device_id+"."+attribute+"."+pt)
+
+        # find the device
+        device = self.site.find_device(str(device_id))
+
+        if device == None:
+            _log.info("SetPt: ERROR! Device "+device_id+" not found in "+self.site.device_id)            
+        else:
+            # FIXME: other error trapping needed?
+            # send the command
+            self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
+            _log.info("SetPt: Sending Cmd!")
+            device.write_cmd(str(attribute), str(pt), val, self)
+
+
+
+    ##############################################################################
+    @Core.periodic(PMC_WATCHDOG_PD)
     def increment_site_watchdog(self):
         """
         Commands site to increment watchdog counter
@@ -508,6 +404,15 @@ class SiteManagerAgent(Agent):
         #FIXME - also is it assumed that only the "site" has a heartbeat? (i.e., not the forecast device?)
         self.site.send_watchdog(self)
 
+    ##############################################################################
+    @Core.periodic(PMC_HEARTBEAT_PD)
+    def check_heartbeat(self):
+        """
+        Checks hearbeat from the site
+        :return:
+        """
+        if self.mode != STARTING:
+            self.site.check_site_heartbeat()
 
     ##############################################################################
     @RPC.export
@@ -542,31 +447,6 @@ class SiteManagerAgent(Agent):
             self.pwr_ctrl_en = ENABLED
             val = self.site.set_interactive_mode(self)
 
-    def handle_moving_averages (self, msg):
-        for k,v in msg.items():
-            if k not in self._config["moving_averages"]["keys"]:
-                continue
-            l = self.moving_averages.get(k,[])
-            l.append(v)
-            if len(l) > self._config["moving_averages"]["length"]:
-                l.pop(0)
-            msg[ k +".MA"] = sum(l)/len(l)
-            self.moving_averages[k]=l
-        
-    def summarize(self,state,headers):
-        self.vip.rpc.call(
-            "essagent-1.0_1",
-            "set_direct",
-            10)
-
-        self.handle_moving_averages(out)
-        new_topic = prefix + "all"
-        meta = dict([(k,{"type":"float"}) for k,v in out.items()])
-        self.vip.pubsub.publish('pubsub', 
-                                new_topic, 
-                                headers=headers, 
-                                message=[out,meta]).get(timeout=10.0)        
-        
 def main(argv=sys.argv):
     '''Main method called by the eggsecutable.'''
     try:
