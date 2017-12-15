@@ -183,10 +183,10 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
 
     if energy_required < discharge_energy_available:
         # (discharge) set point needs to be adjusted to meet a min_SOE_kWh constraint 
-        setpoint = discharge_energy_available / (setpoint_cmd_interval / sec_per_hr)
+        setpoint = discharge_energy_available / (float(setpoint_cmd_interval) / float(sec_per_hr))
     elif energy_required > charge_energy_available:
         # (charge) set point needs to be adjusted to meet a max_SOE_kWh constraint
-        setpoint = charge_energy_available / (setpoint_cmd_interval / sec_per_hr)
+        setpoint = charge_energy_available / (float(setpoint_cmd_interval) / float(sec_per_hr))
 
     return setpoint
 
@@ -673,7 +673,7 @@ class ExecutiveAgent(Agent):
 
         #with open(fname, 'a') as datafile:
         #    datafile.write(str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
-        _log.info("wrote: "+str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
+        _log.info("SetPt: wrote: "+str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
 
     ##############################################################################
     @Core.receiver('onstop')
