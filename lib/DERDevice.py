@@ -293,7 +293,8 @@ class DERDevice():
         device in the site data model).
         :return:
         """
-        self.comms_status = self.parent_device.comms_status
+        if self.parent_device != None:
+            self.comms_status = self.parent_device.comms_status
         try:
             if (self.health_status.data_dict["CommsStatus"] == 0):
                 self.comms_status = 0
@@ -505,44 +506,44 @@ class DERDevice():
                 tmplist = [v/1000 for v in cur_attribute.data_dict[keyval]]
                 del cur_attribute.data_dict[keyval][:]
                 cur_attribute.data_dict[keyval] = tmplist[:]
-                _log.info("PopEndpts: converted "+k+"from "+endpt_units+
+                _log.debug("PopEndpts: converted "+k+"from "+endpt_units+
                           " to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
             else:
                 cur_attribute.data_dict[keyval] /= 1000
-                _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+
+                _log.debug("PopEndpts: converted "+k+"from "+endpt_units+" to "+
                           cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
 
         if (endpt_units == "ScaledW") and (cur_attribute.units[keyval] == "kW"):
             base_name = keyval[:len(keyval)-len("raw")] # assume this has "_raw" on the end of the name
             cur_attribute.data_dict[base_name+"kW"] = \
                 (cur_attribute.data_dict[keyval]*10**cur_attribute.data_dict[base_name+"SF"])/1000
-            _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+
+            _log.debug("PopEndpts: converted "+k+"from "+endpt_units+" to "+
                       cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[base_name+"kW"]))
 
 
         if (endpt_units == "Pct") and (cur_attribute.units[keyval] == "kW"):   # FIXME - make this PctkW?
             # #_log.info("converting pct to kW")
             nameplate = cur_device.get_nameplate()
-            _log.info("val is "+str(nameplate))
+            _log.debug("val is "+str(nameplate))
 
             #if type(cur_attribute.data_dict[keyval]) is int:
 	        #    cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
             #elif type(cur_attribute.data_dict[keyval]) is float:
 	        #	cur_attribute.data_dict[keyval] = float((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
             if type(cur_attribute.data_dict[keyval]) is list:
-                _log.info("converting list from pct to kW")
+                _log.debug("converting list from pct to kW")
                 # FIXME - ugh
                 tmplist = [(float(v) / 100) * nameplate for v in cur_attribute.data_dict[keyval]]
                 del cur_attribute.data_dict[keyval][:]
                 cur_attribute.data_dict[keyval] = tmplist[:]
             else: # assume int
-                _log.info("converting single pt from pct to kW")
-                _log.info("value is "+str(cur_attribute.data_dict[keyval])+"; nameplate is "+str(nameplate))
+                _log.debug("converting single pt from pct to kW")
+                _log.debug("value is "+str(cur_attribute.data_dict[keyval])+"; nameplate is "+str(nameplate))
                 cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * nameplate)
-                _log.info("new value is "+str(cur_attribute.data_dict[keyval]))
+                _log.debug("new value is "+str(cur_attribute.data_dict[keyval]))
                 #cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
                 #_log.info("Unsupported data type for conversion pct to kW")
-	        _log.info("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
+	        _log.debug("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
 
     ##############################################################################
     def convert_units_to_endpt(self, attribute, cmd):
