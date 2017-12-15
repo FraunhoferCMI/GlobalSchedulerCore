@@ -287,15 +287,15 @@ class SiteManagerAgent(Agent):
         self.publish_data()
 
         for k,v in self.site.op_status.data_dict.items():
-            _log.debug("Status-"+self.site.device_id+"-Ops: "+k+": "+str(v))
+            _log.info("Status-"+self.site.device_id+"-Ops: "+k+": "+str(v))
         for k,v in self.site.mode_status.data_dict.items():
-            _log.debug("Status-"+self.site.device_id+"-Mode: "+k+": "+str(v))
+            _log.info("Status-"+self.site.device_id+"-Mode: "+k+": "+str(v))
         for k,v in self.site.health_status.data_dict.items():
-            _log.debug("Status-"+self.site.device_id+"-Health: "+k+": "+str(v))
+            _log.info("Status-"+self.site.device_id+"-Health: "+k+": "+str(v))
         for k,v in self.site.pwr_ctrl.data_dict.items():
-            _log.debug("Status-"+self.site.device_id+"-PwrCtrl: "+k+": "+str(v))
+            _log.info("Status-"+self.site.device_id+"-PwrCtrl: "+k+": "+str(v))
         for k,v in self.site.mode_ctrl.data_dict.items():
-            _log.debug("Status-"+self.site.device_id+"-ModeCtrl: "+k+": "+str(v))
+            _log.info("Status-"+self.site.device_id+"-ModeCtrl: "+k+": "+str(v))
 
         self.SiteStatus.update({"ReadStatus": self.site.read_status})
         #self.SiteStatus.update({"WriteError": WriteError})
