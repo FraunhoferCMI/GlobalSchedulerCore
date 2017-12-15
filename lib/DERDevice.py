@@ -55,7 +55,7 @@ from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
 from volttron.platform.agent import utils
 from volttron.platform.messaging import headers as headers_mod
 
-from gs_identities import (INTERACTIVE, AUTO, SITE_IDLE, SITE_RUNNING, PMC_WATCHDOG_RESET)
+from gs_identities import (INTERACTIVE, AUTO, SITE_IDLE, SITE_RUNNING, PMC_WATCHDOG_RESET, IGNORE_HEARTBEAT_ERRORS)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -222,7 +222,7 @@ class DERDevice():
             self.datagroup_dict_list[group_id].data_mapping_dict.update({ext_endpt: int_endpt})
             self.datagroup_dict_list[group_id].map_int_to_ext_endpt.update({int_endpt: ext_endpt})
             self.datagroup_dict_list[group_id].data_dict.update({int_endpt: 0})
-            self.datagroup_dict_list[group_id].update_fail_states(int_endpt, fail_state, group_id)
+            #self.datagroup_dict_list[group_id].update_fail_states(int_endpt, fail_state, group_id)
             self.datagroup_dict_list[group_id].units.update({int_endpt: units})
             self.datagroup_dict_list[group_id].topic_map.update({int_endpt: topic_index})
             self.datagroup_dict.update({ext_endpt: self.datagroup_dict_list[group_id]})
@@ -932,17 +932,17 @@ class DERModbusSite(DERSite):
         site if the heartbeat has not incremented.
         TODO - should a single miss trigger a timeout?
         """
-        if int(self.mode_status.data_dict["GSHeartBeat"]) != self.mode_status.data_dict["GSHeartBeat_prev"]+1:
-            # heartbeat has not updated.  Indicates that the site controller may not be functioning properly.
-            self.health_status.data_dict["CommsStatus"] = 0
-            _log.info("Heartbeat Error: GS Heart Beat = "+str(self.mode_status.data_dict["GSHeartBeat"])+"; prev = "+str(self.mode_status.data_dict["GSHeartBeat_prev"]))
+
+        if IGNORE_HEARTBEAT_ERRORS == 0:
+            if int(self.mode_status.data_dict["GSHeartBeat"]) != self.mode_status.data_dict["GSHeartBeat_prev"]+1:
+                # heartbeat has not updated.  Indicates that the site controller may not be functioning properly.
+                self.health_status.data_dict["CommsStatus"] = 0
+                _log.info("Heartbeat Error: GS Heart Beat = "+str(self.mode_status.data_dict["GSHeartBeat"])+"; prev = "+str(self.mode_status.data_dict["GSHeartBeat_prev"]))
+            else:
+                self.health_status.data_dict["CommsStatus"] = 1
         else:
             self.health_status.data_dict["CommsStatus"] = 1
-            _log.info("Heartbeat OK: GS Heart Beat = "+str(self.mode_status.data_dict["GSHeartBeat"])+"; prev = "+str(self.mode_status.data_dict["GSHeartBeat_prev"]))
-
         self.mode_status.data_dict["GSHeartBeat_prev"] = int(self.mode_status.data_dict["GSHeartBeat"])
-        
-        pass
 
     ##############################################################################
     #@core.periodic(PMC_WATCHDOG_PD)

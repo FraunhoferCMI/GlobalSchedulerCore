@@ -62,7 +62,7 @@ PMC_HEARTBEAT_PD      = 10 # expected period, in seconds
 PMC_HEARTBEAT_RESET   = 24 * 60 * 60 # heartbeat reset frequency, in seconds
 PMC_WATCHDOG_PD       = 10 # expected heartbeat, in seconds
 PMC_WATCHDOG_RESET    = 24 * 60 * 60 # watchdog reset frequency, in seconds
-
+IGNORE_HEARTBEAT_ERRORS = 1
 
 # GS Internal Operating Modes
 IDLE = 0
