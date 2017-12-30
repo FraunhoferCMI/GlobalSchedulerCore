@@ -124,6 +124,8 @@ class SiteManagerAgent(Agent):
         self.dirtyFlag = 1 
         self.updating  = 0
         self.write_error_count = 0
+        self.devices_to_display = ["ShirleySouth-ESSPlant-ESS1"]
+
 
     ##############################################################################
     @RPC.export
@@ -248,7 +250,41 @@ class SiteManagerAgent(Agent):
                                     self.mode)
         self.site.publish_device_data(self)
 
+    ##############################################################################
+    def log_device_status(self, device):
+        for k,v in device.op_status.data_dict.items():
+            _log.info("Status-"+device.device_id+"-Ops: "+k+": "+str(v))
+        for k,v in device.mode_status.data_dict.items():
+            _log.info("Status-"+device.device_id+"-Mode: "+k+": "+str(v))
+        for k,v in device.health_status.data_dict.items():
+            _log.info("Status-"+device.device_id+"-Health: "+k+": "+str(v))
+        for k,v in device.pwr_ctrl.data_dict.items():
+            _log.info("Status-"+device.device_id+"-PwrCtrl: "+k+": "+str(v))
+        for k,v in device.mode_ctrl.data_dict.items():
+            _log.info("Status-"+device.device_id+"-ModeCtrl: "+k+": "+str(v))
 
+        try:
+            for k,v in device.config.data_dict.items():
+                _log.info("Status-"+device.device_id+"-Config: "+k+": "+str(v))
+
+            for k,v in device.qSetPtr_ctrl.data_dict.items():
+                _log.info("Status-"+device.device_id+"-QSetPt: "+k+": "+str(v))
+
+            for k,v in device.q_ctrl.data_dict.items():
+                _log.info("Status-"+device.device_id+"-QModeCtrl: "+k+": "+str(v))
+
+        except:
+            _log.info("Error! val not found")
+            pass
+
+
+    ##############################################################################
+    @RPC.export
+    def set_devices_to_display(self, dev_str): 
+       self.devices_to_display = []
+       for devs in dev_str:
+           self.devices_to_display.append(devs)
+       #self.devices_to_display = [dev_str]
 
     ##############################################################################
     @RPC.export
@@ -286,16 +322,20 @@ class SiteManagerAgent(Agent):
         self.site.print_site_status()
         self.publish_data()
 
-        for k,v in self.site.op_status.data_dict.items():
-            _log.info("Status-"+self.site.device_id+"-Ops: "+k+": "+str(v))
-        for k,v in self.site.mode_status.data_dict.items():
-            _log.info("Status-"+self.site.device_id+"-Mode: "+k+": "+str(v))
-        for k,v in self.site.health_status.data_dict.items():
-            _log.info("Status-"+self.site.device_id+"-Health: "+k+": "+str(v))
-        for k,v in self.site.pwr_ctrl.data_dict.items():
-            _log.info("Status-"+self.site.device_id+"-PwrCtrl: "+k+": "+str(v))
-        for k,v in self.site.mode_ctrl.data_dict.items():
-            _log.info("Status-"+self.site.device_id+"-ModeCtrl: "+k+": "+str(v))
+        for dev_str in self.devices_to_display:
+            device = self.site.find_device(dev_str)
+            self.log_device_status(device)
+
+        #for k,v in self.site.op_status.data_dict.items():
+        #    _log.info("Status-"+self.site.device_id+"-Ops: "+k+": "+str(v))
+        #for k,v in self.site.mode_status.data_dict.items():
+        #    _log.info("Status-"+self.site.device_id+"-Mode: "+k+": "+str(v))
+        #for k,v in self.site.health_status.data_dict.items():
+        #    _log.info("Status-"+self.site.device_id+"-Health: "+k+": "+str(v))
+        #for k,v in self.site.pwr_ctrl.data_dict.items():
+        #    _log.info("Status-"+self.site.device_id+"-PwrCtrl: "+k+": "+str(v))
+        #for k,v in self.site.mode_ctrl.data_dict.items():
+        #    _log.info("Status-"+self.site.device_id+"-ModeCtrl: "+k+": "+str(v))
 
         self.SiteStatus.update({"ReadStatus": self.site.read_status})
         #self.SiteStatus.update({"WriteError": WriteError})
