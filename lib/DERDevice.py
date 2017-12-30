@@ -140,11 +140,24 @@ class DERDevice():
         self.op_status = self.DeviceAttributes("OpStatus")
         self.health_status = self.DeviceAttributes("HealthStatus")
         self.mode_status = self.DeviceAttributes("ModeStatus")
+        self.env_status = self.DeviceAttributes("EnvStatus")
         self.mode_ctrl = self.DeviceAttributes("ModeControl")
         self.pwr_ctrl = self.DeviceAttributes("RealPwrCtrl")
+	self.q_ctrl   = self.DeviceAttributes("QModeCtrl")
+        self.pf_ctrl   = self.DeviceAttributes("PF")
+        self.qSetPt_ctrl   = self.DeviceAttributes("QSetPt")
+        self.PFComp_ctrl   = self.DeviceAttributes("PFComp")
+        self.Vreg_ctrl   = self.DeviceAttributes("Vreg")
+        self.Vcomp_ctrl   = self.DeviceAttributes("Vcomp")
         self.forecast = self.DeviceAttributes("Forecast")
         self.mode_ctrl_cmd = self.DeviceAttributes("ModeControlCmd")
         self.pwr_ctrl_cmd = self.DeviceAttributes("RealPwrCtrlCmd")
+	self.q_ctrl_cmd   = self.DeviceAttributes("QModeCtrlCmd")
+        self.pf_ctrl_cmd   = self.DeviceAttributes("PFCmd")
+        self.qSetPt_ctrl_cmd   = self.DeviceAttributes("QSetPtCmd")
+        self.PFComp_ctrl_cmd   = self.DeviceAttributes("PFCompCmd")
+        self.Vreg_ctrl_cmd   = self.DeviceAttributes("VregCmd")
+        self.Vcomp_ctrl_cmd   = self.DeviceAttributes("VcompCmd")
 
         _log.info("device is ..." + self.device_id)
         self.datagroup_dict_list = {}
@@ -152,11 +165,26 @@ class DERDevice():
         self.datagroup_dict_list.update({"OpStatus": self.op_status})
         self.datagroup_dict_list.update({"HealthStatus": self.health_status})
         self.datagroup_dict_list.update({"ModeStatus": self.mode_status})
+        self.datagroup_dict_list.update({"EnvStatus": self.env_status})         
         self.datagroup_dict_list.update({"ModeControl": self.mode_ctrl})
         self.datagroup_dict_list.update({"RealPwrCtrl": self.pwr_ctrl})
+        self.datagroup_dict_list.update({"QModeCtrl": self.q_ctrl})
+        self.datagroup_dict_list.update({"PF": self.pf_ctrl})
+        self.datagroup_dict_list.update({"QSetPt": self.qSetPt_ctrl})
+        self.datagroup_dict_list.update({"PFComp": self.PFComp_ctrl})
+        self.datagroup_dict_list.update({"Vreg": self.Vreg_ctrl})
+        self.datagroup_dict_list.update({"Vcomp": self.Vcomp_ctrl})
         self.datagroup_dict_list.update({"Forecast": self.forecast})
         self.datagroup_dict_list.update({"ModeControlCmd": self.mode_ctrl_cmd})
         self.datagroup_dict_list.update({"RealPwrCtrlCmd": self.pwr_ctrl_cmd})
+        self.datagroup_dict_list.update({"QModeCtrlCmd": self.q_ctrl_cmd})
+        self.datagroup_dict_list.update({"PFCmd": self.pf_ctrl_cmd})
+        self.datagroup_dict_list.update({"QSetPtCmd": self.qSetPt_ctrl_cmd})
+        self.datagroup_dict_list.update({"PFCompCmd": self.PFComp_ctrl_cmd})
+        self.datagroup_dict_list.update({"VregCmd": self.Vreg_ctrl_cmd})
+        self.datagroup_dict_list.update({"VcompCmd": self.Vcomp_ctrl_cmd})
+
+
 
     ##############################################################################
     def find_device(self, device_id):
@@ -334,9 +362,11 @@ class DERDevice():
         # if this is an end point device and data is marked as invalid, 
         # then zero out all of the operational status indicators.  Data is not 
         # to be trusted.
-        if (self.device_type in self.DGDevice) & (self.isDataValid == 0):
-            for key in self.op_status.key_update_list:
-                self.op_status.data_dict[key] = 0
+        IGNORE_ERRORS = 1
+        if (IGNORE_ERRORS!=1):
+            if (self.device_type in self.DGDevice) & (self.isDataValid == 0):
+                for key in self.op_status.key_update_list:
+                    self.op_status.data_dict[key] = 0
 
         # if this is not an end point device, set data that gets propagated upward from 
         # children devices to 0.  These registers are recalculated as the sum of all children
@@ -1001,7 +1031,23 @@ class DERCtrlNode(DERDevice):
         self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
         # where does the actual pwr ctrl live???
 
+
+        try: 
+            pass
+            # check Q mode? check enable?
+            # check for permissions 
+            #self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": int(val)})
+            # if there are additional registers?
+            #self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
+
+            # ideally would now check for ...
+            #self.pwr_ctrl_cmd.data_dict.update({"Trigger_cmd": 1})
+            #self.set_point("RealPwrCtrl", "Trigger", sitemgr)
+        except:
+            pass
         pass
+
+
 
     ##############################################################################
     def set_power_reactive(self):
