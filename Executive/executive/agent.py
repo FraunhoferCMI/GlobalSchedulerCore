@@ -44,7 +44,7 @@
 
 from __future__ import absolute_import
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import sys
 import os
@@ -201,8 +201,6 @@ def get_current_forecast(forecast):
     """
     #cur_time = datetime.now()
     return forecast["Pwr"][11]
-
-
 
 ##############################################################################
 class ExecutiveAgent(Agent):
@@ -422,6 +420,7 @@ class ExecutiveAgent(Agent):
         self.sundial_system = SundialSystemResource(new_system_resource, sitelist)
         self.sundial_resources.append(self.sundial_system)
 
+
     ##############################################################################
     def build_sundial(self):
         """
@@ -499,6 +498,80 @@ class ExecutiveAgent(Agent):
 
 
     ##############################################################################
+    @RPC.export
+    def get_schedule(self):
+        """
+        Placeholder.
+        (Also could return the time at which the next optimization pass will start)
+
+        :return: new_time - the start time of the next dispatch schedule period
+        """
+
+        TimeStamp = utils.get_aware_utc_now()
+        #TimeStamp = datetime.now()
+        #new_time  = TimeStamp+timedelta(hours=1)
+
+        self.last_optimization_start
+        # self.last_optimization_start = utils.get_aware_utc_now()
+
+        # For right now, assume that the GS will generate dispatch signals starting at the top of
+        # of the next hour.
+        #FIXME - Parameterize this!
+        new_time = TimeStamp + timedelta(hours = 1)  #seconds = GS_SCHEDULE
+        new_time  = new_time.replace(minute=0, second=0, microsecond=0)
+
+
+        #print("TimeStamp = " + TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"))
+        #print("Send next sync time = " + new_time.strftime("%Y-%m-%dT%H:%M:%S.%f"))
+
+        return new_time
+
+
+    ##############################################################################
+    def update_sundial_resources(self, sdr_to_sm_lookup_table):
+        """
+
+        :param sdr_to_sm_lookup_table:
+        :return:
+        """
+
+        # brainstorm idea - to handle the intermediate control loop
+        # what if the "update_der_device_commands" method writes to a register that is called
+        # "schedule command"
+        # but the executive is in charge of calling the routine that actually writes the
+        # scheduled command?
+        # what if the sundial resource data objects have ?
+
+
+
+        for entries in sdr_to_sm_lookup_table:
+
+            for devices in entries.device_list:
+
+                # how do you want to update?
+                # SDR.update_list?
+
+                # check site health to see if we should update
+
+                # MaxSOE_kWh, MinSOE_kWh, SOE_kWh, Nameplate(?), ChgEff, DischgEff, MaxChargePwr_kW... etc.
+                for (a,v) in zip(entries.sundial_resource.update_list_attributes, entries.sundial_resource.update_list_end_pts):
+                    # set up mapping keys from a to b
+                    # set up a mapping file and mapping keys from sdr to derdevice and back
+                    # these are intialized in the SDR routine.
+                    # what if I just add them as fields to the json file?
+
+                    #k = "Test" # should be key from lookup table
+                    attribute = self.vip.rpc.call(str(devices["AgentID"]),  # self.sundial_pv.sites[nodes["AgentID"]],
+                                          "get_device_data",
+                                          devices["DeviceID"],
+                                          a).get(timeout=5)
+
+                    #entries.sundial_resource. attribute[v]
+
+
+            pass
+
+    ##############################################################################
     @Core.periodic(GS_SCHEDULE)
     def run_optimizer(self):
         """
@@ -508,7 +581,7 @@ class ExecutiveAgent(Agent):
         dispatch command to make up the difference, subject to ESS constraints.
         :return:
         """
-
+        self.last_optimization_start = utils.get_aware_utc_now()
         if self.OptimizerEnable == ENABLED:
             _log.info("Optimizer: Running Optimizer")
 
