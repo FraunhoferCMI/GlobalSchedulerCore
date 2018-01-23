@@ -1,3 +1,4 @@
+cp ../GS_Optimizer/SunDialResource.py ../../../../env/lib/python2.7/site-packages/
 volttron-ctl stop --tag exec
 volttron-pkg package . 
 volttron-ctl remove --tag exec
