@@ -71,73 +71,7 @@ __version__ = '1.0'
 
 import DERDevice
 import json
-
-
-##############################################################################
-class SunDialResource():
-    ##############################################################################
-    def __init__(self, resource_cfg, sites):
-        """
-
-        1. Read a configuration file that tells what resources to include
-        2. populate
-        """
-
-        self.resource_type = resource_cfg["ResourceType"]
-        self.resource_id   = resource_cfg["ID"]
-        self.virtual_plant = DERDevice.VirtualDERCtrlNode(device_id=self.resource_id, device_list=resource_cfg["DeviceList"])
-        self.sites         = sites
-        self.obj_fcns     = []
-
-
-##############################################################################
-class ESSResource(SunDialResource):
-    def __init__(self, resource_cfg, sites):
-        SunDialResource.__init__(self, resource_cfg, sites)
-        pass
-
-
-##############################################################################
-class PVResource(SunDialResource):
-    def __init__(self, resource_cfg, sites):
-        SunDialResource.__init__(self, resource_cfg, sites)
-        pass
-
-
-##############################################################################
-class LoadShiftResource(SunDialResource):
-    def __init__(self, resource_cfg, sites):
-        SunDialResource.__init__(self, resource_cfg, sites)
-        pass
-
-
-##############################################################################
-class BaselineLoadResource(SunDialResource):
-    def __init__(self, resource_cfg, sites):
-        SunDialResource.__init__(self, resource_cfg, sites)
-        pass
-
-
-##############################################################################
-class SundialSystemResource(SunDialResource):
-    def __init__(self, resource_cfg, sites):
-        SunDialResource.__init__(self, resource_cfg, sites)
-        self.obj_fcns = [self.obj_fcn_energy, self.obj_fcn_demand]
-        pass
-
-    def obj_fcn_energy(self):
-        """
-        placeholder for a function that calculates an energy cost for a given net demand profile
-        :return:
-        """
-        pass
-
-    def obj_fcn_demand(self):
-        """
-        placeholder for a function that calculates a demadn charge for a given net demand profile
-        :return:
-        """
-        pass
+from SunDialResource import SundialSystemResource, SundialResource, SundialResourceProfile, build_SundialResource_to_SiteManager_lookup_table
 
 
 ##############################################################################
@@ -333,7 +267,7 @@ class ExecutiveAgent(Agent):
             # the following sleep message is supposed to pause operation for long enough for site manager
             # to finish its initialization.
             # FIXME: There is probably a more robust way to do this, but this seems to work ok
-            gevent.sleep(0.5)
+            gevent.sleep(1.0)
 
             # The following gets a handle to the agent that we've just created.
             # It's not done very efficiently though - It gets a list of agents and find one that
@@ -349,112 +283,23 @@ class ExecutiveAgent(Agent):
             # TODO - return something from init_site indicating success??
             self.vip.rpc.call(cur_agent["identity"], "init_site", site)
 
-        self.init_resources(self.sundial_resource_cfg_list, self.sitemgr_list)
+        self.sundial_resources = SundialSystemResource(self.sundial_resource_cfg_list, {}, None)
+        _log.info("about to call lookup!")
+        self.sdr_to_sm_lookup_table = build_SundialResource_to_SiteManager_lookup_table(self.sundial_resource_cfg_list,
+                                                                                        self.sundial_resources,
+                                                                                        sitemgr_list=self.sitemgr_list,
+                                                                                        use_volttron=1)
+        _log.info("done with lookup!!")
+        for entries in self.sdr_to_sm_lookup_table:
+            _log.info("SDRInit: "+entries.sundial_resource.resource_id + ":" + str(entries.device_list))
+            #for devices in entries.device_list:
+            #    for cur_agent in agents:
+            #        if cur_agent["identity"] == devices["AgentID"]:
+            #            self.sdr_to_sm_lookup_table.
+
+        #self.sundial_resources.init_test_values(24)
+
         self.OperatingMode_set = IDLE
-
-
-    ##############################################################################
-    def init_resources(self, sundial_resource_cfg_list, sitemgr_list):
-        """
-        This method constructs a list of sundial resource objects based on data stored in a system configuration
-        json file.
-        This method is called by executive just after the agent is instantiated
-        :param sundial_resource_cfg_list: List of sundial resources to be initialized
-        :return:
-        """
-        # 1. get the name of the site from the device list;
-        # 2. make sure that site exists.  Make sure that device exists
-        # 3. Instantiate SunDial Resource.
-        # 3. save agentID in SunDial Resource.
-        # 4. system object - perhaps does not need to be defined in the config file?
-
-
-        self.sundial_resources = []
-        for new_resource in sundial_resource_cfg_list:
-
-            # find devices matching the specified device names....
-            sitelist = {} #[]
-            for device in new_resource["DeviceList"]:
-                _log.info("New Resource: "+new_resource["ID"]+" of type "+new_resource["ResourceType"])
-                _log.info("Device List entries: ")                
-                for site in sitemgr_list:
-                    if site["identity"] == device["AgentID"]:
-                        _log.info("Agent name: " + site["identity"] + " is a match!!")
-                        sitelist.update({device["AgentID"]:site})
-                        break
-                if site["identity"] != device["AgentID"]:
-                    # error trapping - make sure that the agent & associated device are valid entries
-                    _log.info("Error - "+device["AgentID"]+" not found.  Skipping...")
-                    sitelist.update({device["AgentID"]:None})
-                    #FIXME: does not actually skip the not-found element
-                    #FIXME: does not check for whether the device exists
-
-            if new_resource["ResourceType"] == "ESSCtrlNode":
-                self.sundial_ess = ESSResource(new_resource, sitelist)
-                self.sundial_resources.append(self.sundial_ess)
-            elif new_resource["ResourceType"] == "PVCtrlNode":
-                self.sundial_pv = PVResource(new_resource, sitelist)
-                self.sundial_resources.append(self.sundial_pv)
-            elif new_resource["ResourceType"] == "LoadShiftCtrlNode":
-                self.sundial_loadshift = LoadShiftResource(new_resource, sitelist)
-                self.sundial_resources.append(self.sundial_loadshift)
-            elif new_resource["ResourceType"] == "Load":
-                self.sundial_baseline = BaselineLoadResource(new_resource, sitelist)
-                self.sundial_resources.append(self.sundial_baseline)
-            else:
-                _log.info("Warning: Resoure Type "+new_resource["ResourceType"] +
-                          " not found, constructing a generic Sundial Resource")
-                self.sundial_resources.append(SunDialResource(new_resource))
-
-        # Next construct a "System" resource.  By convention, the System Resource
-        # is composed of all the virtual plants specified in the cfg file
-        new_system_resource = {}
-        new_system_resource.update({"ID": "System"})
-        new_system_resource.update({"ResourceType": "System"})
-        new_system_resource.update({"Use": "Y"})
-        new_system_resource.update({"DeviceList": [{}]})
-        sitelist = {}
-        for resources in self.sundial_resources:
-            new_system_resource["DeviceList"].append({"AgentID": resources.resource_id, "DeviceID": resources.resource_id})
-            sitelist.update({resources.resource_id: site})
-        self.sundial_system = SundialSystemResource(new_system_resource, sitelist)
-        self.sundial_resources.append(self.sundial_system)
-
-
-    ##############################################################################
-    def build_sundial(self):
-        """
-        Currently unused.
-        This would start up a separate "SunDialResourceManager" agent that is responsible for building
-        and managing sundial resources, and possibly would run the optimizer.  Analogous to Executive's
-        relationhip with the SiteManager agents
-        For simplicity, current implementation is keepin within the umbrella of the "executive" agent
-        """
-        #sundial_cfg_list = [
-        #    ("loadshift_sdr", ["IPKeys-FLAME_loadshift"], "LoadShiftCtrlNode"),
-        #    ("load_sdr", ["IPKeys-FLAME_baseline"], "Load"),
-        #    ("pv_sdr", ["ShirleySouth-PVPlant", "ShirleyNorth-PVPlant"], "PVCtrlNode"), #ShirleySouth
-        #    ("ess_sdr", ["ShirleySouth-ESSPlant-ESS1"], "ESSCtrlNode"), #ShirleySouth-ESSPlant
-        #    ("system_sdr", ["loadshift_sdr", "load_sdr", "pv_sdr", "ess_sdr"], "SYSTEM")]
-
-        fname = "/home/matt/.volttron/packaged/sundial_resource_manageragent-1.0-py2-none-any.whl"
-        uuid = self.vip.rpc.call(CONTROL, "install_agent_local", fname, vip_identity="SundialResourceManager", secretkey=None,
-                                 publickey=None).get(timeout=30)
-        _log.info("Agent uuid is:" + uuid)
-        self.vip.rpc.call(CONTROL, "start_agent", uuid).get(timeout=5)
-        gevent.sleep(0.5)
-
-        agents = self.vip.rpc.call(CONTROL, "list_agents").get(timeout=5)
-        for cur_agent in agents:
-            if cur_agent["uuid"] == uuid:
-                self.sdrm = cur_agent
-                _log.info("Agent name is: " + cur_agent["name"])
-                _log.info("Agent dir is: " + str(dir(cur_agent)))
-                _log.info("Agent id is: " + cur_agent["identity"])
-                break
-
-        self.init_resources(self.sundial_resource_cfg_list, self.sitemgr_list)
-        #self.vip.rpc.call(self.sdrm, "init_resources", sundial_resource_cfg_list)
 
 
     ##############################################################################
@@ -530,6 +375,18 @@ class ExecutiveAgent(Agent):
     ##############################################################################
     def update_sundial_resources(self, sdr_to_sm_lookup_table):
         """
+        This method updates the sundial resource data structure with data from SiteManager
+        agents.
+
+        You could of course also do this by reading for data published on the IEB.
+
+        the lookup table contains devices that are connected to sdrs
+        so this cycles through the lookup table and retrieves them.
+
+        is it a little bit silly though?
+        (is this overly complicated?)
+
+
 
         :param sdr_to_sm_lookup_table:
         :return:
@@ -554,22 +411,30 @@ class ExecutiveAgent(Agent):
                 # check site health to see if we should update
 
                 # MaxSOE_kWh, MinSOE_kWh, SOE_kWh, Nameplate(?), ChgEff, DischgEff, MaxChargePwr_kW... etc.
-                for (a,v) in zip(entries.sundial_resource.update_list_attributes, entries.sundial_resource.update_list_end_pts):
+                for (a, v) in zip(entries.sundial_resource.update_list_attributes, entries.sundial_resource.update_list_end_pts):
                     # set up mapping keys from a to b
                     # set up a mapping file and mapping keys from sdr to derdevice and back
                     # these are intialized in the SDR routine.
                     # what if I just add them as fields to the json file?
 
-                    #k = "Test" # should be key from lookup table
-                    attribute = self.vip.rpc.call(str(devices["AgentID"]),  # self.sundial_pv.sites[nodes["AgentID"]],
+                    _log.info("UpdateSDR: "+entries.sundial_resource.resource_id+": SM Device ="+devices["DeviceID"]+"; a="+str(a)+"v="+str(v))
+                    if devices["isAvailable"] == 1:
+                        _log.info(str(entries.sundial_resource.update_list_attributes[a]))
+                        _log.info(str(entries.sundial_resource.update_list_end_pts[v]))
+
+                        attribute = self.vip.rpc.call(str(devices["AgentID"]),  # self.sundial_pv.sites[nodes["AgentID"]],
                                           "get_device_data",
                                           devices["DeviceID"],
-                                          a).get(timeout=5)
+                                          entries.sundial_resource.update_list_attributes[a]).get(timeout=5)
+
+                        try:
+                            _log.info(str(attribute[str(entries.sundial_resource.update_list_end_pts[v])]))
+                        except KeyError:
+                            _log.info("Key not found!!")
 
                     #entries.sundial_resource. attribute[v]
-
-
             pass
+
 
     ##############################################################################
     @Core.periodic(GS_SCHEDULE)
@@ -581,8 +446,12 @@ class ExecutiveAgent(Agent):
         dispatch command to make up the difference, subject to ESS constraints.
         :return:
         """
+
         self.last_optimization_start = utils.get_aware_utc_now()
         if self.OptimizerEnable == ENABLED:
+            self.update_sundial_resources(self.sdr_to_sm_lookup_table)
+
+        if (0):
             _log.info("Optimizer: Running Optimizer")
 
             # Go through each solar resource in the system and calculate:
