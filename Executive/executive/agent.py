@@ -72,6 +72,7 @@ __version__ = '1.0'
 import DERDevice
 import json
 from SunDialResource import SundialSystemResource, SundialResource, SundialResourceProfile, build_SundialResource_to_SiteManager_lookup_table
+from SSA_Optimization import SimulatedAnnealer
 
 
 ##############################################################################
@@ -299,6 +300,23 @@ class ExecutiveAgent(Agent):
 
         #self.sundial_resources.init_test_values(24)
 
+
+        self.optimizer = SimulatedAnnealer()
+        self.sundial_resources.init_test_values(24)
+
+
+
+        _log.info("Finding Nodes")
+        self.ess_resources = self.sundial_resources.find_resource_type("ESSCtrlNode")
+        self.pv_resources  = self.sundial_resources.find_resource_type("PVCtrlNode")
+        self.system_resources = self.sundial_resources.find_resource_type("System")
+        self.loadshift_resources = self.sundial_resources.find_resource_type("LoadShiftCtrlNode")
+        self.load_resources = self.sundial_resources.find_resource_type("Load")
+        #for load in self.load_resources:
+        #    _log.info("Found "+ load.resource_id)
+
+        self.opt_cnt = 0
+
         self.OperatingMode_set = IDLE
 
 
@@ -437,6 +455,60 @@ class ExecutiveAgent(Agent):
 
 
     ##############################################################################
+    def publish_schedules(self, sdr_to_sm_lookup_table):
+        """
+        What this is supposed to do - after optimizer is called
+        we call this. it takes schedule data from the optimizer data structures
+        and preps it for consumption by the forecast follower
+        :param sdr_to_sm_lookup_table:
+        :return:
+        """
+
+        # this should get called on a schedule - say every 30 seconds.
+
+        # (how are you going to deal with time?)
+        # target power - sum of all (scheduled resources - ESS scheduled)
+        # current power - sum of all resources (not including ess)
+        # SOE_kWh - from battery
+        # min_SOE_kWh
+        # max_SOE_kWh
+        # max_charge_kW
+        # max_charge_kW
+        # max_discharge_kW
+
+
+        # get target power - how?
+        # self.sundial_resources --> tree of SDRs
+        # ESS = sdr.get_resource(resource_type)
+        # what are the
+        # target_pwr = update
+        # should update just get called every 30 seconds on its own?
+        # (let's assume yes)
+        # let's say that this gets called
+
+
+        curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
+        targetPwr_kW = self.system_resources.schedule_var["DemandForecast_kW"]       # get
+
+
+        self.ess_resources = self.sundial_resources.find_resource_type("ESSCtrlNode")
+        self.pv_resources  = self.sundial_resources.find_resource_type("PVCtrlNode")
+        self.system_resources = self.sundial_resources.find_resource_type("System")
+        self.loadshift_resources = self.sundial_resources.find_resource_type("LoadShiftCtrlNode")
+        self.load_resources = self.sundial_resources.find_resource_type("Load")
+
+
+
+        # figure out set point command to send to sites
+        #setpoint = calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW,
+        #                             max_discharge_kW)
+
+
+
+        pass
+
+
+    ##############################################################################
     @Core.periodic(GS_SCHEDULE)
     def run_optimizer(self):
         """
@@ -450,7 +522,7 @@ class ExecutiveAgent(Agent):
         self.last_optimization_start = utils.get_aware_utc_now()
         if self.OptimizerEnable == ENABLED:
             self.update_sundial_resources(self.sdr_to_sm_lookup_table)
-
+            self.optimizer.run_ssa_optimization(self.sundial_resources)
         if (0):
             _log.info("Optimizer: Running Optimizer")
 
