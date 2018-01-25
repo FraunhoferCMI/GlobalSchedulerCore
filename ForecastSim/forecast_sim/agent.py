@@ -54,6 +54,8 @@ from volttron.platform.agent.utils import jsonapi
 from volttron.platform.messaging import topics
 from volttron.platform.messaging import headers as headers_mod
 import xml.etree.ElementTree as ET
+from gs_identities import SSA_SCHEDULE_RESOLUTION, SSA_SCHEDULE_DURATION
+
 
 #_PROD = [4,0,0,0,0,0,0,0,0,68,294,499,666,751,791,787,685,540,
 #        717,699,600,580,366,112]
@@ -76,10 +78,14 @@ SAMPLE = """
 PERIOD = """
     <SimulationPeriod StartTime="%(start)s" EndTime="%(end)s" Energy_kWh="%(prod)s" ObservationTypes="AD" AmbientTemperature_DegreesC="0" WindSpeed_MetersPerSecond="3" />
 """
+
+
+##############################################################################
 def CPRPub(config_path, **kwargs):
     conf = utils.load_config(config_path)
     query_interval = conf.get("interval",10)
     topic = conf.get("topic","/cpr/forecast")
+
     class CPRAgent(Agent):
         #
         """
@@ -91,7 +97,8 @@ def CPRPub(config_path, **kwargs):
 TODO: 
 
         """
-        
+
+        ##############################################################################
         def __init__(self, config_path, **kwargs):
             super(CPRAgent, self).__init__(**kwargs)
             self.volttron_root = os.getcwd()
@@ -114,7 +121,9 @@ TODO:
             self.GHI = None
             self.load_irradiance()
             _log.warning("loaded GHI on init")
-	    _log.info("Interval is: "+self._config["interval"]+"topic is "+self._config["topic"])    
+            _log.info("Interval is: "+self._config["interval"]+"topic is "+self._config["topic"])
+
+        ##############################################################################
         def configure(self,config_name, action, contents):
             self._config.update(contents)
             self.load_irradiance()
@@ -124,9 +133,81 @@ TODO:
             except ValueError as e:
                 _log.error("ERROR PROCESSING CONFIGURATION: {}".format(e))
 
+        ##############################################################################
         def load_irradiance(self):
-            self.GHI = pickle.load(open(self._config["ghi"])).sort_index().to_period("H")
-            self.GHI *= 1500000 / max(self.GHI.ghi)
+            """
+            Load a csv file with an offset, in minutes
+            Use user-defined offset to figure out where to start
+            Synchronize this start time to the first optimizer run time.
+            :return:
+            """
+
+            # before stopping, I would like to get this cleaned with respect to all of the parameters
+            # i.e., GS_TIME_RESOLUTION, etc
+
+            # constants
+            MINUTES_PER_HR = 60
+            MINUTES_PER_DAY = 24*MINUTES_PER_HR
+            MINUTES_PER_YR  = 365*MINUTES_PER_DAY
+
+            # User configured
+            sim_start_day = 2  # day 106
+            sim_start_hr  = 0
+
+            csv_time_resolution_min = 60
+            self.volttron_root = os.getcwd()
+            self.volttron_root = self.volttron_root + "/../../../../"
+            csv_name = (self.volttron_root + "SAM_PVPwr_nyc.csv")
+            _log.info(csv_name)
+
+            gs_start_time = self.vip.rpc.call("executiveagent-1.0_1",
+                                              "get_gs_start_time").get(timeout=5)
+
+
+            t_array = []
+            ghi_array = []
+
+            try:
+                with open(csv_name, 'rb') as csvfile:
+                    csv_data = csv.reader(csvfile)
+
+                    for row in csv_data:
+                        t_array.append(int(row[0]))
+                        ghi_array.append(float(row[1]))
+            except IOError as e:
+                _log.info("forecast database " + csv_name + " not found")
+
+
+            # the following constructs a full year's worth of irradiance data.
+            # It re-indexes the irradiance file such that start day / start hour is
+            # set to the ACTUAL time at which the GS Executive started.
+            # GS
+            pts_per_day = int((MINUTES_PER_DAY) / csv_time_resolution_min)
+            start_ind = int((sim_start_day - 1) * pts_per_day+sim_start_hr*MINUTES_PER_HR/csv_time_resolution_min)
+
+            ghi_timestamps = [gs_start_time + timedelta(minutes=t) for t in range(0, MINUTES_PER_YR, csv_time_resolution_min)]
+            ghi_array_reindexed = []
+            ghi_array_reindexed.extend(ghi_array[start_ind:])
+            ghi_array_reindexed.extend(ghi_array[:start_ind])
+            ghi_series_init = pandas.Series(data=ghi_array_reindexed, index=ghi_timestamps)
+
+            #next_forecast_start_ind = ghi_timestamps.index(get_schedule())
+            #next_forecast_end_ind   = next_forecast_start_ind + pts_per_day
+            #next_forecast_ghi       = ghi_array_reindexed[next_forecast_start_ind:next_forecast_end_ind]
+            #next_forecast_t         = ghi_timestamps[next_forecast_start_ind:next_forecast_end_ind]
+            #for (t, g) in zip(next_forecast_t, next_forecast_ghi):  # zip(t_array,ghi_array):
+            #    _log.info(str(t) + ": " + str(g))
+
+
+            # resample to the time resolution of the GS optimizer
+            if csv_time_resolution_min != SSA_SCHEDULE_RESOLUTION: # need to resample!!
+                sample_pd_str = str(SSA_SCHEDULE_RESOLUTION)+"min"
+                self.ghi_series = ghi_series_init.resample(sample_pd_str).mean()
+                if csv_time_resolution_min > SSA_SCHEDULE_RESOLUTION: # interpolate if upsampling is necessary
+                    self.ghi_series = self.ghi_series.interpolate(method='linear')
+            else:
+                self.ghi_series = ghi_series_init
+
             _log.warning("Loaded irradiance file")
             
         def generate_sample(self,
@@ -156,44 +237,43 @@ TODO:
         def parse_query(self,query):
             """
             """
-	    # FIXME - units - kWh or W?
-            root = ET.fromstring(query)
-	    ret =  [ 
-                {
-		    "Forecast": [100*float(v)/1000 for v in _PROD], #[
-                        #float(child.attrib["Energy_kWh"])
-                        #for child in root[0] ],
-		    "Time": [
-			child.attrib["StartTime"] for child in root[0] ]},
-		{ "Forecast":{
-                    "units":"Pct",#"W",
-                    "type":"float"}, 
-                  "Time":{
-		    "units":"UTC",
-                    "type":"str"}}
+            # FIXME - units - kWh or W?
 
-                #{
-		#    "Forecast": [
-                #        [ child.attrib["StartTime"],
-                #          float(child.attrib["Energy_kWh"])]
-                #        for child in root[0] ]},
-		#{ "Forecast":{
-                #    "units":"W",
-                #    "tz":"UTC",
-                #    "type":"float"}}
-                      
-            #ret =  {
-                
-            #    "CPR" :{
-            #        "Readings":[ 
-            #             [ child.attrib["StartTime"],
-            #               float(child.attrib["Energy_kWh"])]
-            #             for child in root[0] ],
-            #        "Units":"KWH",
-            #        "tz":"UTC",
-            #        "data_type":"float"
-            #    }		
-            ]
+            # the following is what is used to retrieve data for a specific time in the future...
+            # need to fix up all time deltas, etc.
+            next_forecast_start_time = self.vip.rpc.call("executiveagent-1.0_1",
+                                                         "get_schedule").get(timeout=5)
+
+            # generate the list of timestamps that will comprise the next forecast:
+            next_forecast_timestamps = [next_forecast_start_time +
+                                        timedelta(minutes=t) for t in range(0,
+                                                                            SSA_SCHEDULE_DURATION*MINUTES_PER_HR,
+                                                                            SSA_SCHEDULE_RESOLUTION)]
+            next_forecast = self.ghi_series.get(next_forecast_timestamps)
+
+            #_log.info(resample_ghi.head(48))
+
+            next_forecast_list = [100 * v / 1000 for v in next_forecast]
+            #for pts in forecast_pts:
+            #    _log.info(str(pts))
+
+            if (0):
+                root = ET.fromstring(query)
+                ret =  [ {"Forecast": [100*float(v)/1000 for v in _PROD], #[float(child.attrib["Energy_kWh"]) for child in root[0] ],
+                          "Time": [child.attrib["StartTime"] for child in root[0] ]},
+                         { "Forecast":{"units":"Pct", #"W",
+                                       "type":"float"},
+                           "Time":{"units":"UTC",
+                                   "type":"str"}}
+                ]
+            else:
+                ret = [ {"Forecast": next_forecast_list,
+                          "Time": next_forecast_timestamps},
+                         { "Forecast":{"units":"Pct", #"W",
+                                       "type":"float"},
+                           "Time":{"units":"UTC",
+                                   "type":"str"}}]
+
             return ret
             
         @Core.periodic(period = query_interval)
@@ -211,8 +291,8 @@ TODO:
             _log.debug("Fetching {}, got {}".format(a, req.status_code))
 
             if req.status_code == 200:
-"""
-            _log.info("querying for production forecast from CPR")
+            """
+            _log.info("querying for production forecast from database")
             message = self.parse_query(self.generate_sample())
             self.vip.pubsub.publish(
                 peer="pubsub",
