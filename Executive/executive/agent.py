@@ -63,10 +63,11 @@ from . import settings
 import HistorianTools
 
 import DERDevice
-from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXEC_STARTING, EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD)
+from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXEC_STARTING,
+                           EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD, SSA_SCHEDULE_RESOLUTION, START_LATENCY)
 
-utils.setup_logging()
-_log = logging.getLogger(__name__)
+#utils.setup_logging()
+_log = logging.getLogger("Executive")#__name__)
 __version__ = '1.0'
 
 import DERDevice
@@ -318,6 +319,7 @@ class ExecutiveAgent(Agent):
         self.opt_cnt = 0
 
         self.OperatingMode_set = IDLE
+        self.gs_start_time     = self.get_schedule() #utils.get_aware_utc_now()
 
 
     ##############################################################################
@@ -362,32 +364,33 @@ class ExecutiveAgent(Agent):
 
     ##############################################################################
     @RPC.export
+    def get_gs_start_time(self):
+        #start_time_str = self.gs_start_time.strftime("%Y-%m-%dT%H:%M:%S.%f")
+        return self.gs_start_time #start_time_str
+
+    ##############################################################################
+    @RPC.export
     def get_schedule(self):
         """
-        Placeholder.
-        (Also could return the time at which the next optimization pass will start)
-
+        Returns the start time of the next dispatch schedule that will be generated
         :return: new_time - the start time of the next dispatch schedule period
         """
-
         TimeStamp = utils.get_aware_utc_now()
-        #TimeStamp = datetime.now()
-        #new_time  = TimeStamp+timedelta(hours=1)
+        minutes = TimeStamp.minute
+        rem = minutes % SSA_SCHEDULE_RESOLUTION  # GS_SCHEDULE
+        new_time = TimeStamp + timedelta(minutes=SSA_SCHEDULE_RESOLUTION - rem)  # GS_SCHEDULE
+        new_time = new_time.replace(second=0, microsecond=0)
 
-        self.last_optimization_start
-        # self.last_optimization_start = utils.get_aware_utc_now()
+        # this gives now + gs_schedule period, truncated to the top of the minute
+        # e.g., 1208 --> set to 1223.
+        # now we need to round down.
+        # so you want to get minutes mod GS_SCHEDULE - remainder
 
-        # For right now, assume that the GS will generate dispatch signals starting at the top of
-        # of the next hour.
-        #FIXME - Parameterize this!
-        new_time = TimeStamp + timedelta(hours = 1)  #seconds = GS_SCHEDULE
-        new_time  = new_time.replace(minute=0, second=0, microsecond=0)
-
-
-        #print("TimeStamp = " + TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"))
-        #print("Send next sync time = " + new_time.strftime("%Y-%m-%dT%H:%M:%S.%f"))
-
-        return new_time
+        # new_time  = new_time.replace(minute=0, second=0, microsecond=0)
+        print("TimeStamp = " + TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"))
+        print("new_time = " + new_time.strftime("%Y-%m-%dT%H:%M:%S.%f"))
+        time_str = new_time.strftime("%Y-%m-%dT%H:%M:%S.%f")
+        return time_str
 
 
     ##############################################################################

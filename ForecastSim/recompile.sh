@@ -1,3 +1,4 @@
+cp SAM_PVPwr_nyc.csv  ~/.volttron/gs_cfg/SAM_PVPwr_nyc.csv
 volttron-ctl remove  --tag cpr
 volttron-pkg package .
 cp forecast_sim/cpr_ghi.pkl ~/.volttron/gs_cfg/cpr_ghi.pkl
