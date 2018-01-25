@@ -71,9 +71,15 @@ APPLICATION_CONTROL = 2
 EXEC_STARTING = 3
 
 EXECUTIVE_CLKTIME = 5 # period, in seconds, at which the executive polls system state
-GS_SCHEDULE       = 5  # period, in seconds, at which the GS optimizer runs
+GS_SCHEDULE       = 60  # period, in seconds, at which the GS optimizer runs
 STATUS_MSG_PD     = 20 # update rate for various status messages
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
+START_LATENCY = 0 # time in seconds, to delay execution
 
 #FIXME - Placeholder!
 SCRAPE_TIMEOUT = 30 # timeout period in seconds for modbus device to post on the IEB bus
+
+SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedules
+SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
+
+CPR_QUERY_INTERVAL = 30
