@@ -81,5 +81,5 @@ SCRAPE_TIMEOUT = 30 # timeout period in seconds for modbus device to post on the
 
 SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedules
 SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
-
+SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
 CPR_QUERY_INTERVAL = 30
