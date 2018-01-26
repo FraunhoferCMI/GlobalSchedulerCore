@@ -64,7 +64,8 @@ import HistorianTools
 
 import DERDevice
 from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXEC_STARTING,
-                           EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD, SSA_SCHEDULE_RESOLUTION, START_LATENCY)
+                           EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD,
+                           SSA_SCHEDULE_RESOLUTION, SSA_PTS_PER_SCHEDULE, START_LATENCY)
 
 #utils.setup_logging()
 _log = logging.getLogger("Executive")#__name__)
@@ -450,11 +451,13 @@ class ExecutiveAgent(Agent):
 
                         try:
                             _log.info(str(attribute[str(entries.sundial_resource.update_list_end_pts[v])]))
+                            entries.sundial_resource.state_vars[a] = attribute[str(entries.sundial_resource.update_list_end_pts[v])] #.copy()
+
                         except KeyError:
                             _log.info("Key not found!!")
 
                     #entries.sundial_resource. attribute[v]
-            pass
+        self.sundial_resources.update_sundial_resource(length = SSA_PTS_PER_SCHEDULE) # propagates new data to non-ternminal nodes
 
 
     ##############################################################################
@@ -467,7 +470,7 @@ class ExecutiveAgent(Agent):
         :return:
         """
 
-        # this should get called on a schedule - say every 30 seconds.
+        # this should get called on a schedule - say every 30 seconds.`
 
         # (how are you going to deal with time?)
         # target power - sum of all (scheduled resources - ESS scheduled)
