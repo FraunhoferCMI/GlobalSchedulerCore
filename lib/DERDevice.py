@@ -171,12 +171,12 @@ class DERDevice():
         """
         #FIXME - this functionality is duplicated elsewhere.  (E.g., in init_device fcns...)  Should reference
         #FIXME - against this method
-        _log.info("FindDevice: "+self.device_id)
+        _log.debug("FindDevice: "+self.device_id)
         if self.device_id == device_id:
             return self
         else:
             for cur_device in self.devices:
-                _log.info("FindDevice: "+cur_device.device_id)
+                _log.debug("FindDevice: "+cur_device.device_id)
                 child_device = cur_device.find_device(device_id)
                 if child_device != None:
                     return child_device
@@ -401,14 +401,14 @@ class DERDevice():
 
     ##############################################################################
     def print_site_status(self):
-        _log.info("DERDevice Status: "+self.device_id)
-        _log.info("DERDevice Status: isControllable="+str(self.isControllable)+"; isDataValid="+str(self.isDataValid)+"; isControlAvailable="+str(self.isControlAvailable))  
-        _log.info("DERDevice Status: comms="+str(self.comms_status)+"; device_status="+str(self.device_status)+"; control mode="+str(self.control_mode)+"; read_status="+str(self.read_status)+"; mode_mismatch="+str(self.mode_state_mismatch))      
+        _log.debug("DERDevice Status: "+self.device_id)
+        _log.debug("DERDevice Status: isControllable="+str(self.isControllable)+"; isDataValid="+str(self.isDataValid)+"; isControlAvailable="+str(self.isControlAvailable))
+        _log.debug("DERDevice Status: comms="+str(self.comms_status)+"; device_status="+str(self.device_status)+"; control mode="+str(self.control_mode)+"; read_status="+str(self.read_status)+"; mode_mismatch="+str(self.mode_state_mismatch))
 
         opstatus_str = ""
         for key in self.op_status.key_update_list:
             opstatus_str += key+": "+str(self.op_status.data_dict[key])+"; "
-        _log.info("DERDevice Status: Opstatus - "+opstatus_str)
+        _log.debug("DERDevice Status: Opstatus - "+opstatus_str)
 
         for cur_device in self.devices:
             cur_device.print_site_status()
@@ -485,7 +485,7 @@ class DERDevice():
         # update power, energy registers
         self.update_op_status()
 
-        _log.info("UpdateStatus: "+self.device_id+": data valid = "+str(self.isDataValid)+"; ControlAvailable = "+str(self.isControlAvailable))
+        _log.debug("UpdateStatus: "+self.device_id+": data valid = "+str(self.isDataValid)+"; ControlAvailable = "+str(self.isControlAvailable))
 
     ##############################################################################
     def convert_units_from_endpt(self, k, endpt_units):
