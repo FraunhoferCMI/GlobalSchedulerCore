@@ -201,6 +201,7 @@ class CPRAgent(Agent):
         # GS
         pts_per_day = int((MINUTES_PER_DAY) / csv_time_resolution_min)
         start_ind = int((sim_start_day - 1) * pts_per_day+sim_start_hr*MINUTES_PER_HR/csv_time_resolution_min)
+        _log.info("start index is: "+str(start_ind)+"; sim_start_day is "+str(sim_start_day))
 
         ghi_timestamps = [gs_start_time + timedelta(minutes=t) for t in range(0, MINUTES_PER_YR, csv_time_resolution_min)]
         ghi_array_reindexed = []
@@ -276,7 +277,7 @@ class CPRAgent(Agent):
         next_forecast_list = [100 * v / 1000 for v in next_forecast]
         next_timestamps_list = [datetime.datetime.strftime(ts, "%Y-%m-%dT%H:%M:%S") for ts in next_forecast_timestamps]
         _log.info("forecast is:"+str(next_forecast_list))
-        _log.info("timestarmps are:"+str(next_timestamps_list))
+        _log.info("timestamps are:"+str(next_timestamps_list))
 
         #for pts in forecast_pts:
         #    _log.info(str(pts))
