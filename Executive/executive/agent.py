@@ -304,7 +304,7 @@ class ExecutiveAgent(Agent):
 
 
         self.optimizer = SimulatedAnnealer()
-        self.sundial_resources.init_test_values(24)
+        self.sundial_resources.init_test_values(SSA_PTS_PER_SCHEDULE)
 
 
 
@@ -493,9 +493,24 @@ class ExecutiveAgent(Agent):
         # let's say that this gets called
 
 
+        # get_schedule --> implies that sch
+        # should schedule be a pandas-time stamped list?
+
+        # this needs to regulate power to target at time = now.
+        # so I need to retrieve my schedule
+        # the schedule data structure could be....
+        # (1) pandas series of time stamped values
+        # (2) there should be a routine that lets me query what the current target power output should be.
+        # i.e., in sundialResource - get_scheduled_pwr(t) - returns the scheduled power at the specified time.
+        #
+
+        # need to update values before retrieving??
         curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
         targetPwr_kW = self.system_resources.schedule_var["DemandForecast_kW"]       # get
 
+        SOE_kWh = self.ess_resources.state_vars["SOE_kWh"]
+        SOE_kWh = self.ess_resources.state_vars["MinSOE_kWh"]
+        SOE_kWh = self.ess_resources.state_vars["MaxSOE_kWh"]
 
         self.ess_resources = self.sundial_resources.find_resource_type("ESSCtrlNode")
         self.pv_resources  = self.sundial_resources.find_resource_type("PVCtrlNode")
@@ -509,6 +524,11 @@ class ExecutiveAgent(Agent):
         #setpoint = calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW,
         #                             max_discharge_kW)
 
+        # divide set point between resources -
+
+        #
+
+        # now send commands to the actual ESS's...
 
 
         pass
