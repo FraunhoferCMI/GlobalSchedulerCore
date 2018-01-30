@@ -64,8 +64,8 @@ import HistorianTools
 
 import DERDevice
 from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXEC_STARTING,
-                           EXECUTIVE_CLKTIME, GS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD,
-                           SSA_SCHEDULE_RESOLUTION, SSA_PTS_PER_SCHEDULE, START_LATENCY)
+                           EXECUTIVE_CLKTIME, GS_SCHEDULE, ESS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD,
+                           SSA_SCHEDULE_RESOLUTION, SSA_PTS_PER_SCHEDULE, SSA_SCHEDULE_DURATION, START_LATENCY)
 
 #utils.setup_logging()
 _log = logging.getLogger("Executive")#__name__)
@@ -73,6 +73,7 @@ __version__ = '1.0'
 
 import DERDevice
 import json
+import numpy
 from SunDialResource import SundialSystemResource, SundialResource, SundialResourceProfile, build_SundialResource_to_SiteManager_lookup_table
 from SSA_Optimization import SimulatedAnnealer
 
@@ -309,11 +310,12 @@ class ExecutiveAgent(Agent):
 
 
         _log.info("Finding Nodes")
-        self.ess_resources = self.sundial_resources.find_resource_type("ESSCtrlNode")
-        self.pv_resources  = self.sundial_resources.find_resource_type("PVCtrlNode")
-        self.system_resources = self.sundial_resources.find_resource_type("System")
-        self.loadshift_resources = self.sundial_resources.find_resource_type("LoadShiftCtrlNode")
-        self.load_resources = self.sundial_resources.find_resource_type("Load")
+        #FIXME - indices in lists
+        self.ess_resources = self.sundial_resources.find_resource_type("ESSCtrlNode")[0]
+        self.pv_resources  = self.sundial_resources.find_resource_type("PVCtrlNode")[0]
+        self.system_resources = self.sundial_resources.find_resource_type("System")[0]
+        self.loadshift_resources = self.sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
+        self.load_resources = self.sundial_resources.find_resource_type("Load")[0]
         #for load in self.load_resources:
         #    _log.info("Found "+ load.resource_id)
 
@@ -354,7 +356,7 @@ class ExecutiveAgent(Agent):
         """
         for site in self.sitemgr_list:
             _log.info("Checking status for site "+site["identity"])
-            site_status = self.vip.rpc.call(site["identity"], "update_site_status").get(timeout=5)
+            site_status = self.vip.rpc.call(site["identity"], "update_site_status").get(timeout=10)
             #for k,v in site_errors.items():
             #    if k=="Mode":
             #        pass
@@ -373,9 +375,11 @@ class ExecutiveAgent(Agent):
     @RPC.export
     def get_schedule(self):
         """
-        Returns the start time of the next dispatch schedule that will be generated
+        Returns the start time of the next dispatch schedule command
         :return: new_time - the start time of the next dispatch schedule period
         """
+
+        #FIXME - implicitly assumes SSA_SCHEDULE_RESOLUTION <= 60 minutes
         TimeStamp = utils.get_aware_utc_now()
         minutes = TimeStamp.minute
         rem = minutes % SSA_SCHEDULE_RESOLUTION  # GS_SCHEDULE
@@ -460,8 +464,10 @@ class ExecutiveAgent(Agent):
         self.sundial_resources.update_sundial_resource(length = SSA_PTS_PER_SCHEDULE) # propagates new data to non-ternminal nodes
 
 
+
     ##############################################################################
-    def publish_schedules(self, sdr_to_sm_lookup_table):
+    @Core.periodic(ESS_SCHEDULE)
+    def send_ess_commands(self):
         """
         What this is supposed to do - after optimizer is called
         we call this. it takes schedule data from the optimizer data structures
@@ -504,34 +510,101 @@ class ExecutiveAgent(Agent):
         # i.e., in sundialResource - get_scheduled_pwr(t) - returns the scheduled power at the specified time.
         #
 
-        # need to update values before retrieving??
-        curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
-        targetPwr_kW = self.system_resources.schedule_var["DemandForecast_kW"]       # get
 
-        SOE_kWh = self.ess_resources.state_vars["SOE_kWh"]
-        SOE_kWh = self.ess_resources.state_vars["MinSOE_kWh"]
-        SOE_kWh = self.ess_resources.state_vars["MaxSOE_kWh"]
+        if self.OptimizerEnable == ENABLED:
+            self.update_sundial_resources(self.sdr_to_sm_lookup_table)
 
-        self.ess_resources = self.sundial_resources.find_resource_type("ESSCtrlNode")
-        self.pv_resources  = self.sundial_resources.find_resource_type("PVCtrlNode")
-        self.system_resources = self.sundial_resources.find_resource_type("System")
-        self.loadshift_resources = self.sundial_resources.find_resource_type("LoadShiftCtrlNode")
-        self.load_resources = self.sundial_resources.find_resource_type("Load")
+            # need to update values before retrieving??
+            curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
+
+            # retrieve the current scheduled value:
+            # now I need to do a lookup based on the current schedule.
+            # first, get the "current" time slice.
+            next_scheduled_time = datetime.strptime(self.get_schedule(),"%Y-%m-%dT%H:%M:%S.%f")
+            cur_scheduled_time  = next_scheduled_time - timedelta(SSA_SCHEDULE_RESOLUTION)
+            _log.info("Trying to retrieve next schedule")
+            targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][0]
+            _log.info("Target power is " + str(targetPwr_kW))
+            _log.info("Current power is "+str(curPwr_kW))
+            #try:
+            #    ind = numpy.nonzero(self.system_resources.schedule_vars["timestamp"] == next_scheduled_time)
+            #    _log.info("ind = "+str(ind))
+            #    _log.info("schedule is:"+str(self.system_resources.schedule_vars["DemandForecast_kW"]))
+            #    targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ind]
+            #    _log.info("Target power is "+str(targetPwr_kW))
+            #except ValueError:
+            #    try:
+            #        _log.info("cur time not found - trying next time")
+            #        ind = numpy.nonzero(self.system_resources.schedule_vars["timestamp"] == next_scheduled_time)
+            #        targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ind]
+            #        _log.info("Target power is " + str(targetPwr_kW))
+            #    except:
+            #        _log.info("Error: time not found")
+            #except:
+            #    _log.info("Other error found!!")
+
+            SOE_kWh = self.ess_resources.state_vars["SOE_kWh"]
+            min_SOE_kWh = self.ess_resources.state_vars["MinSOE_kWh"]
+            max_SOE_kWh = self.ess_resources.state_vars["MaxSOE_kWh"]
+            max_charge_kW = self.ess_resources.state_vars["MaxChargePwr_kW"]
+            max_discharge_kW = self.ess_resources.state_vars["MaxDischargePwr_kW"]
 
 
+            # figure out set point command to send to sites
+            setpoint = calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW,
+                                         max_discharge_kW)
 
-        # figure out set point command to send to sites
-        #setpoint = calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW,
-        #                             max_discharge_kW)
+            # divide set point between resources -
+            # Ignore for right now (assume one ESS)
+            # now send commands to the actual ESS's...
+            _log.info("Optimizer: setpoint = " + str(setpoint))
 
-        # divide set point between resources -
-
-        #
-
-        # now send commands to the actual ESS's...
+            # Divide the set point command across the available ESS sites.
+            # currently divided pro rata based on kWh available.
+            # what is my link to the ess end points?
 
 
-        pass
+            for entries in self.sdr_to_sm_lookup_table:
+                if entries.sundial_resource.resource_type == "ESSCtrlNode":
+                    for devices in entries.device_list:
+                        if devices["isAvailable"] == 1:
+                            op_status = self.vip.rpc.call(str(devices["AgentID"]),
+                                                          "get_device_data",
+                                                          devices["DeviceID"],
+                                                          "OpStatus").get(timeout=5)
+                            if (setpoint > 0):  # charging
+                                pro_rata_share = float(op_status["Energy_kWh"]) / float(SOE_kWh) * float(setpoint)
+                            else:
+                                pro_rata_share = float(op_status["FullChargeEnergy_kWh"] - op_status["Energy_kWh"]) / \
+                                                 (max_SOE_kWh - float(SOE_kWh)) * float(setpoint)
+                            _log.info("Optimizer: Sending request for " + str(pro_rata_share) + "to " + devices["AgentID"])
+                            self.vip.rpc.call(str(devices["AgentID"]),
+                                              "set_real_pwr_cmd",
+                                              devices["DeviceID"],
+                                              pro_rata_share)
+
+
+            self.optimizer_info["setpoint"] = setpoint
+            self.optimizer_info["targetPwr_kW"] = targetPwr_kW
+            self.optimizer_info["curPwr_kW"] = curPwr_kW
+
+
+    ##############################################################################
+    def generate_schedule_timestamps(self):
+        """
+
+        :return:
+        """
+        MINUTES_PER_HR = 60
+        schedule_start_time = datetime.strptime(self.get_schedule(),"%Y-%m-%dT%H:%M:%S.%f")
+
+        # generate the list of timestamps that will comprise the next forecast:
+        schedule_timestamps = [schedule_start_time +
+                               timedelta(minutes=t) for t in range(0,
+                                                                   SSA_SCHEDULE_DURATION*MINUTES_PER_HR,
+                                                                   SSA_SCHEDULE_RESOLUTION)]
+        return schedule_timestamps
+
 
 
     ##############################################################################
@@ -547,8 +620,11 @@ class ExecutiveAgent(Agent):
 
         self.last_optimization_start = utils.get_aware_utc_now()
         if self.OptimizerEnable == ENABLED:
-            self.update_sundial_resources(self.sdr_to_sm_lookup_table)
-            self.optimizer.run_ssa_optimization(self.sundial_resources)
+            #self.update_sundial_resources(self.sdr_to_sm_lookup_table)
+            # assume update happens under send_ess_commands
+            schedule_timestamps = self.generate_schedule_timestamps()
+            self.optimizer.run_ssa_optimization(self.sundial_resources, schedule_timestamps)
+            #self.send_ess_commands(self.sdr_to_sm_lookup_table)
         if (0):
             _log.info("Optimizer: Running Optimizer")
 

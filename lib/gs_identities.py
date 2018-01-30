@@ -71,7 +71,8 @@ APPLICATION_CONTROL = 2
 EXEC_STARTING = 3
 
 EXECUTIVE_CLKTIME = 5 # period, in seconds, at which the executive polls system state
-GS_SCHEDULE       = 60  # period, in seconds, at which the GS optimizer runs
+GS_SCHEDULE       = 15  # period, in seconds, at which the GS optimizer runs
+ESS_SCHEDULE      = 5
 STATUS_MSG_PD     = 20 # update rate for various status messages
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
 START_LATENCY = 0 # time in seconds, to delay execution
