@@ -66,6 +66,7 @@ import DERDevice
 from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXEC_STARTING,
                            EXECUTIVE_CLKTIME, GS_SCHEDULE, ESS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD,
                            SSA_SCHEDULE_RESOLUTION, SSA_PTS_PER_SCHEDULE, SSA_SCHEDULE_DURATION, START_LATENCY)
+from gs_utilities import get_schedule
 
 #utils.setup_logging()
 _log = logging.getLogger("Executive")#__name__)
@@ -322,7 +323,7 @@ class ExecutiveAgent(Agent):
         self.opt_cnt = 0
 
         self.OperatingMode_set = IDLE
-        self.gs_start_time     = self.get_schedule() #utils.get_aware_utc_now()
+        self.gs_start_time     = get_schedule() #utils.get_aware_utc_now()
 
 
     ##############################################################################
@@ -372,19 +373,19 @@ class ExecutiveAgent(Agent):
         return self.gs_start_time #start_time_str
 
     ##############################################################################
-    @RPC.export
-    def get_schedule(self):
-        """
-        Returns the start time of the next dispatch schedule command
-        :return: new_time - the start time of the next dispatch schedule period
-        """
+#    @RPC.export
+#    def get_schedule(self):
+#        """
+#        Returns the start time of the next dispatch schedule command
+#        :return: new_time - the start time of the next dispatch schedule period
+#        """
 
-        #FIXME - implicitly assumes SSA_SCHEDULE_RESOLUTION <= 60 minutes
-        TimeStamp = utils.get_aware_utc_now()
-        minutes = TimeStamp.minute
-        rem = minutes % SSA_SCHEDULE_RESOLUTION  # GS_SCHEDULE
-        new_time = TimeStamp + timedelta(minutes=SSA_SCHEDULE_RESOLUTION - rem)  # GS_SCHEDULE
-        new_time = new_time.replace(second=0, microsecond=0)
+#        #FIXME - implicitly assumes SSA_SCHEDULE_RESOLUTION <= 60 minutes
+#        TimeStamp = utils.get_aware_utc_now()
+#        minutes = TimeStamp.minute
+#        rem = minutes % SSA_SCHEDULE_RESOLUTION  # GS_SCHEDULE
+#        new_time = TimeStamp + timedelta(minutes=SSA_SCHEDULE_RESOLUTION - rem)  # GS_SCHEDULE
+#        new_time = new_time.replace(second=0, microsecond=0)
 
         # this gives now + gs_schedule period, truncated to the top of the minute
         # e.g., 1208 --> set to 1223.
@@ -392,10 +393,10 @@ class ExecutiveAgent(Agent):
         # so you want to get minutes mod GS_SCHEDULE - remainder
 
         # new_time  = new_time.replace(minute=0, second=0, microsecond=0)
-        print("TimeStamp = " + TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"))
-        print("new_time = " + new_time.strftime("%Y-%m-%dT%H:%M:%S.%f"))
-        time_str = new_time.strftime("%Y-%m-%dT%H:%M:%S.%f")
-        return time_str
+#        print("TimeStamp = " + TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"))
+#        print("new_time = " + new_time.strftime("%Y-%m-%dT%H:%M:%S.%f"))
+#        time_str = new_time.strftime("%Y-%m-%dT%H:%M:%S.%f")
+#        return time_str
 
 
     ##############################################################################
@@ -520,7 +521,7 @@ class ExecutiveAgent(Agent):
             # retrieve the current scheduled value:
             # now I need to do a lookup based on the current schedule.
             # first, get the "current" time slice.
-            next_scheduled_time = datetime.strptime(self.get_schedule(),"%Y-%m-%dT%H:%M:%S.%f")
+            next_scheduled_time = datetime.strptime(get_schedule(),"%Y-%m-%dT%H:%M:%S.%f")
             cur_scheduled_time  = next_scheduled_time - timedelta(SSA_SCHEDULE_RESOLUTION)
             _log.info("Trying to retrieve next schedule")
             targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][0]
@@ -596,7 +597,7 @@ class ExecutiveAgent(Agent):
         :return:
         """
         MINUTES_PER_HR = 60
-        schedule_start_time = datetime.strptime(self.get_schedule(),"%Y-%m-%dT%H:%M:%S.%f")
+        schedule_start_time = datetime.strptime(get_schedule(),"%Y-%m-%dT%H:%M:%S.%f")
 
         # generate the list of timestamps that will comprise the next forecast:
         schedule_timestamps = [schedule_start_time +

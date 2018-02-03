@@ -58,13 +58,12 @@ from volttron.platform.agent.utils import jsonapi
 from volttron.platform.messaging import topics
 from volttron.platform.messaging import headers as headers_mod
 import xml.etree.ElementTree as ET
-from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_SCHEDULE_DURATION, CPR_QUERY_INTERVAL)
+from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_SCHEDULE_DURATION, CPR_QUERY_INTERVAL, USE_VOLTTRON)
+from gs_utilities import get_schedule
 import csv
 import pandas
 
 
-#_PROD = [4,0,0,0,0,0,0,0,0,68,294,499,666,751,791,787,685,540,
-#        717,699,600,580,366,112]
 _PROD = [0,0,0,0,0,0,68,294,499,666,751,791,787,685,540,
         717,699,600,580,366,112,0,0,0]
 PROD = [ p* 1500000.0 / max(_PROD) for p in _PROD ]
@@ -74,16 +73,6 @@ _log = logging.getLogger(__name__)
 
 __version__="0.1"
 
-SAMPLE = """
-<SimulationResponse xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" EnergySiteId="EHmMWnHp-EqzKJx3McTWWg" RequestURL="/SolarAnywhereToolkit/Services/Services.svc/v1/Simulate?EnergySiteId=EHmMWnHp-EqzKJx3McTWWg&amp;StartTime=2011-01-01T09%%3a00%%3a00-08%%3a00&amp;EndTime=2011-01-01T11%%3a00%%3a00-08%%3a00&amp;AmbientTemperature&amp;WindSpeed&amp;key=****EY" Status="Success" xmlns="v3">
-  <SimulationPeriods>
-%s  
-</SimulationPeriods>
-</SimulationResponse>
-"""
-PERIOD = """
-    <SimulationPeriod StartTime="%(start)s" EndTime="%(end)s" Energy_kWh="%(prod)s" ObservationTypes="AD" AmbientTemperature_DegreesC="0" WindSpeed_MetersPerSecond="3" />
-"""
 # constants
 MINUTES_PER_HR = 60
 MINUTES_PER_DAY = 24 * MINUTES_PER_HR
@@ -93,12 +82,18 @@ MINUTES_PER_YR = 365 * MINUTES_PER_DAY
 class CPRAgent(Agent):
     #
     """
-    Retrieve locall production forecast for the site,
-    using the XML-based REST interface.
+    load_irradiance()
+    Retrieves solar forecast data from a csv file.
+    csv file is a list of one year's worht of irradiance values (W/m2), with time step defined by csv_time_resolution_min
+    Reindexes the file to make user-specified start-date and start time === the time when the GS Executive started
+    Resamples data file to match desired forecast resolution
 
-    At the moment, it will just retrieve a straw sample
-    from the global variables
-    TODO:
+
+    periodically publishes forecasts.
+    - Forecast duration is defined by SSA_SCHEDULE_DURATION
+    - Forecast time step is defined by SSA_SCHEDULE_RESOLUTION
+    - Publication interval is defined by CPR_QUERY_INTERVAL
+    - Published in units of "Pct" (Irradiance / 1000)
 
     """
 
@@ -108,17 +103,10 @@ class CPRAgent(Agent):
         self.volttron_root = os.getcwd()
         self.volttron_root = self.volttron_root+"/../../../../"
         self.default_config = {
-            "interval":1200,
-            "username": "shines",
-            "password":"VolttronShines",
-            "baseurl":"",
             "topic": "devices/cpr/forecast/all",
-            "horizon":24,
-            "ghi":self.volttron_root+"gs_cfg/cpr_ghi.pkl",
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "DEFAULT_MESSAGE": 'FORECAST_SIM_Message',
             "DEFAULT_AGENTID": "FORECAST_SIM",
-            # straw suggestion as this is the only option available.
             "interval":"PT60M",
         }
         self._config = self.default_config.copy()
@@ -128,9 +116,8 @@ class CPRAgent(Agent):
 
         self.vip.config.set_default("config", self.default_config)
         self.vip.config.subscribe(self.configure, actions=["NEW", "UPDATE"], pattern="config")
-        self.GHI = None
-        _log.warning("loaded GHI on init")
-        _log.info("Interval is: "+self._config["interval"]+"topic is "+self._config["topic"])
+        self.ghi_series = None
+        self.initialization_complete = 0
 
     ##############################################################################
     def configure(self,config_name, action, contents):
@@ -156,9 +143,24 @@ class CPRAgent(Agent):
     ##############################################################################
     def load_irradiance(self):
         """
-        Load a csv file with an offset, in minutes
-        Use user-defined offset to figure out where to start
-        Synchronize this start time to the first optimizer run time.
+        Load a csv file of irradiance values.
+        The csv file is interpreted as follows:
+        (1) each row is an irradiance point, starting from jan 1st
+        (2) the time step between rows is defined by csv_time_resolution_min
+        (3) the file is assumed to comprise exactly a single year of data
+
+        Use user-defined offsets (sim_start_day, sim_start_hr) to figure out where to start
+        Synchronize this start time to the time when the GS executive started.
+
+        right now, all these configuration parameters are set within this method.
+        Eventually move to a config:
+
+        sim_start_day
+        sim_start_hr
+        csv_time_resolution_min - time resolution, in minutes, of data in the csv irradiance file
+        csv_fname - name of a
+
+
         :return:
         """
 
@@ -166,22 +168,18 @@ class CPRAgent(Agent):
         # i.e., GS_TIME_RESOLUTION, etc
 
 
-        # User configured
+        # Configuration Parameters
         sim_start_day = 2  # day 106
         sim_start_hr  = 0
-
+        csv_fname     = "SAM_PVPwr_nyc.csv"
         csv_time_resolution_min = 60
+
+        # Get irradiance data from csv file and populate in ghi_array
         self.volttron_root = os.getcwd()
         self.volttron_root = self.volttron_root + "/../../../../gs_cfg/"
-        csv_name = (self.volttron_root + "SAM_PVPwr_nyc.csv")
+        csv_name           = (self.volttron_root + csv_fname)
         _log.info(csv_name)
 
-        gs_start_time = datetime.datetime.strptime( self.vip.rpc.call("executiveagent-1.0_1",
-                                                                      "get_gs_start_time").get(timeout=5),
-                                                    "%Y-%m-%dT%H:%M:%S.%f")
-
-
-        t_array = []
         ghi_array = []
 
         try:
@@ -189,81 +187,73 @@ class CPRAgent(Agent):
                 csv_data = csv.reader(csvfile)
 
                 for row in csv_data:
-                    t_array.append(int(row[0]))
-                    ghi_array.append(float(row[1]))
+                    ghi_array.append(float(row[0]))
         except IOError as e:
             _log.info("forecast database " + csv_name + " not found")
 
 
-        # the following constructs a full year's worth of irradiance data.
+        # Now construct a full year's worth of irradiance data.
         # It re-indexes the irradiance file such that start day / start hour is
         # set to the ACTUAL time at which the GS Executive started.
-        # GS
         pts_per_day = int((MINUTES_PER_DAY) / csv_time_resolution_min)
         start_ind = int((sim_start_day - 1) * pts_per_day+sim_start_hr*MINUTES_PER_HR/csv_time_resolution_min)
+
+        try:
+            gs_start_time = datetime.datetime.strptime( self.vip.rpc.call("executiveagent-1.0_1",
+                                                                          "get_gs_start_time").get(timeout=5),
+                                                        "%Y-%m-%dT%H:%M:%S.%f")
+        except:
+            _log.info("Forecast - gs_start_time not found.  Using current time as gs_start_time")
+            gs_start_time =  datetime.datetime.strptime(get_schedule(),
+                                                        "%Y-%m-%dT%H:%M:%S.%f")
+
+
+
+
         _log.info("start index is: "+str(start_ind)+"; sim_start_day is "+str(sim_start_day))
 
+        # now set up a panda.Series with indices = timestamp starting from GS start time,
+        # time step from csv_time_resolution_min; and with values = ghi_array, starting from the index corresponding
+        # to start day / start time
         ghi_timestamps = [gs_start_time + timedelta(minutes=t) for t in range(0, MINUTES_PER_YR, csv_time_resolution_min)]
         ghi_array_reindexed = []
         ghi_array_reindexed.extend(ghi_array[start_ind:])
         ghi_array_reindexed.extend(ghi_array[:start_ind])
         ghi_series_init = pandas.Series(data=ghi_array_reindexed, index=ghi_timestamps)
 
-        #next_forecast_start_ind = ghi_timestamps.index(get_schedule())
-        #next_forecast_end_ind   = next_forecast_start_ind + pts_per_day
-        #next_forecast_ghi       = ghi_array_reindexed[next_forecast_start_ind:next_forecast_end_ind]
-        #next_forecast_t         = ghi_timestamps[next_forecast_start_ind:next_forecast_end_ind]
-        #for (t, g) in zip(next_forecast_t, next_forecast_ghi):  # zip(t_array,ghi_array):
-        #    _log.info(str(t) + ": " + str(g))
 
-
-        # resample to the time resolution of the GS optimizer
+        # next resample to the time resolution of the GS optimizer.
         if csv_time_resolution_min != SSA_SCHEDULE_RESOLUTION: # need to resample!!
             sample_pd_str = str(SSA_SCHEDULE_RESOLUTION)+"min"
             self.ghi_series = ghi_series_init.resample(sample_pd_str).mean()
             if csv_time_resolution_min > SSA_SCHEDULE_RESOLUTION: # interpolate if upsampling is necessary
                 self.ghi_series = self.ghi_series.interpolate(method='linear')
-        else:
+        else: # resampling is unnecessary
             self.ghi_series = ghi_series_init
 
         _log.info(str(self.ghi_series.head(48)))
-
         _log.info("Loaded irradiance file")
+        self.initialization_complete = 1
 
-    def generate_sample(self,
-                        start=None, horizon=24):
-        periods = []
 
-        start = (datetime.datetime.combine(
-            datetime.date.today(),
-            datetime.time(datetime.datetime.now().hour)) +
-                 datetime.timedelta(minutes=60))
-        _log.warning("START " + start.isoformat())
-        for i in range(horizon):
-            end = start + datetime.timedelta(minutes=60)
-            periods.append(
-                PERIOD% {
-                    "start":start,
-                    "prod": (
-                        PROD[start.hour]
-                        if self.GHI is None else
-                        self.GHI[start.replace(year=self.GHI.index[0].year):].ghi[0]
-                    ),
-                    "end":end
-                    })
-            start=end
-        return SAMPLE%''.join(periods)
 
-    def parse_query(self,query):
+    ##############################################################################
+    def parse_query(self):
         """
+        Retrieves a solar forecast in units of "Pct"
+            - start time of the forecast is defined by calling get_schedule()
+            - Forecast duration is defined by SSA_SCHEDULE_DURATION
+            - Forecast time step is defined by SSA_SCHEDULE_RESOLUTION
         """
-        # FIXME - units - kWh or W?
 
-        # the following is what is used to retrieve data for a specific time in the future...
-        # need to fix up all time deltas, etc.
-        next_forecast_start_time = datetime.datetime.strptime(self.vip.rpc.call("executiveagent-1.0_1",
-                                                                                "get_schedule").get(timeout=5),
+        # get the start time of the forecast
+        #next_forecast_start_time = datetime.datetime.strptime(self.vip.rpc.call("executiveagent-1.0_1",
+        #                                                                        "get_schedule").get(timeout=5),
+        #                                                      "%Y-%m-%dT%H:%M:%S.%f")
+
+        next_forecast_start_time = datetime.datetime.strptime(get_schedule(),
                                                               "%Y-%m-%dT%H:%M:%S.%f")
+
 
         # generate the list of timestamps that will comprise the next forecast:
         next_forecast_timestamps = [next_forecast_start_time +
@@ -272,58 +262,39 @@ class CPRAgent(Agent):
                                                                         SSA_SCHEDULE_RESOLUTION)]
         next_forecast = self.ghi_series.get(next_forecast_timestamps)
 
-        #_log.info(resample_ghi.head(48))
 
+        # Convert to a percentage, and convert from a Pandas Series to a serializable list
         next_forecast_list = [100 * v / 1000 for v in next_forecast]
         next_timestamps_list = [datetime.datetime.strftime(ts, "%Y-%m-%dT%H:%M:%S") for ts in next_forecast_timestamps]
         _log.info("forecast is:"+str(next_forecast_list))
         _log.info("timestamps are:"+str(next_timestamps_list))
 
-        #for pts in forecast_pts:
-        #    _log.info(str(pts))
-
-        if (0):
-            root = ET.fromstring(query)
-            ret =  [ {"Forecast": [100*float(v)/1000 for v in _PROD], #[float(child.attrib["Energy_kWh"]) for child in root[0] ],
-                      "Time": [child.attrib["StartTime"] for child in root[0] ]},
-                     { "Forecast":{"units":"Pct", #"W",
-                                   "type":"float"},
-                       "Time":{"units":"UTC",
-                               "type":"str"}}
-            ]
-        else:
-            ret = [ {"Forecast": next_forecast_list,
-                      "Time": next_timestamps_list},
-                     { "Forecast":{"units":"Pct", #"W",
-                                   "type":"float"},
-                       "Time":{"units":"UTC",
-                               "type":"str"}}]
+        ret = [ {"Forecast": next_forecast_list,
+                  "Time": next_timestamps_list},
+                 { "Forecast":{"units":"Pct", #"W",
+                               "type":"float"},
+                   "Time":{"units":"UTC",
+                           "type":"str"}}]
 
         return ret
 
+    ##############################################################################
     @Core.periodic(period = CPR_QUERY_INTERVAL)
     def query_cpr(self):
         """
-        Awaiting account setup:
-
-        a = self._config['LMP']
-        req = requests.get(
-            self._config['baseurl']+a,
-            headers={"Accept":"application/json"},
-            auth=(
-                self._config['username'],
-                self._config['password']))
-        _log.debug("Fetching {}, got {}".format(a, req.status_code))
-
-        if req.status_code == 200:
+        called at interval defined in CPR_QUERY_INTERVAL (gs_identities)
+        publishes forecast corresponding to the next planned optimizer pass
         """
-        _log.info("querying for production forecast from database")
-        message = self.parse_query(self.generate_sample())
-        self.vip.pubsub.publish(
-            peer="pubsub",
-            topic=self._config['topic'],
-            headers={},
-            message=message)
+        if self.initialization_complete == 1:
+            _log.info("querying for production forecast from database")
+            message = self.parse_query()
+            self.vip.pubsub.publish(
+                peer="pubsub",
+                topic=self._config['topic'],
+                headers={},
+                message=message)
+        else:
+            _log.info("initialization incomplete!!")
             
 def main(argv=sys.argv):
     '''Main method called by the platform.'''

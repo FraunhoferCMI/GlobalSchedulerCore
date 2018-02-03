@@ -42,48 +42,59 @@
 # views and opinions of authors expressed herein do not necessarily state
 # or reflect those of the United States Government or any agency thereof.
 
-# execution flags
-USE_VOLTTRON = 1
+from datetime import datetime, timedelta
+import logging
+import sys
+import os
+import csv
+from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
+from volttron.platform.agent import utils
+from volttron.platform.messaging import headers as headers_mod
 
-# Site Operating Modes
-SITE_IDLE    = 0
-SITE_RUNNING = 1
+from gs_identities import (SSA_SCHEDULE_RESOLUTION, USE_VOLTTRON)
 
-# Site System Control Modes
-AUTO        = 0
-INTERACTIVE = 1
-STARTING    = 2
-READY       = 3
+utils.setup_logging()
+_log = logging.getLogger(__name__)
+__version__ = '1.0'
 
 
-DISABLED = 0
-ENABLED  = 1
+def get_schedule():
+    """
+    Returns the start time of the next dispatch schedule command
+    :return: new_time - the start time of the next dispatch schedule period
+    """
 
-# Site Timeout
-PMC_HEARTBEAT_TIMEOUT = 100 # timeout, in seconds
-PMC_HEARTBEAT_PD      = 10 # expected period, in seconds
-PMC_HEARTBEAT_RESET   = 24 * 60 * 60 # heartbeat reset frequency, in seconds
-PMC_WATCHDOG_PD       = 10 # expected heartbeat, in seconds
-PMC_WATCHDOG_RESET    = 24 * 60 * 60 # watchdog reset frequency, in seconds
-IGNORE_HEARTBEAT_ERRORS = 1
+    if USE_VOLTTRON == 1:
+        # FIXME - implicitly assumes SSA_SCHEDULE_RESOLUTION <= 60 minutes
+        TimeStamp = utils.get_aware_utc_now()
+    else:
+        TimeStamp = datetime.utcnow()
+    minutes = TimeStamp.minute
+    rem = minutes % SSA_SCHEDULE_RESOLUTION  # GS_SCHEDULE
+    new_time = TimeStamp + timedelta(minutes=SSA_SCHEDULE_RESOLUTION - rem)  # GS_SCHEDULE
+    new_time = new_time.replace(second=0, microsecond=0)
 
-# GS Internal Operating Modes
-IDLE = 0
-USER_CONTROL = 1
-APPLICATION_CONTROL = 2
-EXEC_STARTING = 3
+    # this gives now + gs_schedule period, truncated to the top of the minute
+    # e.g., 1208 --> set to 1223.
+    # now we need to round down.
+    # so you want to get minutes mod GS_SCHEDULE - remainder
 
-EXECUTIVE_CLKTIME = 5 # period, in seconds, at which the executive polls system state
-GS_SCHEDULE       = 15  # period, in seconds, at which the GS optimizer runs
-ESS_SCHEDULE      = 5
-STATUS_MSG_PD     = 20 # update rate for various status messages
-UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
-START_LATENCY = 0 # time in seconds, to delay execution
+    # new_time  = new_time.replace(minute=0, second=0, microsecond=0)
+    print("TimeStamp = " + TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"))
+    print("new_time = " + new_time.strftime("%Y-%m-%dT%H:%M:%S.%f"))
+    time_str = new_time.strftime("%Y-%m-%dT%H:%M:%S.%f")
+    return time_str
 
-#FIXME - Placeholder!
-SCRAPE_TIMEOUT = 30 # timeout period in seconds for modbus device to post on the IEB bus
 
-SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedules
-SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
-SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
-CPR_QUERY_INTERVAL = 10
+class ForecastObject():
+    ##############################################################################
+    def __init__(self, length, units, datatype):
+        forecast_values = {"Forecast": [0.0]*length,
+                           "Time": [0]*length}
+        forecast_meta_data = {"Forecast": {"units": units, "type": datatype},
+                              "Time": {"units": "UTC", "type": "str"}}
+
+        self.forecast_obj = [forecast_values, forecast_meta_data]
+
+
+
