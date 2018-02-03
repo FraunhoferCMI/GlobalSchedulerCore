@@ -165,12 +165,12 @@ class DERDevice():
         """
         #FIXME - this functionality is duplicated elsewhere.  (E.g., in init_device fcns...)  Should reference
         #FIXME - against this method
-        _log.info("FindDevice: "+self.device_id)
+        _log.debug("FindDevice: "+self.device_id)
         if self.device_id == device_id:
             return self
         else:
             for cur_device in self.devices:
-                _log.info("FindDevice: "+cur_device.device_id)
+                _log.debug("FindDevice: "+cur_device.device_id)
                 child_device = cur_device.find_device(device_id)
                 if child_device != None:
                     return child_device
