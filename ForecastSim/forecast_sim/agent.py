@@ -58,8 +58,8 @@ from volttron.platform.agent.utils import jsonapi
 from volttron.platform.messaging import topics
 from volttron.platform.messaging import headers as headers_mod
 import xml.etree.ElementTree as ET
-from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_SCHEDULE_DURATION, CPR_QUERY_INTERVAL, USE_VOLTTRON)
-from gs_utilities import get_schedule
+from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_SCHEDULE_DURATION, SSA_PTS_PER_SCHEDULE, CPR_QUERY_INTERVAL, USE_VOLTTRON)
+from gs_utilities import get_schedule, ForecastObject
 import csv
 import pandas
 
@@ -116,7 +116,12 @@ class CPRAgent(Agent):
 
         self.vip.config.set_default("config", self.default_config)
         self.vip.config.subscribe(self.configure, actions=["NEW", "UPDATE"], pattern="config")
+
+        # this is the data structure that will hold ghi data & time stamps, populated in load_irradiance()
         self.ghi_series = None
+
+        # indicates that load_irradiance (called onstart) is incomplete, so don't start publishing forecast
+        # data yet.
         self.initialization_complete = 0
 
     ##############################################################################
@@ -159,25 +164,19 @@ class CPRAgent(Agent):
         sim_start_hr
         csv_time_resolution_min - time resolution, in minutes, of data in the csv irradiance file
         csv_fname - name of a
-
-
-        :return:
         """
-
-        # before stopping, I would like to get this cleaned with respect to all of the parameters
-        # i.e., GS_TIME_RESOLUTION, etc
 
 
         # Configuration Parameters
         sim_start_day = 2  # day 106
         sim_start_hr  = 0
-        csv_fname     = "SAM_PVPwr_nyc.csv"
+        pv_forecast_file     = "SAM_PVPwr_nyc.csv"
         csv_time_resolution_min = 60
 
         # Get irradiance data from csv file and populate in ghi_array
         self.volttron_root = os.getcwd()
         self.volttron_root = self.volttron_root + "/../../../../gs_cfg/"
-        csv_name           = (self.volttron_root + csv_fname)
+        csv_name           = (self.volttron_root + pv_forecast_file)
         _log.info(csv_name)
 
         ghi_array = []
@@ -233,8 +232,11 @@ class CPRAgent(Agent):
 
         _log.info(str(self.ghi_series.head(48)))
         _log.info("Loaded irradiance file")
+
+        # indicates that forecast data is ready to be published
         self.initialization_complete = 1
 
+        self.solar_forecast = ForecastObject(SSA_PTS_PER_SCHEDULE, "Pct", "float")
 
 
     ##############################################################################
@@ -247,15 +249,12 @@ class CPRAgent(Agent):
         """
 
         # get the start time of the forecast
-        #next_forecast_start_time = datetime.datetime.strptime(self.vip.rpc.call("executiveagent-1.0_1",
-        #                                                                        "get_schedule").get(timeout=5),
-        #                                                      "%Y-%m-%dT%H:%M:%S.%f")
-
         next_forecast_start_time = datetime.datetime.strptime(get_schedule(),
                                                               "%Y-%m-%dT%H:%M:%S.%f")
 
 
-        # generate the list of timestamps that will comprise the next forecast:
+        # Need to convert panda series to flat list of timestamps and irradiance data
+        # that will comprise the next forecast:
         next_forecast_timestamps = [next_forecast_start_time +
                                     timedelta(minutes=t) for t in range(0,
                                                                         SSA_SCHEDULE_DURATION*MINUTES_PER_HR,
@@ -263,20 +262,14 @@ class CPRAgent(Agent):
         next_forecast = self.ghi_series.get(next_forecast_timestamps)
 
 
-        # Convert to a percentage, and convert from a Pandas Series to a serializable list
-        next_forecast_list = [100 * v / 1000 for v in next_forecast]
-        next_timestamps_list = [datetime.datetime.strftime(ts, "%Y-%m-%dT%H:%M:%S") for ts in next_forecast_timestamps]
-        _log.info("forecast is:"+str(next_forecast_list))
-        _log.info("timestamps are:"+str(next_timestamps_list))
+        # Convert irradiance to a percentage
+        self.solar_forecast.forecast_values["Forecast"] = [100 * v / 1000 for v in next_forecast]
+        self.solar_forecast.forecast_values["Time"]     = [datetime.datetime.strftime(ts, "%Y-%m-%dT%H:%M:%S") for ts in next_forecast_timestamps]
+        _log.info("forecast is:"+str(self.solar_forecast.forecast_values["Forecast"]))
+        _log.info("timestamps are:"+str(self.solar_forecast.forecast_values["Time"]))
 
-        ret = [ {"Forecast": next_forecast_list,
-                  "Time": next_timestamps_list},
-                 { "Forecast":{"units":"Pct", #"W",
-                               "type":"float"},
-                   "Time":{"units":"UTC",
-                           "type":"str"}}]
-
-        return ret
+        # for publication to IEB:
+        return self.solar_forecast.forecast_obj
 
     ##############################################################################
     @Core.periodic(period = CPR_QUERY_INTERVAL)

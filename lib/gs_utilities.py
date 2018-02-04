@@ -58,9 +58,11 @@ _log = logging.getLogger(__name__)
 __version__ = '1.0'
 
 
+##############################################################################
 def get_schedule():
     """
     Returns the start time of the next dispatch schedule command
+    Strips out seconds, microseconds, etc.  Rounds to the next SSA_SCHEDULE_RESOLUTION time step
     :return: new_time - the start time of the next dispatch schedule period
     """
 
@@ -86,15 +88,16 @@ def get_schedule():
     return time_str
 
 
+##############################################################################
 class ForecastObject():
     ##############################################################################
     def __init__(self, length, units, datatype):
-        forecast_values = {"Forecast": [0.0]*length,
-                           "Time": [0]*length}
-        forecast_meta_data = {"Forecast": {"units": units, "type": datatype},
-                              "Time": {"units": "UTC", "type": "str"}}
+        self.forecast_values = {"Forecast": [0.0]*length,
+                                "Time": [0]*length}
+        self.forecast_meta_data = {"Forecast": {"units": units, "type": datatype},
+                                   "Time": {"units": "UTC", "type": "str"}}
 
-        self.forecast_obj = [forecast_values, forecast_meta_data]
+        self.forecast_obj = [self.forecast_values, self.forecast_meta_data]
 
 
 
