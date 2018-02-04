@@ -425,7 +425,7 @@ class SiteManagerAgent(Agent):
         """
         
         # find the device
-        _log.info("FindDevice: device id is "+device_id)
+        _log.debug("FindDevice: device id is "+device_id)
         device = self.site.find_device(device_id)       
         #_log.info("attribute is "+attribute)
         #_log.info("site is "+self.site.device_id)

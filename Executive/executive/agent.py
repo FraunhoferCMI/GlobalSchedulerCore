@@ -444,10 +444,10 @@ class ExecutiveAgent(Agent):
                     # these are intialized in the SDR routine.
                     # what if I just add them as fields to the json file?
 
-                    _log.info("UpdateSDR: "+entries.sundial_resource.resource_id+": SM Device ="+devices["DeviceID"]+"; a="+str(a)+"v="+str(v))
+                    _log.debug("UpdateSDR: "+entries.sundial_resource.resource_id+": SM Device ="+devices["DeviceID"]+"; a="+str(a)+"v="+str(v))
                     if devices["isAvailable"] == 1:
-                        _log.info(str(entries.sundial_resource.update_list_attributes[a]))
-                        _log.info(str(entries.sundial_resource.update_list_end_pts[v]))
+                        _log.debug(str(entries.sundial_resource.update_list_attributes[a]))
+                        _log.debug(str(entries.sundial_resource.update_list_end_pts[v]))
 
                         attribute = self.vip.rpc.call(str(devices["AgentID"]),  # self.sundial_pv.sites[nodes["AgentID"]],
                                           "get_device_data",
@@ -459,7 +459,7 @@ class ExecutiveAgent(Agent):
                             entries.sundial_resource.state_vars[a] = attribute[str(entries.sundial_resource.update_list_end_pts[v])] #.copy()
 
                         except KeyError:
-                            _log.info("Key not found!!")
+                            _log.debug("Key not found!!")
 
                     #entries.sundial_resource. attribute[v]
         self.sundial_resources.update_sundial_resource(length = SSA_PTS_PER_SCHEDULE) # propagates new data to non-ternminal nodes
