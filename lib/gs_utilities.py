@@ -1,4 +1,4 @@
-# Copyright (c) 2017, The Fraunhofer Center for Sustainable Energy
+# Copyright (c) 2018, The Fraunhofer Center for Sustainable Energy
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -90,6 +90,9 @@ def get_schedule():
 
 ##############################################################################
 class ForecastObject():
+    """
+    Data class for storing forecast data in a serializable format that is consumable by the VOLTTRON Historian
+    """
     ##############################################################################
     def __init__(self, length, units, datatype):
         self.forecast_values = {"Forecast": [0.0]*length,

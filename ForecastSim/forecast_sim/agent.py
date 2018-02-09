@@ -80,11 +80,9 @@ MINUTES_PER_YR = 365 * MINUTES_PER_DAY
 
 
 class CPRAgent(Agent):
-    #
     """
-    load_irradiance()
     Retrieves solar forecast data from a csv file.
-    csv file is a list of one year's worht of irradiance values (W/m2), with time step defined by csv_time_resolution_min
+    csv file is a list of one year's worth of irradiance values (W/m2), with time step defined by csv_time_resolution_min
     Reindexes the file to make user-specified start-date and start time === the time when the GS Executive started
     Resamples data file to match desired forecast resolution
 
@@ -127,7 +125,6 @@ class CPRAgent(Agent):
     ##############################################################################
     def configure(self,config_name, action, contents):
         self._config.update(contents)
-        #self.load_irradiance()
         # make sure config variables are valid
         try:
             pass
@@ -205,10 +202,6 @@ class CPRAgent(Agent):
             _log.info("Forecast - gs_start_time not found.  Using current time as gs_start_time")
             gs_start_time =  datetime.datetime.strptime(get_schedule(),
                                                         "%Y-%m-%dT%H:%M:%S.%f")
-
-
-
-
         _log.info("start index is: "+str(start_ind)+"; sim_start_day is "+str(sim_start_day))
 
         # now set up a panda.Series with indices = timestamp starting from GS start time,
@@ -219,7 +212,6 @@ class CPRAgent(Agent):
         ghi_array_reindexed.extend(ghi_array[start_ind:])
         ghi_array_reindexed.extend(ghi_array[:start_ind])
         ghi_series_init = pandas.Series(data=ghi_array_reindexed, index=ghi_timestamps)
-
 
         # next resample to the time resolution of the GS optimizer.
         if csv_time_resolution_min != SSA_SCHEDULE_RESOLUTION: # need to resample!!
@@ -236,6 +228,7 @@ class CPRAgent(Agent):
         # indicates that forecast data is ready to be published
         self.initialization_complete = 1
 
+        # initialize a ForecastObject for publishing data to the VOLTTRON message bus
         self.solar_forecast = ForecastObject(SSA_PTS_PER_SCHEDULE, "Pct", "float")
 
 
