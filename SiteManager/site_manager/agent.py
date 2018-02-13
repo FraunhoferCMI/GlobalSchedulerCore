@@ -402,7 +402,10 @@ class SiteManagerAgent(Agent):
         #FIXME - this need to be more nuanced - not every site has the same heartbeat period
         #FIXME - or requires a heartbeat.
         #FIXME - also is it assumed that only the "site" has a heartbeat? (i.e., not the forecast device?)
-        self.site.send_watchdog(self)
+        try:
+            self.site.send_watchdog(self)
+        except:
+            pass
 
     ##############################################################################
     @Core.periodic(PMC_HEARTBEAT_PD)
@@ -422,7 +425,7 @@ class SiteManagerAgent(Agent):
         """
         
         # find the device
-        _log.info("FindDevice: device id is "+device_id)
+        _log.debug("FindDevice: device id is "+device_id)
         device = self.site.find_device(device_id)       
         #_log.info("attribute is "+attribute)
         #_log.info("site is "+self.site.device_id)

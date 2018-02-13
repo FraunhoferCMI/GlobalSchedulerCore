@@ -42,6 +42,9 @@
 # views and opinions of authors expressed herein do not necessarily state
 # or reflect those of the United States Government or any agency thereof.
 
+# execution flags
+USE_VOLTTRON = 1
+
 # Site Operating Modes
 SITE_IDLE    = 0
 SITE_RUNNING = 1
@@ -71,9 +74,16 @@ APPLICATION_CONTROL = 2
 EXEC_STARTING = 3
 
 EXECUTIVE_CLKTIME = 5 # period, in seconds, at which the executive polls system state
-GS_SCHEDULE       = 5  # period, in seconds, at which the GS optimizer runs
+GS_SCHEDULE       = 15  # period, in seconds, at which the GS optimizer runs
+ESS_SCHEDULE      = 5
 STATUS_MSG_PD     = 20 # update rate for various status messages
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
+START_LATENCY = 0 # time in seconds, to delay execution
 
 #FIXME - Placeholder!
 SCRAPE_TIMEOUT = 30 # timeout period in seconds for modbus device to post on the IEB bus
+
+SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedules
+SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
+SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
+CPR_QUERY_INTERVAL = 10

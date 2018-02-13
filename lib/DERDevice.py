@@ -106,6 +106,12 @@ class DERDevice():
             elif device["ResourceType"] == 'PV':
                 self.devices.append(
                     PVDevice(device, parent_device=self))
+            elif (device["ResourceType"] == "ESSCtrlNode"):
+                self.devices.append(
+                    ESSCtrlNode(device, parent_device=self))
+            elif (device["ResourceType"] == "PVCtrlNode"):
+                self.devices.append(
+                    PVCtrlNode(device, parent_device=self))
             elif (device["ResourceType"] in self.DGPlant):
                 self.devices.append(
                     DERCtrlNode(device, parent_device=self))
@@ -395,14 +401,14 @@ class DERDevice():
 
     ##############################################################################
     def print_site_status(self):
-        _log.info("DERDevice Status: "+self.device_id)
-        _log.info("DERDevice Status: isControllable="+str(self.isControllable)+"; isDataValid="+str(self.isDataValid)+"; isControlAvailable="+str(self.isControlAvailable))  
-        _log.info("DERDevice Status: comms="+str(self.comms_status)+"; device_status="+str(self.device_status)+"; control mode="+str(self.control_mode)+"; read_status="+str(self.read_status)+"; mode_mismatch="+str(self.mode_state_mismatch))      
+        _log.debug("DERDevice Status: "+self.device_id)
+        _log.debug("DERDevice Status: isControllable="+str(self.isControllable)+"; isDataValid="+str(self.isDataValid)+"; isControlAvailable="+str(self.isControlAvailable))
+        _log.debug("DERDevice Status: comms="+str(self.comms_status)+"; device_status="+str(self.device_status)+"; control mode="+str(self.control_mode)+"; read_status="+str(self.read_status)+"; mode_mismatch="+str(self.mode_state_mismatch))
 
         opstatus_str = ""
         for key in self.op_status.key_update_list:
             opstatus_str += key+": "+str(self.op_status.data_dict[key])+"; "
-        _log.info("DERDevice Status: Opstatus - "+opstatus_str)
+        _log.debug("DERDevice Status: Opstatus - "+opstatus_str)
 
         for cur_device in self.devices:
             cur_device.print_site_status()
@@ -479,7 +485,7 @@ class DERDevice():
         # update power, energy registers
         self.update_op_status()
 
-        _log.info("UpdateStatus: "+self.device_id+": data valid = "+str(self.isDataValid)+"; ControlAvailable = "+str(self.isControlAvailable))
+        _log.debug("UpdateStatus: "+self.device_id+": data valid = "+str(self.isDataValid)+"; ControlAvailable = "+str(self.isControlAvailable))
 
     ##############################################################################
     def convert_units_from_endpt(self, k, endpt_units):
@@ -859,9 +865,10 @@ class DERSite(DERDevice):
         """
         traverses the site tree and sets configuration info
         """
+        self.config.data_dict.update({"Nameplate_kW": 0})
         for cur_device in self.devices:
             cur_device.set_config()
-        self.config.data_dict.update({"Nameplate_kW": 0})
+            self.config.data_dict["Nameplate_kW"] += cur_device.config.data_dict["Nameplate_kW"]
         _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"]))
         # TODO: should a site have a nameplate that represents aggregate of children CtrlNodes?
         pass
@@ -981,8 +988,8 @@ class DERCtrlNode(DERDevice):
         self.config.data_dict.update({"Nameplate_kW": 0}) # FIXME - charge vs discharge?
         for device in self.devices:
             device.set_config()
-        #FIXME - exception handle for no device
-        self.config.data_dict["Nameplate_kW"] += device.get_nameplate()
+            #FIXME - exception handle for no device
+            self.config.data_dict["Nameplate_kW"] += device.get_nameplate()
         _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"]))
 
     ##############################################################################
@@ -1011,7 +1018,24 @@ class DERCtrlNode(DERDevice):
 
 ##############################################################################
 class ESSCtrlNode(DERCtrlNode):
-    pass
+
+    def set_config(self):
+        self.config.data_dict.update({"Nameplate_kW": 0}) # FIXME - charge vs discharge?
+        self.config.data_dict.update({"ChgEff": 0.95})  #FIXME - tmp
+        self.config.data_dict.update({"DischgEff": 0.95})
+        self.config.data_dict.update({"MinEnergy_kWh": 0})
+
+
+        for device in self.devices:
+            device.set_config()
+            #FIXME - exception handle for no device
+            self.config.data_dict["Nameplate_kW"] += device.get_nameplate()
+            self.config.data_dict["MinEnergy_kWh"] += device.config.data_dict["MinEnergy_kWh"]
+
+
+        _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"])+
+                  "; chg="+str(self.config.data_dict["ChgEff"])+"; dis="+str(self.config.data_dict["DischgEff"]))
+
 
 ##############################################################################
 class PVCtrlNode(DERCtrlNode):
@@ -1026,6 +1050,10 @@ class ESSDevice(DERDevice):
         # FIXME: should be done through a config file, not hardcoded
         self.config.data_dict["Mfr"] = "Tesla"
         self.config.data_dict.update({"Nameplate_kW": 500}) # FIXME - charge vs discharge?
+        self.config.data_dict.update({"ChgEff": 0.9})
+        self.config.data_dict.update({"DischgEff": 0.9})
+        self.config.data_dict.update({"MinEnergy_kWh": 0})
+
         _log.info("SetConfig: Device ID = "+self.device_id+"; Nameplate is "+str(self.config.data_dict["Nameplate_kW"]))
         _log.info("SetConfig: Mfr = "+self.config.data_dict["Mfr"])
         pass
