@@ -44,6 +44,7 @@
 
 # execution flags
 USE_VOLTTRON = 1
+USE_LABVIEW  = 1
 
 # Site Operating Modes
 SITE_IDLE    = 0

@@ -1,6 +1,7 @@
 [
    {
       "ID":"ShirleySouth",
+      "SiteModel": "Shirley",
       "Topics":[
          {
             "TopicName":"Modbus",
@@ -21,10 +22,11 @@
             "DeviceList":[
                {
                   "ID":"ESS1",
-                  "ResourceType":"ESS",
+                  "ResourceType":"Tesla",
                   "Mfr": "Tesla",
                   "kW_rating": "500",
                   "kWh_rating": "1000",
+                  "min_SOE": "0",
                   "Metered":"Y",
                   "DeviceList":[]
                }
@@ -37,7 +39,7 @@
             "DeviceList":[
                {
                   "ID":"Inverter1",
-                  "ResourceType":"PV",
+                  "ResourceType":"Solectria",
                   "Mfr": "Solectria",
                   "kW_rating": "500",
                   "Metered":"Y",
