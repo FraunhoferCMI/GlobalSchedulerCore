@@ -333,7 +333,7 @@ class ExecutiveAgent(Agent):
         """
         for site in self.sitemgr_list:
             _log.info("Checking status for site "+site["identity"])
-            site_status = self.vip.rpc.call(site["identity"], "update_site_status").get(timeout=10)
+            site_status = self.vip.rpc.call(site["identity"], "update_site_status").get() #timeout=10)
             #for k,v in site_errors.items():
             #    if k=="Mode":
             #        pass
