@@ -5,11 +5,13 @@
       "Topics":[
          {
             "TopicName":"Modbus",
-            "TopicPath":"devices/Site1"
+            "TopicPath":"devices/Site1",
+            "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3"
          },
          {
             "TopicName":"Forecast",
-            "TopicPath":"devices/cpr/forecast"
+            "TopicPath":"devices/cpr/forecast",
+            "TopicScrapeTimeout":"CPR_QUERY_INTERVAL*2"
          }
       ],
       "Use" :"Y",
@@ -24,9 +26,12 @@
                   "ID":"ESS1",
                   "ResourceType":"Tesla",
                   "Mfr": "Tesla",
-                  "kW_rating": "500",
-                  "kWh_rating": "1000",
-                  "min_SOE": "0",
+                  "max_chg_pwr": "500",
+                  "max_dischg_pwr": "500",
+                  "max_soe": "1000",
+                  "min_soe": "0",
+                  "chg_eff": "0.93",
+                  "dischg_eff": "0.93",
                   "Metered":"Y",
                   "DeviceList":[]
                }
@@ -41,7 +46,7 @@
                   "ID":"Inverter1",
                   "ResourceType":"Solectria",
                   "Mfr": "Solectria",
-                  "kW_rating": "500",
+                  "nameplate_rating_kW": "500",
                   "Metered":"Y",
                   "DeviceList":[]
                }

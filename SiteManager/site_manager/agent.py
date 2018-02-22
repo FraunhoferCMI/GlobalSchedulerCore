@@ -60,7 +60,8 @@ from volttron.platform.agent.known_identities import (
     VOLTTRON_CENTRAL, VOLTTRON_CENTRAL_PLATFORM, CONTROL, CONFIGURATION_STORE)
 
 from . import settings
-from gs_identities import (INTERACTIVE, AUTO, STARTING, SCRAPE_TIMEOUT, ENABLED, DISABLED, PMC_WATCHDOG_PD, PMC_HEARTBEAT_PD)
+from gs_identities import (INTERACTIVE, AUTO, STARTING, MODBUS_SCRAPE_INTERVAL, ENABLED, DISABLED,
+                           PMC_WATCHDOG_PD, PMC_HEARTBEAT_PD, CPR_QUERY_INTERVAL)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -143,7 +144,7 @@ class SiteManagerAgent(Agent):
             self.vip.pubsub.subscribe(peer='pubsub', prefix=topics["TopicPath"], callback=self.parse_IEB_msgs) #+'/all'
             topics.update({"isValid": "N"})
             topics.update({"last_read_time": utils.get_aware_utc_now()})
-            topics.update({"SCRAPE_TIMEOUT": SCRAPE_TIMEOUT})
+            topics.update({"SCRAPE_TIMEOUT": eval(topics["TopicScrapeTimeout"])})
             _log.info("SiteManagerConfig: Subscribing to new topic: "+topics["TopicPath"]+'/all')
 
         self.site = DERDevice.get_site_handle(cursite, self.data_map_dir)
@@ -270,7 +271,7 @@ class SiteManagerAgent(Agent):
             _log.info("delta T "+str(deltaT))
             tot_sec = deltaT.total_seconds()
 
-            _log.info("Delta T = "+str(deltaT)+"; SCRAPE_TIMEOUT = "+ str(SCRAPE_TIMEOUT)+"; tot sec = "+str(tot_sec))
+            _log.info("Delta T = "+str(deltaT)+"; SCRAPE_TIMEOUT = "+ str(topic_obj["SCRAPE_TIMEOUT"])+"; tot sec = "+str(tot_sec))
 
 
             if tot_sec > topic_obj["SCRAPE_TIMEOUT"]:
@@ -421,6 +422,22 @@ class SiteManagerAgent(Agent):
 
         # return the attribute data dict
         return device.datagroup_dict_list[attribute].data_dict #self.site.datagroup_dict_list[attribute].data_dict 
+
+    ##############################################################################
+    @RPC.export
+    def get_device_state_vars(self, device_id):
+        """
+        sends a real power command to the specified device
+        """
+
+        # find the device
+        _log.debug("FindDevice: device id is " + device_id)
+        device = self.site.find_device(device_id)
+        # _log.info("attribute is "+attribute)
+        # _log.info("site is "+self.site.device_id)
+
+        # return the attribute data dict
+        return device.state_vars  # self.site.datagroup_dict_list[attribute].data_dict
 
     ##############################################################################
     @RPC.export

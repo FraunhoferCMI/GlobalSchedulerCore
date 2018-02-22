@@ -82,9 +82,9 @@ UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls U
 START_LATENCY = 0 # time in seconds, to delay execution
 
 #FIXME - Placeholder!
-SCRAPE_TIMEOUT = 30 # timeout period in seconds for modbus device to post on the IEB bus
+MODBUS_SCRAPE_INTERVAL = 5 # period in seconds for modbus device to post on the IEB bus
+CPR_QUERY_INTERVAL = 10 # period in seconds for forecasts to arrive
 
 SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedules
 SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
 SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
-CPR_QUERY_INTERVAL = 10

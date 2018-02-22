@@ -244,6 +244,24 @@ class ExecutiveAgent(Agent):
             # start a new SiteManager agent 
             # FIXME - needs error trapping: (1) is agent already installed? (2) does site mgr agent exist?
             # FIXME - (3) did it start successfully?
+
+
+            # check to see if an agent associated with the site already exists:
+            uuid = None
+            agents = self.vip.rpc.call(CONTROL, "list_agents").get(timeout=5)
+            for cur_agent in agents:
+                _log.info("Cur agent is "+cur_agent["identity"]+"; site id is"+site["ID"])
+                if cur_agent["identity"] == site["ID"]:
+                    uuid = cur_agent["uuid"]
+                    _log.info("Match found!!")
+                    break
+            if uuid != None:  # remove existing agent
+                _log.info("removing agent "+site["ID"])
+                self.vip.rpc.call(CONTROL,
+                                  "remove_agent",
+                                  uuid)
+                gevent.sleep(1.0)
+
             uuid = self.vip.rpc.call(CONTROL,
                                      "install_agent_local",
                                      self.packaged_site_manager_fname,
@@ -374,25 +392,19 @@ class ExecutiveAgent(Agent):
                 # TODO: Right here is where we would check the health status, availability, etc of end point devices
                 # TODO: to see if we should include within the next optimization pass
 
-                for (a, v) in zip(entries.sundial_resource.update_list_attributes, entries.sundial_resource.update_list_end_pts):
+                for (k,v) in entries.sundial_resource.update_list_end_pts.items(): #(a, v) in zip(entries.sundial_resource.update_list_attributes, entries.sundial_resource.update_list_end_pts):
                     # now map data end points from devices to SundialResources
-                    _log.debug("UpdateSDR: "+entries.sundial_resource.resource_id+": SM Device ="+devices["DeviceID"]+"; a="+str(a)+"v="+str(v))
+                    _log.debug("UpdateSDR: "+entries.sundial_resource.resource_id+": SM Device ="+devices["DeviceID"]+"; k="+str(k)+"v="+str(v))
                     if devices["isAvailable"] == 1:
-                        _log.debug(str(entries.sundial_resource.update_list_attributes[a]))
-                        _log.debug(str(entries.sundial_resource.update_list_end_pts[v]))
-
                         # FIXME - should this extrapolate values to schedule start time.
                         # FIXME - e.g., assuming battery continues to charge / discharge at present rate what would the
                         # FIXME - value be at that time?
-
-                        attribute = self.vip.rpc.call(str(devices["AgentID"]),
-                                                      "get_device_data",
-                                                      devices["DeviceID"],
-                                                      entries.sundial_resource.update_list_attributes[a]).get(timeout=5)
-
                         try:
-                            _log.info(str(attribute[str(entries.sundial_resource.update_list_end_pts[v])]))
-                            entries.sundial_resource.state_vars[a] = attribute[str(entries.sundial_resource.update_list_end_pts[v])] #.copy()
+                            dev_state_var = self.vip.rpc.call(str(devices["AgentID"]),
+                                                              "get_device_state_vars",
+                                                              devices["DeviceID"]).get(timeout=5)
+                            _log.info(k+": "+str(dev_state_var[k]))
+                            entries.sundial_resource.state_vars[k] = dev_state_var[k]
 
                         except KeyError:
                             _log.debug("Key not found!!")
@@ -464,18 +476,21 @@ class ExecutiveAgent(Agent):
                     for devices in entries.device_list:   # for each end point device associated with that ESS
                         if devices["isAvailable"] == 1:   # device is available for control
                             # retrieve a reference to the device end point operational registers
-                            op_status = self.vip.rpc.call(str(devices["AgentID"]),
-                                                          "get_device_data",
-                                                          devices["DeviceID"],
-                                                          "OpStatus").get(timeout=5)
+                            device_state_vars = self.vip.rpc.call(str(devices["AgentID"]),
+                                                                  "get_device_state_vars",
+                                                                  devices["DeviceID"]).get(timeout=5)
+
+                            _log.info("state vars = "+str(device_state_vars))
+
                             # Divides the set point command across the available ESS sites.
                             # currently divided pro rata based on kWh available.
                             # Right now configured with only one ESS - has not been tested this iteration with more
                             # than one ESS end point in this iteration
                             if (setpoint > 0):  # charging
-                                pro_rata_share = float(op_status["Energy_kWh"]) / float(SOE_kWh) * float(setpoint)
+                                pro_rata_share = float(device_state_vars["SOE_kWh"]) / float(SOE_kWh) * float(setpoint)
+                                #todo - need to check for min SOE - implication of the above is that min = 0
                             else: # discharging
-                                pro_rata_share = float(op_status["FullChargeEnergy_kWh"] - op_status["Energy_kWh"]) / \
+                                pro_rata_share = float(device_state_vars["MaxSOE_kWh"] - device_state_vars["SOE_kWh"]) /\
                                                  (max_SOE_kWh - float(SOE_kWh)) * float(setpoint)
                             _log.info("Optimizer: Sending request for " + str(pro_rata_share) + "to " + devices["AgentID"])
                             # send command
