@@ -73,7 +73,8 @@ def get_schedule():
         TimeStamp = datetime.utcnow()
     minutes = TimeStamp.minute
     rem = minutes % SSA_SCHEDULE_RESOLUTION  # GS_SCHEDULE
-    new_time = TimeStamp + timedelta(minutes=SSA_SCHEDULE_RESOLUTION - rem)  # GS_SCHEDULE
+    #new_time = TimeStamp + timedelta(minutes=SSA_SCHEDULE_RESOLUTION - rem)  # GS_SCHEDULE
+    new_time = TimeStamp - timedelta(minutes=rem) # todo - temp fix - moves forecast to tstep-1
     new_time = new_time.replace(second=0, microsecond=0)
 
     # this gives now + gs_schedule period, truncated to the top of the minute
