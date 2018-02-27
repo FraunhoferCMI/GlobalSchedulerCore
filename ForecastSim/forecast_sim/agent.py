@@ -58,7 +58,8 @@ from volttron.platform.agent.utils import jsonapi
 from volttron.platform.messaging import topics
 from volttron.platform.messaging import headers as headers_mod
 import xml.etree.ElementTree as ET
-from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_SCHEDULE_DURATION, SSA_PTS_PER_SCHEDULE, CPR_QUERY_INTERVAL, USE_VOLTTRON)
+from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_SCHEDULE_DURATION, SSA_PTS_PER_SCHEDULE, CPR_QUERY_INTERVAL,
+                           USE_VOLTTRON, SIM_START_DAY, SIM_START_HR)
 from gs_utilities import get_schedule, ForecastObject
 import csv
 import pandas
@@ -151,24 +152,27 @@ class CPRAgent(Agent):
         (2) the time step between rows is defined by csv_time_resolution_min
         (3) the file is assumed to comprise exactly a single year of data
 
-        Use user-defined offsets (sim_start_day, sim_start_hr) to figure out where to start
+        Use user-defined offsets (SIM_START_DAY, SIM_START_HR) to figure out where to start
         Synchronize this start time to the time when the GS executive started.
 
         right now, all these configuration parameters are set within this method.
         Eventually move to a config:
 
-        sim_start_day
-        sim_start_hr
+        SIM_START_DAY
+        SIM_START_HR
         csv_time_resolution_min - time resolution, in minutes, of data in the csv irradiance file
         csv_fname - name of a
         """
 
 
         # Configuration Parameters
-        sim_start_day = 2  # day 106
-        sim_start_hr  = 0
-        pv_forecast_file     = "SAM_PVPwr_nyc.csv"
-        csv_time_resolution_min = 60
+        scenario = 2
+        if scenario == 1:
+            pv_forecast_file     = "SAM_PVPwr_nyc.csv" #"irr_1min.csv"
+            csv_time_resolution_min = 60 #1
+        else:
+            pv_forecast_file = "irr_1min.csv"
+            csv_time_resolution_min = 1
 
         # Get irradiance data from csv file and populate in ghi_array
         self.volttron_root = os.getcwd()
@@ -192,7 +196,7 @@ class CPRAgent(Agent):
         # It re-indexes the irradiance file such that start day / start hour is
         # set to the ACTUAL time at which the GS Executive started.
         pts_per_day = int((MINUTES_PER_DAY) / csv_time_resolution_min)
-        start_ind = int((sim_start_day - 1) * pts_per_day+sim_start_hr*MINUTES_PER_HR/csv_time_resolution_min)
+        start_ind = int((SIM_START_DAY - 1) * pts_per_day+SIM_START_HR*MINUTES_PER_HR/csv_time_resolution_min)
 
         try:
             gs_start_time = datetime.datetime.strptime( self.vip.rpc.call("executiveagent-1.0_1",
@@ -202,7 +206,7 @@ class CPRAgent(Agent):
             _log.info("Forecast - gs_start_time not found.  Using current time as gs_start_time")
             gs_start_time =  datetime.datetime.strptime(get_schedule(),
                                                         "%Y-%m-%dT%H:%M:%S.%f")
-        _log.info("start index is: "+str(start_ind)+"; sim_start_day is "+str(sim_start_day))
+        _log.info("start index is: "+str(start_ind)+"; SIM_START_DAY is "+str(SIM_START_DAY))
 
         # now set up a panda.Series with indices = timestamp starting from GS start time,
         # time step from csv_time_resolution_min; and with values = ghi_array, starting from the index corresponding
@@ -256,7 +260,7 @@ class CPRAgent(Agent):
 
 
         # Convert irradiance to a percentage
-        self.solar_forecast.forecast_values["Forecast"] = [100 * v / 1000 for v in next_forecast]
+        self.solar_forecast.forecast_values["Forecast"] = [-100 * v / 1000 for v in next_forecast]
         self.solar_forecast.forecast_values["Time"]     = [datetime.datetime.strftime(ts, "%Y-%m-%dT%H:%M:%S") for ts in next_forecast_timestamps]
         _log.info("forecast is:"+str(self.solar_forecast.forecast_values["Forecast"]))
         _log.info("timestamps are:"+str(self.solar_forecast.forecast_values["Time"]))
