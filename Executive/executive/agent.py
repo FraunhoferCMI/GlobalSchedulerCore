@@ -65,7 +65,7 @@ import HistorianTools
 import DERDevice
 from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXEC_STARTING,
                            EXECUTIVE_CLKTIME, GS_SCHEDULE, ESS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD,
-                           SSA_SCHEDULE_RESOLUTION, SSA_PTS_PER_SCHEDULE, SSA_SCHEDULE_DURATION, START_LATENCY)
+                           SSA_SCHEDULE_RESOLUTION, SSA_PTS_PER_SCHEDULE, SSA_SCHEDULE_DURATION, SIM_START_TIME, START_LATENCY)
 from gs_utilities import get_schedule
 
 #utils.setup_logging()
@@ -78,6 +78,17 @@ import numpy
 from SunDialResource import SundialSystemResource, SundialResource, SundialResourceProfile, build_SundialResource_to_SiteManager_lookup_table
 from SSA_Optimization import SimulatedAnnealer
 
+default_units = {"setpoint":"kW",
+                 "targetPwr_kW": "kW",
+                 "curPwr_kW": "kW",
+                 "expectedPwr_kW": "kW",
+                 "DemandForecast_kW": "kW",
+                 "EnergyAvailableForecast_kWh": "kWh",
+                 "netDemand_kW": "kW",
+                 "timestamp": "datetime",
+                 "gs_start_time": "datetime",
+                 "SIM_START_TIME": "datetime",
+                 "total_cost": ""}
 
 ##############################################################################
 def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW, max_discharge_kW):
@@ -99,10 +110,10 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     # setpoint_cmd_interval indicates how frequently the target setpoint is recalculated.
     # it is used to determine what the max sustainable charge / discharge rate is for the
     # battery before the next time that we receive a high level schedule request.
-    setpoint_cmd_interval = 300
+    setpoint_cmd_interval = 300 #FIXME - this needs to be tied to globals defined in gs_identities
     sec_per_hr = 60 * 60
 
-    setpoint = curPwr_kW - targetPwr_kW
+    setpoint = targetPwr_kW-curPwr_kW  #FIXME sign convention for charge vs discharge?
     _log.info("Optimizer: target Setpoint ="+str(setpoint))
 
     # check that we are within power limits of the storage system
@@ -186,6 +197,10 @@ class ExecutiveAgent(Agent):
         self.optimizer_info.update({"setpoint": 0})
         self.optimizer_info.update({"targetPwr_kW": 0})
         self.optimizer_info.update({"curPwr_kW": 0})
+        self.optimizer_info.update({"expectedPwr_kW": 0})
+        self.optimizer_info.update({"netDemand_kW": 0})
+
+        self.opt_cnt = 0
 
 
 
@@ -296,7 +311,8 @@ class ExecutiveAgent(Agent):
         # SiteManager Initialization complete
 
         ###This section instantiates a SundialResource tree based on SystemConfiguration.json, and an Optimizer ########
-        self.sundial_resources = SundialSystemResource(self.sundial_resource_cfg_list)
+        self.gs_start_time     = get_schedule() #utils.get_aware_utc_now()
+        self.sundial_resources = SundialSystemResource(self.sundial_resource_cfg_list, self.gs_start_time)
         self.sdr_to_sm_lookup_table = build_SundialResource_to_SiteManager_lookup_table(self.sundial_resource_cfg_list,
                                                                                         self.sundial_resources,
                                                                                         sitemgr_list=self.sitemgr_list,
@@ -317,8 +333,20 @@ class ExecutiveAgent(Agent):
         self.loadshift_resources = self.sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
         self.load_resources = self.sundial_resources.find_resource_type("Load")[0]
 
+        # get a time stamp of start time to database
+        HistorianTools.publish_data(self,
+                                    "Executive",
+                                    default_units["gs_start_time"],
+                                    "gs_start_time",
+                                    self.gs_start_time)
+
+        HistorianTools.publish_data(self,
+                                    "Executive",
+                                    default_units["SIM_START_TIME"],
+                                    "SIM_START_TIME",
+                                    SIM_START_TIME.strftime("%Y-%m-%dT%H:%M:%S.%f"))
+
         self.OperatingMode_set = IDLE
-        self.gs_start_time     = get_schedule() #utils.get_aware_utc_now()
 
 
     ##############################################################################
@@ -436,7 +464,7 @@ class ExecutiveAgent(Agent):
             # retrieve the current power output of the system, not including energy storage.
             # taking a shortcut here - implicit assumption that there is a single pool of ESS
             curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
-
+            netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
             # retrieve the current scheduled value:
             # Taking a shortcut where we just grab the zero element of the most recently generated schedule.
             # This is fine (For now) - BUT presents a known issue as follows -
@@ -449,6 +477,7 @@ class ExecutiveAgent(Agent):
 
             #next_scheduled_time = datetime.strptime(get_schedule(),"%Y-%m-%dT%H:%M:%S.%f")
             targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][0]
+            expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][0]
             _log.info("Target power is " + str(targetPwr_kW))
             _log.info("Current power is "+str(curPwr_kW))
 
@@ -503,6 +532,8 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["setpoint"] = setpoint
             self.optimizer_info["targetPwr_kW"] = targetPwr_kW
             self.optimizer_info["curPwr_kW"] = curPwr_kW
+            self.optimizer_info["expectedPwr_kW"] = expectedPwr_kW
+            self.optimizer_info["netDemand_kW"]   = netDemand_kW
 
 
     ##############################################################################
@@ -534,11 +565,44 @@ class ExecutiveAgent(Agent):
         devices.
         :return: None
         """
-
         self.last_optimization_start = utils.get_aware_utc_now()  # not currently used
         if self.OptimizerEnable == ENABLED:
-            schedule_timestamps = self.generate_schedule_timestamps() # associated timestamps
-            self.optimizer.run_ssa_optimization(self.sundial_resources, schedule_timestamps) # SSA optimization
+            #self.opt_cnt += 1
+            if self.opt_cnt <= 1:
+                schedule_timestamps = self.generate_schedule_timestamps() # associated timestamps # FIXME - should be np array?
+                self.optimizer.run_ssa_optimization(self.sundial_resources, schedule_timestamps) # SSA optimization
+
+                HistorianTools.publish_data(self,
+                                            "SystemResource/Schedule",
+                                            default_units["DemandForecast_kW"],
+                                            "DemandForecast_kW",
+                                            self.system_resources.schedule_vars["DemandForecast_kW"].tolist())
+                HistorianTools.publish_data(self,
+                                            "SystemResource/Schedule",
+                                            default_units["timestamp"],
+                                            "timestamp",
+                                            [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.system_resources.schedule_vars["timestamp"]])
+                HistorianTools.publish_data(self,
+                                            "SystemResource/Schedule",
+                                            default_units["total_cost"],
+                                            "total_cost",
+                                            self.system_resources.schedule_vars["total_cost"])
+                HistorianTools.publish_data(self,
+                                            "ESSResource/Schedule",
+                                            default_units["DemandForecast_kW"],
+                                            "DemandForecast_kW",
+                                            self.ess_resources.schedule_vars["DemandForecast_kW"].tolist())
+                HistorianTools.publish_data(self,
+                                            "ESSResource/Schedule",
+                                            default_units["EnergyAvailableForecast_kWh"],
+                                            "EnergyAvailableForecast_kWh",
+                                            self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"].tolist())
+                HistorianTools.publish_data(self,
+                                            "ESSResource/Schedule",
+                                            default_units["timestamp"],
+                                            "timestamp",
+                                            [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.ess_resources.schedule_vars["timestamp"]])
+
 
     ##############################################################################
     @Core.periodic(STATUS_MSG_PD)
@@ -553,9 +617,10 @@ class ExecutiveAgent(Agent):
         for k,v in self.optimizer_info.items():
             _log.info("ExecutiveStatus: " + k + "=" + str(v))
             #TODO - still need to add meta data associated with optimizer_info to the historian message
+            units = default_units[k]
             HistorianTools.publish_data(self, 
                                         "Executive", 
-                                        "", 
+                                        units,
                                         k, 
                                         v)
 
