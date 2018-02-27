@@ -46,8 +46,12 @@ import json
 import numpy
 import math
 import copy
+from datetime import datetime, timedelta
+import pandas
+import csv
 import logging
-from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_PTS_PER_SCHEDULE)
+import os
+from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_PTS_PER_SCHEDULE, USE_SIM, SIM_START_TIME)
 _log = logging.getLogger("SDR")
 
 ############################
@@ -88,7 +92,7 @@ class SundialResourceProfile():
     """
 
     ##############################################################################
-    def __init__(self, sundial_resources):
+    def __init__(self, sundial_resources, schedule_timestamps):
         """
         Recursively constructs a SundialResourceProfile tree.
         The SundialResourceProfile tree replicates the tree structure of the passed sundial_resource.  Nodes in the
@@ -108,7 +112,7 @@ class SundialResourceProfile():
 
         # call SundialResourceProfile constructor for children of the associated sundial_resource instance
         for virtual_plant in sundial_resources.virtual_plants:
-            self.virtual_plants.append(SundialResourceProfile(virtual_plant))
+            self.virtual_plants.append(SundialResourceProfile(virtual_plant, schedule_timestamps))
 
         # initialize self.state_vars - length = SSA_PTS_PER_SCHEDULE
         # DemandForecast_kW is set to the baseline forecast for the resource in question.
@@ -131,9 +135,18 @@ class SundialResourceProfile():
 
         self.sundial_resources = sundial_resources
         self.cost = 0
+        self.cfg_cost(schedule_timestamps)
         self.total_cost = self.calc_cost()
 
         pass
+
+    ##############################################################################
+    def cfg_cost(self, schedule_timestamps):
+        _log.info("cfg cost - SDR")
+        for virtual_plant in self.virtual_plants:
+            virtual_plant.cfg_cost(schedule_timestamps)
+        self.sundial_resources.cfg_cost(schedule_timestamps)
+
 
     ##############################################################################
     def calc_cost(self):
@@ -231,7 +244,7 @@ class SundialResource():
     straightforward configuration
     """
     ##############################################################################
-    def __init__(self, resource_cfg):
+    def __init__(self, resource_cfg, gs_start_time):
         """
         Initializes a generic SundialResource object based on parameters set in the resource_cfg data structure
         :param resource_cfg: json object representing sundial resource tree class structure
@@ -244,6 +257,8 @@ class SundialResource():
         self.update_required      = 0 # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         self.obj_fcns      = []
+        self.obj_fcns_cfg  = []
+        self.schedule_timestamps = [] # fixme temp
 
         # initialize dictionaries for mapping from DERDevice keys to SundialResource keys.
         # This should go away in future rev.
@@ -256,6 +271,9 @@ class SundialResource():
         self.update_list_end_pts.update({"DemandForecast_t": "t"})
         self.update_list_end_pts.update({"Pwr_kW": "Pwr_kW"})
 
+        if USE_SIM == 1:
+            # set a time offset that matches gs start time to the desired sim start time
+            self.sim_offset = SIM_START_TIME - datetime.strptime(gs_start_time,"%Y-%m-%dT%H:%M:%S.%f")
 
         self.pts_per_schedule = SSA_PTS_PER_SCHEDULE
         self.init_state_vars()
@@ -268,19 +286,19 @@ class SundialResource():
             print(virtual_plant["ResourceType"] + " " + virtual_plant["ID"])
             if virtual_plant["ResourceType"] == 'ESSCtrlNode':
                 self.virtual_plants.append(
-                    ESSResource(virtual_plant))
+                    ESSResource(virtual_plant, gs_start_time))
             elif virtual_plant["ResourceType"] == 'PVCtrlNode':
                 self.virtual_plants.append(
-                    PVResource(virtual_plant))
+                    PVResource(virtual_plant, gs_start_time))
             elif (virtual_plant["ResourceType"] == "LoadShiftCtrlNode"):
                 self.virtual_plants.append(
-                    LoadShiftResource(virtual_plant))
+                    LoadShiftResource(virtual_plant, gs_start_time))
             elif virtual_plant["ResourceType"] == "Load":
                 self.virtual_plants.append(
-                    BaselineLoadResource(virtual_plant))
+                    BaselineLoadResource(virtual_plant, gs_start_time))
             else:
                 self.virtual_plants.append(
-                    SundialResource(virtual_plant))
+                    SundialResource(virtual_plant, gs_start_time))
 
     ##############################################################################
     def find_resource(self, resource_id):
@@ -336,7 +354,8 @@ class SundialResource():
         self.schedule_vars = {"DemandForecast_kW": numpy.array([0.0] * self.pts_per_schedule),
                               "EnergyAvailableForecast_kWh": numpy.array([0.0] * self.pts_per_schedule),
                               "DeltaEnergy_kWh": numpy.array([0.0] * self.pts_per_schedule),
-                              "timestamp": numpy.array([0] * self.pts_per_schedule)}
+                              "timestamp": numpy.array([0] * self.pts_per_schedule),
+                              "total_cost": 0.0}
 
 
     ##############################################################################
@@ -394,6 +413,14 @@ class SundialResource():
             cost += fcn()
         return cost
 
+    ############################
+    def cfg_cost(self, schedule_timestamps):
+        """
+        """
+        self.schedule_timestamps = schedule_timestamps
+        _log.info("cfg cost")
+        for fcn in self.obj_fcns_cfg:
+            fcn()
 
 
 ##############################################################################
@@ -411,8 +438,8 @@ class ESSResource(SundialResource):
     """
 
     ##############################################################################
-    def __init__(self, resource_cfg):
-        SundialResource.__init__(self, resource_cfg)
+    def __init__(self, resource_cfg, gs_start_time):
+        SundialResource.__init__(self, resource_cfg, gs_start_time)
         self.update_required = 1  # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         # define a bunch of ESS-specific end points to update
@@ -664,6 +691,14 @@ class PVResource(SundialResource):
             _log.info(k+": "+str(v))
 
 
+    ##############################################################################
+    def update_sundial_resource(self):
+        """
+        propagates data from children to non-terminal parent nodes in the SundialResource tree
+        :return: None
+        """
+        self.state_vars["Pwr_kW"] = self.state_vars["Pwr_kW"] * -1
+        SundialResource.update_sundial_resource(self)
 
 ##############################################################################
 class LoadShiftResource(SundialResource):
@@ -699,12 +734,17 @@ class BaselineLoadResource(SundialResource):
         """
         SundialResource.init_test_values(self, length)
 
-        self.state_vars["DemandForecast_kW"] += [142.4973, 142.4973, 142.4973, 145.9894,
-                                                             160.094, 289.5996, 339.7752, 572.17,
-                                                             658.6025, 647.2883, 650.1958, 639.7053,
-                                                             658.044, 661.158, 660.3772, 673.1098,
-                                                             640.9227, 523.3306, 542.7008, 499.3727,
-                                                             357.9398, 160.0936, 145.9894, 142.4973]
+        #self.state_vars["DemandForecast_kW"] += #[142.4973, 142.4973, 142.4973, 145.9894,
+                                                #             160.094, 289.5996, 339.7752, 572.17,
+                                                #             658.6025, 647.2883, 650.1958, 639.7053,
+                                                #             658.044, 661.158, 660.3772, 673.1098,
+                                                #             640.9227, 523.3306, 542.7008, 499.3727,
+                                                #             357.9398, 160.0936, 145.9894, 142.4973]
+
+        self.state_vars["DemandForecast_kW"] += [0.0]*24 #[250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+                                                # 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250]
+
+
         self.state_vars["Nameplate"] += 1000
 
         _log.info("Resource "+self.resource_id)
@@ -720,8 +760,8 @@ class SundialSystemResource(SundialResource):
     """
 
     ##############################################################################
-    def __init__(self, resource_cfg):
-        SundialResource.__init__(self, resource_cfg)
+    def __init__(self, resource_cfg, gs_start_time):
+        SundialResource.__init__(self, resource_cfg, gs_start_time)
         self.update_required = 1  # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         #########################################################
@@ -730,6 +770,7 @@ class SundialSystemResource(SundialResource):
         self.demand_threshold   = 0  # threshold at which demand charges accrue
         self.demand_cost_per_kW = 10 # per kW cost of demand in excess of self.demand_threshold
         self.obj_fcns = [self.obj_fcn_follow_loadshape]
+        self.obj_fcns_cfg = [self.cfg_loadshape]
         #self.obj_fcns = [self.obj_fcn_abs_energy, self.obj_fcn_demand]
 
         ##### the following is for setting a target load shape ######
@@ -819,6 +860,40 @@ class SundialSystemResource(SundialResource):
             cost = 0
         return cost
 
+
+    ##############################################################################
+    def cfg_loadshape(self):
+        _log.info("config load shape")
+        loadshape_file = "loadshape.csv"
+        self.volttron_root = os.getcwd()
+        self.volttron_root = self.volttron_root + "/../../../../gs_cfg/"
+        csv_name           = (self.volttron_root + loadshape_file)
+        _log.info(csv_name)
+
+        #gs_start_time = datetime.datetime.strptime(self.vip.rpc.call("executiveagent-1.0_1",
+        #                                                             "get_gs_start_time").get(timeout=5),
+        #                                           "%Y-%m-%dT%H:%M:%S.%f")
+
+        ls_array = []
+        ts_array = []
+
+        try:
+            with open(csv_name, 'rb') as csvfile:
+                csv_data = csv.reader(csvfile)
+
+                for row in csv_data:
+                    ts_array.append(datetime.strptime(row[0], "%Y-%m-%dT%H:%M:%S"))
+                    ls_array.append(float(row[1]))
+        except IOError as e:
+            _log.info("loadshape database " + csv_name + " not found")
+
+        loadshapes = pandas.Series(data=ls_array, index=ts_array)
+        offset_ts = [t+self.sim_offset for t in self.schedule_timestamps]
+        self.target_profile = numpy.array(loadshapes.get(offset_ts))
+        _log.info("Load Shape time stamps are:"+str(offset_ts))
+        _log.info("load shape is: "+str(self.target_profile))
+
+        pass
 
     ##############################################################################
     def obj_fcn_follow_loadshape(self):
@@ -920,7 +995,7 @@ def export_schedule(profile, timestamps):
     profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"] = profile.state_vars["EnergyAvailableForecast_kWh"]
     profile.sundial_resources.schedule_vars["DeltaEnergy_kWh"] = profile.state_vars["DeltaEnergy_kWh"]
     profile.sundial_resources.schedule_vars["timestamp"] = copy.deepcopy(timestamps)
-
+    profile.sundial_resources.schedule_vars["total_cost"] = profile.total_cost
     pass
 
 if __name__ == "__main__":

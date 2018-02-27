@@ -53,6 +53,7 @@ from SunDialResource import SundialSystemResource, SundialResource, SundialResou
 from datetime import datetime, timedelta
 import logging
 from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_SCHEDULE_DURATION, SSA_PTS_PER_SCHEDULE)
+from gs_utilities import get_schedule
 
 _log = logging.getLogger("SSA")
 
@@ -229,9 +230,9 @@ class SimulatedAnnealer():
 
         # get an initial set of commands to seed the ssa process
         # then, set least_cost_soln AND current_soln to initiate the SSA
-        init_soln       = SundialResourceProfile(sundial_resources)
-        current_soln    = SundialResourceProfile(sundial_resources)
-        least_cost_soln = SundialResourceProfile(sundial_resources)
+        init_soln       = SundialResourceProfile(sundial_resources, timestamps)
+        current_soln    = SundialResourceProfile(sundial_resources, timestamps)
+        least_cost_soln = SundialResourceProfile(sundial_resources, timestamps)
 
 
         # For convenience - this extracts specific resource types from the Sundial tree structure and puts them
@@ -410,8 +411,9 @@ if __name__ == '__main__':
     SundialCfgFile = "../cfg/SystemCfg/SundialSystemConfiguration.json"#"SundialSystemConfiguration2.json"
     sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
 
-    # sundial_resources = init_resources(sundial_resource_cfg_list,None)
-    sundial_resources = SundialSystemResource(sundial_resource_cfg_list)
+    gs_start_time = datetime.datetime.strptime(get_schedule(),
+                                               "%Y-%m-%dT%H:%M:%S.%f")
+    sundial_resources = SundialSystemResource(sundial_resource_cfg_list, gs_start_time)
 
     #for resource in sundial_resources:
     #    print("Device ID: "+resource.resource_id, "; Device Type = "+resource.resource_type)
