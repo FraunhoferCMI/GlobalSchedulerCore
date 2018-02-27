@@ -55,17 +55,43 @@ from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
 from volttron.platform.agent import utils
 from volttron.platform.messaging import headers as headers_mod
 
-from gs_identities import (INTERACTIVE, AUTO, SITE_IDLE, SITE_RUNNING, PMC_WATCHDOG_RESET, IGNORE_HEARTBEAT_ERRORS, SSA_PTS_PER_SCHEDULE, USE_LABVIEW)
+from gs_identities import (INTERACTIVE, AUTO, SITE_IDLE, SITE_RUNNING, PMC_WATCHDOG_RESET, IGNORE_HEARTBEAT_ERRORS,
+                           SSA_PTS_PER_SCHEDULE, USE_LABVIEW, MODBUS_PTS_PER_WINDOW)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
 __version__ = '1.0'
 
 
-ess_update_list = ["MaxSOE_kWh", "SOE_kWh", "MaxChargePwr_kW", "MaxDischargePwr_kW", "MinSOE_kWh",
-                   "Nameplate_kW", "Pwr_kW", "ChgEff", "DischgEff"]
+# SysModeReason Codes for Shirley RTAC
+GS_REQ = 1
+HMI_REQ = 2
+LOSS_OF_COMMS = 3
+PLANT_ALARMS = 4
 
-device_update_list = ["Nameplate_kW", "Pwr_kW"]
+
+default_units = {"CommStatus": "",
+                 "DeviceStatus": "",
+                 "ReadStatus": "",
+                 "ControlMode": "",
+                 "Pwr_kW": "kW",
+                 "AvgPwr_kW": "kW",
+                 "DemandForecast_kW": "kW",
+                 "Nameplate_kW": "kW",
+                 "MaxSOE_kWh": "kWh",
+                 "SOE_kWh": "kWh",
+                 "MaxChargePwr_kW": "kW",
+                 "MaxDischargePwr_kW": "kW",
+                 "ChgEff": "",
+                 "DischgEff": "",
+                 "MinSOE_kWh": "kWh",
+                 "SetPt": "kW",
+                 "SetPtCmd": "Pct"}
+
+ess_update_list = ["MaxSOE_kWh", "SOE_kWh", "MaxChargePwr_kW", "MaxDischargePwr_kW", "MinSOE_kWh",
+                   "Nameplate_kW", "Pwr_kW", "AvgPwr_kW", "ChgEff", "DischgEff"]
+
+device_update_list = ["Nameplate_kW", "Pwr_kW", "AvgPwr_kW"]
 
 site_lookup = {"Shirley":"ShirleySite(site_info, None, data_map_dir)",
                "FLAME": "FLAMESite(site_info, None, data_map_dir)",
@@ -152,11 +178,11 @@ class DERDevice():
                            "ReadStatus": self.read_status,
                            "ControlMode": self.control_mode,
                            "Pwr_kW": 0,
+                           "AvgPwr_kW": 0,
                            "DemandForecast_kW": [0.0] * SSA_PTS_PER_SCHEDULE,
-                           "Nameplate_kW": 0,
-                           "SetPt": 0,
-                           "SetPtCmd": 0}
+                           "Nameplate_kW": 0}
 
+        self.avg_pwr_buffer = []
 
         self.pending_cmd = []  # todo - is this unnecessary?
 
@@ -368,6 +394,27 @@ class DERDevice():
             cur_device.print_site_status()
 
     ##############################################################################
+    def calc_avg_pwr(self, val):
+        """
+        maintains a circular buffer of length defined by MODBUS_PTS_PER_WINDOW
+        and calculates the average power output over that time window
+        TODO - Note - does not currently address missed readings.  Not sure if this matters.
+        :param val: most recent power reading
+        :return: average power over the last MODBUS_PTS_PER_WINDOW duration
+        """
+        if len(self.avg_pwr_buffer) < MODBUS_PTS_PER_WINDOW:
+            # buffer is not fully populated (when process first starts), so
+            # append values until buffer is fully populated
+            self.avg_pwr_buffer.append(val)
+        else:
+            # buffer is fully populated, so treat as a circular buffer -
+            # remove oldest value from the list
+            self.avg_pwr_buffer.append(val)
+            self.avg_pwr_buffer = self.avg_pwr_buffer[1:]
+
+        return sum(self.avg_pwr_buffer) / float(len(self.avg_pwr_buffer))
+
+    ##############################################################################
     def update_state_vars(self):
         """
         updates external holding registers
@@ -390,6 +437,7 @@ class DERDevice():
 
         try:
             self.state_vars.update({"Pwr_kW": self.op_status.data_dict["Pwr_kW"]})
+            self.state_vars.update({"AvgPwr_kW": self.calc_avg_pwr(self.op_status.data_dict["Pwr_kW"])})
         except KeyError:
             pass
 
@@ -654,26 +702,43 @@ class DERDevice():
         and for each var, it would write the site/attribute/value.     
         """
 
-        for attribute in self.datagroup_dict_list:
-            for k,v in self.datagroup_dict_list[attribute].data_dict.items():
-                # 1. build the path:
-                # change "-" to "/" in the device_id:
-                device_path_str = self.device_id.replace('-', '/')+"/"+attribute
+        device_path_str = self.device_id.replace('-', '/')
+        for k, v in self.state_vars.items():
+            # units for state_vars are defined in the default_units global dictionary
+            # We may want to change this later to have device-specific unit definitions.
+            # in particular - SetPtCmd is problematic.  Currently SetPtCmd units are defined by the end point device,
+            # so it cannot be universally defined.  Another approach (which lets one keep using default_units) woudl be
+            # to make the units of SetPtCmd internally defined and do the unit conversion subsequent to writing to the
+            # SetPtCmd end point.
+            units = default_units[k]
 
-                try:
-                    units = self.datagroup_dict_list[attribute].units[k]
-                except KeyError:
-                    units = ""
+            HistorianTools.publish_data(SiteMgr,
+                                        device_path_str,
+                                        units,
+                                        k,
+                                        v)
 
-                HistorianTools.publish_data(SiteMgr, 
-                                            device_path_str, 
-                                            units, 
-                                            k, 
-                                            v)
+        if (0):
+            for attribute in self.datagroup_dict_list:
+                for k,v in self.datagroup_dict_list[attribute].data_dict.items():
+                    # 1. build the path:
+                    # change "-" to "/" in the device_id:
+                    device_path_str = self.device_id.replace('-', '/')+"/"+attribute
+
+                    try:
+                        units = self.datagroup_dict_list[attribute].units[k]
+                    except KeyError:
+                        units = ""
+
+                    HistorianTools.publish_data(SiteMgr,
+                                                device_path_str,
+                                                units,
+                                                k,
+                                                v)
 
         # now recursively call for each child device:
         for cur_device in self.devices:
-            child_device = cur_device.publish_device_data(SiteMgr)        
+            cur_device.publish_device_data(SiteMgr)
 
 
 
@@ -862,13 +927,8 @@ class ShirleySite(DERSite, DERModbusDevice):
         try:
             if (self.mode_ctrl.data_dict["SysModeCtrl"] != self.mode_status.data_dict["SysModeStatus"]):
             #FIXME - NEED to TEST!: will this need to see multiple fails to actually fail?
+            #FIXME - not necessarily an error - ? could just mean that the HMI user changed?
                 self.device_status = 0
-            # FIXME: this routine should be generalized to check any arbitrary control
-            # FIXME: register against its associated status register
-            # FIXME: I think the way to do this would be to identify registers in the data
-            # FIXME: map as control registers, and then to identify an associated status register
-            # FIXME: so __init__ would build a table mapping control->status registers, and this
-            # FIXME: routine would make sure that they match
 
         except KeyError:
             _log.info("Key Error")
@@ -968,6 +1028,34 @@ class ShirleySite(DERSite, DERModbusDevice):
         This is called after the target device has been scraped
         """
 
+
+        if (((self.mode_status.data_dict["SysModeStatus"] == 0) and (self.control_mode == 1)) or
+            ((self.mode_status.data_dict["SysModeStatus"] == 1) and (self.control_mode == 0))):
+            # mode has changed since last time we polled the device - check reason for change
+            # and act accordingly
+            try:
+                # todo - need to think this through a little bit better
+                # todo - how do faults get cleared?
+                if (self.mode_status.data_dict["SysModeReason"] == GS_REQ):
+                    # command from GS
+                    self.comms_status = 1 # clears any prior comm status faults
+                    self.device_status = 1 # clears any prior plant alarm faults
+                    pass
+                if (self.mode_status.data_dict["SysModeReason"] == HMI_REQ):
+                    # command from HMI user
+                    self.comms_status = 1 # clears any prior comm status faults
+                    self.device_status = 1 # clears any prior plant alarm faults
+                    pass
+                if (self.mode_status.data_dict["SysModeReason"] == LOSS_OF_COMMS):
+                    # loss of communication
+                    self.comms_status = 0
+                    pass
+                if (self.mode_status.data_dict["SysModeReason"] == PLANT_ALARMS):
+                    # plant alarms
+                    self.device_status = 0 #pass
+            except:
+                pass
+
         if self.mode_status.data_dict["SysModeStatus"] == 0:
             self.control_mode   = 0
         #elif self.mode_status.data_dict["OpModeStatus"] == 0:
@@ -1025,6 +1113,16 @@ class DERCtrlNode(DERDevice):
                 (self.state_vars["MaxDischargePwr_kW"] != 0) else 1
 
     ##############################################################################
+    def set_ramprate_real(self, val, sitemgr):
+        try:
+            self.pwr_ctrl_cmd.data_dict.update({"RampRate_cmd": int(val)})
+            _log.info("Setting ramp rate to "+str(val))
+            self.set_point("RealPwrCtrl", "RampRate", sitemgr)
+        except:
+            pass
+
+
+    ##############################################################################
     def set_power_real(self, val, sitemgr):
         # 1. Enable
         # 2. Verify that it is enabled
@@ -1035,12 +1133,23 @@ class DERCtrlNode(DERDevice):
 
         # This method has a number of issues -
         #TODO: Limit check
+
+        if USE_LABVIEW == 0:
+            # implement a complete handshake process for writing a power command -
+            try:
+                self.pwr_ctrl_cmd.data_dict.update({"Enable": int(1)})
+                _log.info("Enabling power control")
+                self.set_point("RealPwrCtrl", "Enable", sitemgr)
+
+                # make sure that the enable commmand has been written.
+
+            except:
+                pass
+
         self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": int(val)})
         _log.info("Setting Power to "+str(val))
         self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
-        # where does the actual pwr ctrl live???
 
-        pass
 
 ##############################################################################
 class DERModbusCtrlNode(DERModbusDevice, DERCtrlNode):
@@ -1073,6 +1182,8 @@ class ESSCtrlNode(DERModbusCtrlNode):
     ##############################################################################
     def __init__(self, device_info, parent_device=None):
         DERDevice.__init__(self, device_info, parent_device)  # device_id, device_type, parent_device)
+        self.state_vars.update({"SetPt": 0,
+                                "SetPtCmd": 0})
         self.state_vars_update_list = ess_update_list
         _log.info("In ESSCtrlNode init - Device is:"+self.device_id)
         _log.info(str(self.state_vars_update_list))
@@ -1088,6 +1199,9 @@ class PVCtrlNode(DERModbusCtrlNode):
     ##############################################################################
     def __init__(self, device_info, parent_device=None):
         DERDevice.__init__(self, device_info, parent_device)  # device_id, device_type, parent_device)
+
+        self.state_vars.update({"SetPt": 0,
+                                "SetPtCmd": 0})
         self.state_vars_update_list = device_update_list
         _log.info("Device is:"+self.device_id)
         _log.info(str(self.state_vars_update_list))
@@ -1120,8 +1234,6 @@ class ESSDevice(DERDevice):
                                 "DischgEff": float(device_info["dischg_eff"]) if("dischg_eff" in device_info) else 1.0,
                                 "MinSOE_kWh": 0.0,
                                 "Nameplate_kW": float(device_info["max_dischg_pwr"]) if("max_dischg_pwr" in device_info) else 0.0})
-
-
         _log.info("ESS Device init - state vars: "+str(self.state_vars))
 
 ##############################################################################
