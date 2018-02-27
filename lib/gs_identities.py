@@ -42,6 +42,8 @@
 # views and opinions of authors expressed herein do not necessarily state
 # or reflect those of the United States Government or any agency thereof.
 
+from datetime import datetime, timedelta
+
 # execution flags
 USE_VOLTTRON = 1
 USE_LABVIEW  = 1
@@ -55,7 +57,6 @@ AUTO        = 0
 INTERACTIVE = 1
 STARTING    = 2
 READY       = 3
-
 
 DISABLED = 0
 ENABLED  = 1
@@ -74,17 +75,26 @@ USER_CONTROL = 1
 APPLICATION_CONTROL = 2
 EXEC_STARTING = 3
 
-EXECUTIVE_CLKTIME = 5 # period, in seconds, at which the executive polls system state
-GS_SCHEDULE       = 15  # period, in seconds, at which the GS optimizer runs
-ESS_SCHEDULE      = 5
+EXECUTIVE_CLKTIME = 1 # period, in seconds, at which the executive polls system state
+GS_SCHEDULE       = 5*60  # period, in seconds, at which the GS optimizer runs
+ESS_SCHEDULE      = 2
 STATUS_MSG_PD     = 20 # update rate for various status messages
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
 START_LATENCY = 0 # time in seconds, to delay execution
 
 #FIXME - Placeholder!
-MODBUS_SCRAPE_INTERVAL = 5 # period in seconds for modbus device to post on the IEB bus
+MODBUS_SCRAPE_INTERVAL = 1 # period in seconds for modbus device to post on the IEB bus
+MODBUS_AVERAGING_WINDOW = 60 # period in seconds over which to average instantaneous readings
+MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
 CPR_QUERY_INTERVAL = 10 # period in seconds for forecasts to arrive
 
 SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedules
 SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
 SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
+
+
+# For configuring w/simulated data
+USE_SIM = 1
+SIM_START_DAY = 200  # day 106 #2  # day 202, Hr = 5
+SIM_START_HR  = 7
+SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0) + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
