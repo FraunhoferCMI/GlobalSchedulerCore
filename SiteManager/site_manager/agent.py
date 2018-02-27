@@ -299,11 +299,6 @@ class SiteManagerAgent(Agent):
 
     ##############################################################################
     @RPC.export
-    def check_site_errors(self):
-        pass
-
-    ##############################################################################
-    @RPC.export
     def set_interactive_mode(self):
         """
         changes site's mode from "AUTO" to "INTERACTIVE"
@@ -333,6 +328,27 @@ class SiteManagerAgent(Agent):
         _log.info("updating watchdog timeout enable flag!!")
         self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
         val = self.site.set_watchdog_timeout_enable(int(val), self)
+
+
+    ##############################################################################
+    @RPC.export
+    def set_ramprate_real(self, device_id, val):
+        # find the device
+        device = self.site.find_device(device_id)
+
+        if device == None:
+            _log.info("SetPt: ERROR! Device "+device_id+" not found in "+self.site.device_id)
+            # FIXME: other error trapping needed?
+        elif device.device_type not in self.site.DGPlant:
+            _log.info("SetPt: ERROR! Pwr dispatch command sent to non-controllable device "+device.device_id)
+            _log.info("SetPt: Device type = "+device.device_type)
+            # FIXME: other error trapping needed?
+        else:
+            # send the command
+            self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
+            _log.info("Ramp Rate: Sending Cmd!")
+            device.set_ramprate_real(val, self)
+
 
     ##############################################################################
     @RPC.export
