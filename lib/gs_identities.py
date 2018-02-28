@@ -87,6 +87,7 @@ MODBUS_SCRAPE_INTERVAL = 1 # period in seconds for modbus device to post on the 
 MODBUS_AVERAGING_WINDOW = 60 # period in seconds over which to average instantaneous readings
 MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
 CPR_QUERY_INTERVAL = 10 # period in seconds for forecasts to arrive
+MODBUS_WRITE_ATTEMPTS  = 5  # number of modbus reads before a write error is thrown
 
 SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedules
 SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
