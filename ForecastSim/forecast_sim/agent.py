@@ -233,7 +233,7 @@ class CPRAgent(Agent):
         self.initialization_complete = 1
 
         # initialize a ForecastObject for publishing data to the VOLTTRON message bus
-        self.solar_forecast = ForecastObject(SSA_PTS_PER_SCHEDULE, "Pct", "float")
+        self.solar_forecast = ForecastObject(SSA_PTS_PER_SCHEDULE, "NegPct", "float")
 
 
     ##############################################################################
@@ -260,7 +260,7 @@ class CPRAgent(Agent):
 
 
         # Convert irradiance to a percentage
-        self.solar_forecast.forecast_values["Forecast"] = [-100 * v / 1000 for v in next_forecast]
+        self.solar_forecast.forecast_values["Forecast"] = [100 * v / 1000 for v in next_forecast]
         self.solar_forecast.forecast_values["Time"]     = [datetime.datetime.strftime(ts, "%Y-%m-%dT%H:%M:%S") for ts in next_forecast_timestamps]
         _log.info("forecast is:"+str(self.solar_forecast.forecast_values["Forecast"]))
         _log.info("timestamps are:"+str(self.solar_forecast.forecast_values["Time"]))

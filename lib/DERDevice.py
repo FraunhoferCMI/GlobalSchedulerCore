@@ -56,7 +56,7 @@ from volttron.platform.agent import utils
 from volttron.platform.messaging import headers as headers_mod
 
 from gs_identities import (INTERACTIVE, AUTO, SITE_IDLE, SITE_RUNNING, PMC_WATCHDOG_RESET, IGNORE_HEARTBEAT_ERRORS,
-                           SSA_PTS_PER_SCHEDULE, USE_LABVIEW, MODBUS_PTS_PER_WINDOW)
+                           SSA_PTS_PER_SCHEDULE, USE_LABVIEW, MODBUS_PTS_PER_WINDOW, MODBUS_WRITE_ATTEMPTS)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -73,6 +73,7 @@ PLANT_ALARMS = 4
 default_units = {"CommStatus": "",
                  "DeviceStatus": "",
                  "ReadStatus": "",
+                 "WriteStatus": "",
                  "ControlMode": "",
                  "Pwr_kW": "kW",
                  "AvgPwr_kW": "kW",
@@ -138,6 +139,7 @@ class DERDevice():
         self.comms_status   = 0
         self.device_status  = 0
         self.read_status    = 0
+        self.write_status   = 1
         self.control_mode   = 0
         self.isDataValid    = 0
         self.isControllable = 1    # FIXME: currently set all devices to controllable. this should be device-specific.
@@ -176,6 +178,7 @@ class DERDevice():
         self.state_vars = {"CommStatus": self.comms_status,
                            "DeviceStatus": self.device_status,
                            "ReadStatus": self.read_status,
+                           "WriteStatus": self.write_status,
                            "ControlMode": self.control_mode,
                            "Pwr_kW": 0,
                            "AvgPwr_kW": 0,
@@ -184,7 +187,15 @@ class DERDevice():
 
         self.avg_pwr_buffer = []
 
-        self.pending_cmd = []  # todo - is this unnecessary?
+        # initialize data table for tracking pending commands
+        self.chkReg = []
+        self.chkRegAttributes = {}
+        self.writeReg = {}
+        self.writeRegAttributes = {}
+        self.writePending = {}
+        self.expectedValue = {}
+        self.nTries = {}
+        self.writeError = {}
 
         _log.info(self.device_id+" Init complete")
 
@@ -430,6 +441,7 @@ class DERDevice():
         self.state_vars.update({"CommStatus": self.comms_status,
                                 "DeviceStatus": self.device_status,
                                 "ReadStatus": self.read_status,
+                                "WriteStatus": self.write_status,
                                 "ControlMode": self.control_mode})
 
         #for k in self.state_vars_update_list:
@@ -462,6 +474,30 @@ class DERDevice():
 
         # todo: check if chg/dischg/minsoe get propagated.
 
+    ##############################################################################
+    def check_write_status(self):
+        """
+
+        :return:
+        """
+        self.write_status = 1
+        for reg in self.chkReg:
+            if self.writePending[reg] == 1:
+                # there is a command pending - check to see if corresponding register has updated
+                if self.writeRegAttributes[reg].data_dict[self.writeReg[reg]] == self.expectedValue[reg]:
+                    # write completed successfully - clear all the write pending registers:
+                    self.nTries[reg]       = 0
+                    self.writePending[reg] = 0
+                    self.writeError[reg]   = 0
+                else:
+                    # write has not completed successfully - increment nTries, check for if a timeout is triggered
+                    self.nTries[reg] += 1
+                    _log.info("Write missed for " + str(reg) + "- try # " + str(self.nTries[reg]) + "expected - "+str(self.expectedValue[reg])+
+                              "; read "+str(self.writeRegAttributes[reg].data_dict[self.writeReg[reg]]))
+                    if self.nTries[reg] >= MODBUS_WRITE_ATTEMPTS:
+                        self.writeError[reg] = 1
+                        self.write_status    = 0
+                        _log.info("Timeout!!")
 
     ##############################################################################
     def update_status(self):
@@ -506,6 +542,8 @@ class DERDevice():
         # check for comms & device failures
         self.check_comm_status()
         self.check_device_status()
+
+        self.check_write_status()
 
         # call this routine for each child:
         for cur_device in self.devices:
@@ -574,6 +612,12 @@ class DERDevice():
             _log.debug("PopEndpts: converted "+k+"from "+endpt_units+" to "+
                       cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[base_name+"kW"]))
 
+        if (endpt_units == "NegScaledW") and (cur_attribute.units[keyval] == "kW"):
+            base_name = keyval[:len(keyval)-len("raw")] # assume this has "_raw" on the end of the name
+            cur_attribute.data_dict[base_name+"kW"] = \
+                -1*(cur_attribute.data_dict[keyval]*10**cur_attribute.data_dict[base_name+"SF"])/1000
+            _log.debug("PopEndpts: converted "+k+"from "+endpt_units+" to "+
+                      cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[base_name+"kW"]))
 
         if (endpt_units == "Pct") and (cur_attribute.units[keyval] == "kW"):   # FIXME - make this PctkW?
             # #_log.info("converting pct to kW")
@@ -595,6 +639,27 @@ class DERDevice():
                 #_log.info("Unsupported data type for conversion pct to kW")
 	        _log.debug("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
 
+        if (endpt_units == "NegPct") and (cur_attribute.units[keyval] == "kW"):  # FIXME - make this PctkW?
+            # #_log.info("converting pct to kW")
+            nameplate = cur_device.get_nameplate()
+            _log.debug("val is " + str(nameplate))
+
+            if type(cur_attribute.data_dict[keyval]) is list:
+                _log.debug("converting list from neg pct to kW")
+                # FIXME - ugh
+                tmplist = [-1*(float(v) / 100) * nameplate for v in cur_attribute.data_dict[keyval]]
+                del cur_attribute.data_dict[keyval][:]
+                cur_attribute.data_dict[keyval] = tmplist[:]
+            else:  # assume int
+                _log.debug("converting single pt from pct to kW")
+                _log.debug("value is " + str(cur_attribute.data_dict[keyval]) + "; nameplate is " + str(nameplate))
+                cur_attribute.data_dict[keyval] = int(-1*(float(cur_attribute.data_dict[keyval]) / 100) * nameplate)
+                _log.debug("new value is " + str(cur_attribute.data_dict[keyval]))
+                # cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
+                # _log.info("Unsupported data type for conversion pct to kW")
+            _log.debug("PopEndpts: converted " + k + "from " + endpt_units + " to " + cur_attribute.units[
+                keyval] + ". New val = " + str(cur_attribute.data_dict[keyval]))
+
     ##############################################################################
     def convert_units_to_endpt(self, attribute, cmd):
 
@@ -609,6 +674,12 @@ class DERDevice():
                 self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"] = \
                     int((float(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]) /
                          self.get_nameplate()) * 100)
+            if (self.datagroup_dict_list[attribute].endpt_units[ext_endpt] == "NegPct") and \
+                    (self.datagroup_dict_list[attribute].units[cmd] == "kW"):   # FIXME - make this PctkW?
+                self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"] = \
+                    int(-1*(float(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]) /
+                         self.get_nameplate()) * 100)
+
             _log.info("SetPt: New val = "+str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
 
         except KeyError as e:
@@ -914,12 +985,31 @@ class DERModbusDevice(DERDevice):
             _log.info("SetPt: Expected " + str(
                 self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]) + "; Read: " + str(val))
 
-        self.pending_cmd.append({"Attribute": attribute, "Cmd": cmd})
-        # return pending_cmd
-
-
 ##############################################################################
 class ShirleySite(DERSite, DERModbusDevice):
+
+    ##############################################################################
+    def __init__(self, site_info, parent_device, data_map_dir):
+        DERSite.__init__(self, site_info, parent_device, data_map_dir)
+        self.chkReg = ["SysModeStatus", "WatchDogTimeoutEnable"]
+        self.chkRegAttributes = {"SysModeStatus": self.mode_status,
+                                 "WatchDogTimeoutEnable": self.mode_ctrl}
+        self.writeReg = {"SysModeStatus": "SysModeCtrl",
+                         "WatchDogTimeoutEnable": "WatchDogTimeoutEnable"}
+        self.writeRegAttributes = {"SysModeStatus": self.mode_ctrl,
+                                   "WatchDogTimeoutEnable": self.mode_ctrl}
+        self.writePending = {"SysModeStatus": 0,
+                             "WatchDogTimeoutEnable": 0}
+        self.expectedValue = {"SysModeStatus": 0,
+                              "WatchDogTimeoutEnable": 0}
+        self.nTries = {"SysModeStatus": 0,
+                       "WatchDogTimeoutEnable": 0}
+        self.writeError = {"SysModeStatus": 0,
+                           "WatchDogTimeoutEnable": 0}
+
+
+
+
     ##############################################################################
     def check_device_status(self):
         # TODO - check for register mismatch (i.e., status != mode)
@@ -953,6 +1043,10 @@ class ShirleySite(DERSite, DERModbusDevice):
         self.mode_ctrl_cmd.data_dict.update({"SysModeCtrl_cmd": INTERACTIVE})
         self.set_point("ModeControl", "SysModeCtrl", sitemgr)
 
+        self.writePending["SysModeStatus"] = 1
+        self.expectedValue["SysModeStatus"] = INTERACTIVE
+
+
     ##############################################################################
     def set_auto_mode(self, sitemgr):
         """
@@ -965,6 +1059,10 @@ class ShirleySite(DERSite, DERModbusDevice):
         # set internal commands to new operating state:
         self.mode_ctrl_cmd.data_dict.update({"SysModeCtrl_cmd": AUTO})
         self.set_point("ModeControl", "SysModeCtrl", sitemgr)
+
+        self.writePending["SysModeStatus"] = 1
+        self.expectedValue["SysModeStatus"] = AUTO
+
 
 
     ##############################################################################
@@ -1000,6 +1098,9 @@ class ShirleySite(DERSite, DERModbusDevice):
         # set internal commands to new operating state:
         self.mode_ctrl_cmd.data_dict.update({"WatchDogTimeoutEnable_cmd": val})
         self.set_point("ModeControl", "WatchDogTimeoutEnable", sitemgr)
+        self.writePending["WatchDogTimeoutEnable"] = 1
+        self.expectedValue["WatchDogTimeoutEnable"] = val
+
 
     ##############################################################################
     def send_watchdog(self, sitemgr):
@@ -1113,11 +1214,33 @@ class DERCtrlNode(DERDevice):
                 (self.state_vars["MaxDischargePwr_kW"] != 0) else 1
 
     ##############################################################################
+    def set_power_real(self, val, sitemgr):
+        # 1. Enable
+        # 2. Verify that it is enabled
+        # 3. set the value
+        # 4. set the trigger
+        # 5. make sure that the value has propagated
+        # 6. <optional> read output
+
+        # This method has a number of issues -
+        # TODO: Limit check
+        self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": int(val)})
+        _log.info("Setting Power to " + str(val))
+        self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
+        # where does the actual pwr ctrl live???
+
+
+##############################################################################
+class DERModbusCtrlNode(DERModbusDevice, DERCtrlNode):
+
+    ##############################################################################
     def set_ramprate_real(self, val, sitemgr):
         try:
             self.pwr_ctrl_cmd.data_dict.update({"RampRate_cmd": int(val)})
             _log.info("Setting ramp rate to "+str(val))
             self.set_point("RealPwrCtrl", "RampRate", sitemgr)
+            self.writePending["RampRate"] = 1
+            self.expectedValue["RampRate"] = int(val)
         except:
             pass
 
@@ -1150,25 +1273,8 @@ class DERCtrlNode(DERDevice):
         _log.info("Setting Power to "+str(val))
         self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
 
-
-##############################################################################
-class DERModbusCtrlNode(DERModbusDevice, DERCtrlNode):
-
-    ##############################################################################
-    def set_power_real(self, val, sitemgr):
-        # 1. Enable
-        # 2. Verify that it is enabled
-        # 3. set the value
-        # 4. set the trigger
-        # 5. make sure that the value has propagated
-        # 6. <optional> read output
-
-        # This method has a number of issues -
-        #TODO: Limit check
-        self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": int(val)})
-        _log.info("Setting Power to "+str(val))
-        self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
-        # where does the actual pwr ctrl live???
+        self.writePending["SetPoint"] = 1
+        self.expectedValue["SetPoint"] = int(val)
 
     ##############################################################################
     def set_power_reactive(self):
@@ -1185,6 +1291,23 @@ class ESSCtrlNode(DERModbusCtrlNode):
         self.state_vars.update({"SetPt": 0,
                                 "SetPtCmd": 0})
         self.state_vars_update_list = ess_update_list
+
+        self.chkReg = ["SetPoint", "RampRate"]
+        self.chkRegAttributes = {"SetPoint": self.pwr_ctrl,
+                                 "RampRate": self.pwr_ctrl}
+        self.writeReg = {"SetPoint": "SetPoint",
+                         "RampRate": "RampRate"}
+        self.writeRegAttributes = {"SetPoint": self.pwr_ctrl,
+                                   "RampRate": self.pwr_ctrl}
+        self.writePending = {"SetPoint": 0,
+                             "RampRate": 0}
+        self.expectedValue = {"SetPoint": 0,
+                             "RampRate": 0}
+        self.nTries = {"SetPoint": 0,
+                       "RampRate": 0}
+        self.writeError = {"SetPoint": 0,
+                           "RampRate": 0}
+
         _log.info("In ESSCtrlNode init - Device is:"+self.device_id)
         _log.info(str(self.state_vars_update_list))
         self.update_state_vars()
@@ -1203,6 +1326,24 @@ class PVCtrlNode(DERModbusCtrlNode):
         self.state_vars.update({"SetPt": 0,
                                 "SetPtCmd": 0})
         self.state_vars_update_list = device_update_list
+
+        self.chkReg = ["SetPoint", "RampRate"]
+        self.chkRegAttributes = {"SetPoint": self.pwr_ctrl,
+                                 "RampRate": self.pwr_ctrl}
+        self.writeReg = {"SetPoint": "SetPoint",
+                         "RampRate": "RampRate"}
+        self.writeRegAttributes = {"SetPoint": self.pwr_ctrl,
+                                   "RampRate": self.pwr_ctrl}
+        self.writePending = {"SetPoint": 0,
+                             "RampRate": 0}
+        self.expectedValue = {"SetPoint": 0,
+                             "RampRate": 0}
+        self.nTries = {"SetPoint": 0,
+                       "RampRate": 0}
+        self.writeError = {"SetPoint": 0,
+                           "RampRate": 0}
+
+
         _log.info("Device is:"+self.device_id)
         _log.info(str(self.state_vars_update_list))
         self.update_state_vars()

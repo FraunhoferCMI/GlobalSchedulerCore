@@ -691,15 +691,6 @@ class PVResource(SundialResource):
             _log.info(k+": "+str(v))
 
 
-    ##############################################################################
-    def update_sundial_resource(self):
-        """
-        propagates data from children to non-terminal parent nodes in the SundialResource tree
-        :return: None
-        """
-        self.state_vars["Pwr_kW"] = self.state_vars["Pwr_kW"] * -1
-        SundialResource.update_sundial_resource(self)
-
 ##############################################################################
 class LoadShiftResource(SundialResource):
     """
