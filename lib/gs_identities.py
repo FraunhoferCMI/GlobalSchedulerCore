@@ -76,7 +76,7 @@ APPLICATION_CONTROL = 2
 EXEC_STARTING = 3
 
 EXECUTIVE_CLKTIME = 1 # period, in seconds, at which the executive polls system state
-GS_SCHEDULE       = 5*60  # period, in seconds, at which the GS optimizer runs
+GS_SCHEDULE       = 20  # period, in seconds, at which the GS optimizer runs
 ESS_SCHEDULE      = 2
 STATUS_MSG_PD     = 20 # update rate for various status messages
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
@@ -86,7 +86,7 @@ START_LATENCY = 0 # time in seconds, to delay execution
 MODBUS_SCRAPE_INTERVAL = 1 # period in seconds for modbus device to post on the IEB bus
 MODBUS_AVERAGING_WINDOW = 60 # period in seconds over which to average instantaneous readings
 MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
-CPR_QUERY_INTERVAL = 10 # period in seconds for forecasts to arrive
+CPR_QUERY_INTERVAL = 5 # period in seconds for forecasts to arrive
 MODBUS_WRITE_ATTEMPTS  = 5  # number of modbus reads before a write error is thrown
 
 SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedules
@@ -96,6 +96,17 @@ SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
 
 # For configuring w/simulated data
 USE_SIM = 1
-SIM_START_DAY = 200  # day 106 #2  # day 202, Hr = 5
-SIM_START_HR  = 7
+SIM_SCENARIO = 1
+SIM_HRS_PER_HR = 1 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
+if SIM_SCENARIO == 1:
+    PV_FORECAST_FILE = "SAM_PVPwr_nyc.csv"  # "irr_1min.csv"
+    PV_FORECAST_FILE_TIME_RESOLUTION_MIN = 60  # 1
+    SIM_START_DAY = 202  # day 106 #2  # day 202, Hr = 5 # 200, Hr = 7
+    SIM_START_HR  = 5
+else:
+    PV_FORECAST_FILE = "irr_1min.csv"
+    PV_FORECAST_FILE_TIME_RESOLUTION_MIN = 1
+    SIM_START_DAY = 200  # day 106 #2  # day 202, Hr = 5 # 200, Hr = 7
+    SIM_START_HR  = 7
+
 SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0) + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)

@@ -56,7 +56,7 @@ from volttron.platform.agent import utils
 from volttron.platform.messaging import headers as headers_mod
 
 from gs_identities import (INTERACTIVE, AUTO, SITE_IDLE, SITE_RUNNING, PMC_WATCHDOG_RESET, IGNORE_HEARTBEAT_ERRORS,
-                           SSA_PTS_PER_SCHEDULE, USE_LABVIEW, MODBUS_PTS_PER_WINDOW, MODBUS_WRITE_ATTEMPTS)
+                           SSA_PTS_PER_SCHEDULE, USE_LABVIEW, MODBUS_PTS_PER_WINDOW, MODBUS_WRITE_ATTEMPTS, SIM_HRS_PER_HR)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -602,6 +602,10 @@ class DERDevice():
                           " to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
             else:
                 cur_attribute.data_dict[keyval] /= 1000
+
+                if (endpt_units == "Wh"):
+                    cur_attribute.data_dict[keyval] *= SIM_HRS_PER_HR #FIXME - temp for doing fast sims
+
                 _log.debug("PopEndpts: converted "+k+"from "+endpt_units+" to "+
                           cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
 

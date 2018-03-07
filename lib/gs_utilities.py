@@ -51,15 +51,16 @@ from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
 from volttron.platform.agent import utils
 from volttron.platform.messaging import headers as headers_mod
 
-from gs_identities import (SSA_SCHEDULE_RESOLUTION, USE_VOLTTRON)
+from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_SCHEDULE_DURATION, USE_VOLTTRON)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
 __version__ = '1.0'
 
-
 ##############################################################################
-def get_schedule():
+def get_schedule(resolution = SSA_SCHEDULE_RESOLUTION,
+                 sim_time_corr = timedelta(seconds=0),
+                 adj_sim_run_time = timedelta(hours=0)):
     """
     Returns the start time of the next dispatch schedule command
     Strips out seconds, microseconds, etc.  Rounds to the next SSA_SCHEDULE_RESOLUTION time step
@@ -68,11 +69,11 @@ def get_schedule():
 
     if USE_VOLTTRON == 1:
         # FIXME - implicitly assumes SSA_SCHEDULE_RESOLUTION <= 60 minutes
-        TimeStamp = utils.get_aware_utc_now()
+        TimeStamp = utils.get_aware_utc_now() - sim_time_corr + adj_sim_run_time
     else:
-        TimeStamp = datetime.utcnow()
+        TimeStamp = datetime.utcnow() - sim_time_corr + adj_sim_run_time
     minutes = TimeStamp.minute
-    rem = minutes % SSA_SCHEDULE_RESOLUTION  # GS_SCHEDULE
+    rem = minutes % resolution
     #new_time = TimeStamp + timedelta(minutes=SSA_SCHEDULE_RESOLUTION - rem)  # GS_SCHEDULE
     new_time = TimeStamp - timedelta(minutes=rem) # todo - temp fix - moves forecast to tstep-1
     new_time = new_time.replace(second=0, microsecond=0)
@@ -83,8 +84,10 @@ def get_schedule():
     # so you want to get minutes mod GS_SCHEDULE - remainder
 
     # new_time  = new_time.replace(minute=0, second=0, microsecond=0)
-    print("TimeStamp = " + TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"))
-    print("new_time = " + new_time.strftime("%Y-%m-%dT%H:%M:%S.%f"))
+    _log.info("Sim time adjustment = "+str(adj_sim_run_time))
+    _log.info("TimeStamp = " + TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"))
+    _log.info("new_time = " + new_time.strftime("%Y-%m-%dT%H:%M:%S.%f"))
+    _log.info("time corr= "+ str(sim_time_corr))
     time_str = new_time.strftime("%Y-%m-%dT%H:%M:%S.%f")
     return time_str
 
@@ -97,9 +100,13 @@ class ForecastObject():
     ##############################################################################
     def __init__(self, length, units, datatype):
         self.forecast_values = {"Forecast": [0.0]*length,
-                                "Time": [0]*length}
+                                "Time": [0]*length,
+                                "Duration": SSA_SCHEDULE_DURATION,
+                                "Resolution": SSA_SCHEDULE_RESOLUTION}
         self.forecast_meta_data = {"Forecast": {"units": units, "type": datatype},
-                                   "Time": {"units": "UTC", "type": "str"}}
+                                   "Time": {"units": "UTC", "type": "str"},
+                                   "Duration": {"units": "hr", "type": "int"},
+                                   "Resolution": {"units": "min", "type": "int"}}
 
         self.forecast_obj = [self.forecast_values, self.forecast_meta_data]
 

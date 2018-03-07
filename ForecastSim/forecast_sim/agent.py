@@ -49,6 +49,7 @@ import sys
 import requests
 import pprint,pickle
 from datetime import timedelta
+import pytz
 import datetime
 import os
 from volttron.platform.messaging.health import STATUS_GOOD
@@ -59,7 +60,8 @@ from volttron.platform.messaging import topics
 from volttron.platform.messaging import headers as headers_mod
 import xml.etree.ElementTree as ET
 from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_SCHEDULE_DURATION, SSA_PTS_PER_SCHEDULE, CPR_QUERY_INTERVAL,
-                           USE_VOLTTRON, SIM_START_DAY, SIM_START_HR)
+                           USE_VOLTTRON, SIM_START_DAY, SIM_START_HR, SIM_SCENARIO, PV_FORECAST_FILE,
+                           PV_FORECAST_FILE_TIME_RESOLUTION_MIN, SIM_HRS_PER_HR)
 from gs_utilities import get_schedule, ForecastObject
 import csv
 import pandas
@@ -122,6 +124,10 @@ class CPRAgent(Agent):
         # indicates that load_irradiance (called onstart) is incomplete, so don't start publishing forecast
         # data yet.
         self.initialization_complete = 0
+        self.last_query = None
+        self.sim_time_corr = timedelta(seconds=0)
+        self.gs_start_time = None
+        self.gs_ts = None
 
     ##############################################################################
     def configure(self,config_name, action, contents):
@@ -152,27 +158,20 @@ class CPRAgent(Agent):
         (2) the time step between rows is defined by csv_time_resolution_min
         (3) the file is assumed to comprise exactly a single year of data
 
-        Use user-defined offsets (SIM_START_DAY, SIM_START_HR) to figure out where to start
+        Use user-defined offsets set in gs_identities (SIM_START_DAY, SIM_START_HR) to figure out where to start
         Synchronize this start time to the time when the GS executive started.
 
-        right now, all these configuration parameters are set within this method.
-        Eventually move to a config:
-
+        these configuration parameters are set within gs_identities.py:
         SIM_START_DAY
         SIM_START_HR
-        csv_time_resolution_min - time resolution, in minutes, of data in the csv irradiance file
-        csv_fname - name of a
+        PV_FORECAST_FILE - name of an appropriately formatted irradiance csv
+        PV_FORECAST_RILE_TIME_RESOLUTION_MIN - time resolution, in minutes, of data in the csv irradiance file
         """
 
 
-        # Configuration Parameters
-        scenario = 2
-        if scenario == 1:
-            pv_forecast_file     = "SAM_PVPwr_nyc.csv" #"irr_1min.csv"
-            csv_time_resolution_min = 60 #1
-        else:
-            pv_forecast_file = "irr_1min.csv"
-            csv_time_resolution_min = 1
+        # fixme - rename
+        pv_forecast_file = PV_FORECAST_FILE
+        csv_time_resolution_min = PV_FORECAST_FILE_TIME_RESOLUTION_MIN
 
         # Get irradiance data from csv file and populate in ghi_array
         self.volttron_root = os.getcwd()
@@ -199,19 +198,21 @@ class CPRAgent(Agent):
         start_ind = int((SIM_START_DAY - 1) * pts_per_day+SIM_START_HR*MINUTES_PER_HR/csv_time_resolution_min)
 
         try:
-            gs_start_time = datetime.datetime.strptime( self.vip.rpc.call("executiveagent-1.0_1",
-                                                                          "get_gs_start_time").get(timeout=5),
-                                                        "%Y-%m-%dT%H:%M:%S.%f")
+            self.gs_start_time, self.gs_ts = datetime.datetime.strptime(self.vip.rpc.call("executiveagent-1.0_1",
+                                                                                          "get_gs_start_time").get(timeout=5),
+                                                                        "%Y-%m-%dT%H:%M:%S.%f")
         except:
             _log.info("Forecast - gs_start_time not found.  Using current time as gs_start_time")
-            gs_start_time =  datetime.datetime.strptime(get_schedule(),
+            self.gs_start_time =  datetime.datetime.strptime(get_schedule(),
                                                         "%Y-%m-%dT%H:%M:%S.%f")
+            self.gs_ts = utils.get_aware_utc_now()
+
         _log.info("start index is: "+str(start_ind)+"; SIM_START_DAY is "+str(SIM_START_DAY))
 
         # now set up a panda.Series with indices = timestamp starting from GS start time,
         # time step from csv_time_resolution_min; and with values = ghi_array, starting from the index corresponding
         # to start day / start time
-        ghi_timestamps = [gs_start_time + timedelta(minutes=t) for t in range(0, MINUTES_PER_YR, csv_time_resolution_min)]
+        ghi_timestamps = [self.gs_start_time + timedelta(minutes=t) for t in range(0, MINUTES_PER_YR, csv_time_resolution_min)]
         ghi_array_reindexed = []
         ghi_array_reindexed.extend(ghi_array[start_ind:])
         ghi_array_reindexed.extend(ghi_array[:start_ind])
@@ -237,6 +238,11 @@ class CPRAgent(Agent):
 
 
     ##############################################################################
+    @RPC.export
+    def get_sim_time_corr(self):
+        return self.sim_time_corr.seconds
+
+    ##############################################################################
     def parse_query(self):
         """
         Retrieves a solar forecast in units of "Pct"
@@ -246,9 +252,33 @@ class CPRAgent(Agent):
         """
 
         # get the start time of the forecast
-        next_forecast_start_time = datetime.datetime.strptime(get_schedule(),
-                                                              "%Y-%m-%dT%H:%M:%S.%f")
+        # to do so: (1) check if we went to sleep since the last forecast retrieved.  If so, use a correction to
+        # make it look like no time has elapsed; (2) if accelerated time is being used, translate actual elapsed time
+        # into accelerated time
+        now = utils.get_aware_utc_now()
+        gs_aware = self.gs_ts.replace(tzinfo=pytz.UTC)
+        _log.info("Cur time: " + now.strftime("%Y-%m-%dT%H:%M:%S") + "; gs start time= " + gs_aware.strftime(
+            "%Y-%m-%dT%H:%M:%S"))
+        run_time = (now - gs_aware).seconds
+        sim_run_time = timedelta(seconds = SIM_HRS_PER_HR * run_time).seconds # tells me the elapsed "accelerated" time
+        adj_sim_run_time = timedelta(seconds = sim_run_time-run_time)
+        _log.info("adj run time = "+str(adj_sim_run_time)+"; sim run time = "+str(sim_run_time)+"; actual run time = "+str(run_time))
+        if self.last_query != None:
+            delta = now - self.last_query
+            expected_delta = timedelta(seconds=CPR_QUERY_INTERVAL)
+            if delta > expected_delta*2:
+                # maybe we went to sleep?
+                _log.info("Expected Delta = "+str(expected_delta))
+                _log.info("Delta = "+str(delta))
+                self.sim_time_corr += delta-expected_delta
+                _log.info("CPR: Found a time correction!!!!")
+                _log.info("Cur time: "+now.strftime("%Y-%m-%dT%H:%M:%S")+"; prev time= "+ self.last_query.strftime("%Y-%m-%dT%H:%M:%S"))
 
+        self.last_query = now
+        _log.info("CPR: "+str(self.sim_time_corr))
+        next_forecast_start_time = datetime.datetime.strptime(get_schedule(sim_time_corr = self.sim_time_corr,
+                                                                           adj_sim_run_time = adj_sim_run_time),
+                                                              "%Y-%m-%dT%H:%M:%S.%f")
 
         # Need to convert panda series to flat list of timestamps and irradiance data
         # that will comprise the next forecast:

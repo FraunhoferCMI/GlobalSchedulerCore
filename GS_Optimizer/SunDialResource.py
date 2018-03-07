@@ -117,13 +117,13 @@ class SundialResourceProfile():
         # initialize self.state_vars - length = SSA_PTS_PER_SCHEDULE
         # DemandForecast_kW is set to the baseline forecast for the resource in question.
         # other state_vars are set to zero.
-        _log.info("demand forecast to copy: "+str(sundial_resources.state_vars["DemandForecast_kW"]))
+        #_log.info("demand forecast to copy: "+str(sundial_resources.state_vars["DemandForecast_kW"]))
         self.state_vars = {"DemandForecast_kW": copy.deepcopy(sundial_resources.state_vars["DemandForecast_kW"]), #.copy(),
                            "EnergyAvailableForecast_kWh": [0.0]*len(sundial_resources.state_vars["DemandForecast_kW"]),
                            "DeltaEnergy_kWh": [0.0]*len(sundial_resources.state_vars["DemandForecast_kW"]),
                            "Weight": numpy.array([1.0]*SSA_PTS_PER_SCHEDULE) if sundial_resources.state_vars["Nameplate"] == 0
                                                  else numpy.array(sundial_resources.state_vars["DemandForecast_kW"]) / float(sundial_resources.state_vars["Nameplate"])}
-        _log.info("Weight is: "+str(self.state_vars["Weight"]))
+        #_log.info("Weight is: "+str(self.state_vars["Weight"]))
         # FIXME - Weights is currently scaled based on device nameplate.  This should be rethought.  e.g., for a
         # FIXME - battery, it should be based on expected charge and discharge power available.
 
@@ -418,7 +418,6 @@ class SundialResource():
         """
         """
         self.schedule_timestamps = schedule_timestamps
-        _log.info("cfg cost")
         for fcn in self.obj_fcns_cfg:
             fcn()
 
@@ -854,7 +853,6 @@ class SundialSystemResource(SundialResource):
 
     ##############################################################################
     def cfg_loadshape(self):
-        _log.info("config load shape")
         loadshape_file = "loadshape.csv"
         self.volttron_root = os.getcwd()
         self.volttron_root = self.volttron_root + "/../../../../gs_cfg/"
@@ -880,8 +878,10 @@ class SundialSystemResource(SundialResource):
 
         loadshapes = pandas.Series(data=ls_array, index=ts_array)
         offset_ts = [t+self.sim_offset for t in self.schedule_timestamps]
+        #+SIM_TIME_CORR
         self.target_profile = numpy.array(loadshapes.get(offset_ts))
         _log.info("Load Shape time stamps are:"+str(offset_ts))
+        #_log.info("load shape: "+str(get_sim_time_corr())) #gs_identities.SIM_TIME_CORR["val"]))
         _log.info("load shape is: "+str(self.target_profile))
 
         pass
