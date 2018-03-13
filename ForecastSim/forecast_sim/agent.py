@@ -259,8 +259,8 @@ class CPRAgent(Agent):
         gs_aware = self.gs_ts.replace(tzinfo=pytz.UTC)
         _log.info("Cur time: " + now.strftime("%Y-%m-%dT%H:%M:%S") + "; gs start time= " + gs_aware.strftime(
             "%Y-%m-%dT%H:%M:%S"))
-        run_time = (now - gs_aware).seconds
-        sim_run_time = timedelta(seconds = SIM_HRS_PER_HR * run_time).seconds # tells me the elapsed "accelerated" time
+        run_time = (now - gs_aware).total_seconds()
+        sim_run_time = timedelta(seconds = SIM_HRS_PER_HR * run_time).total_seconds() # tells me the elapsed "accelerated" time
         adj_sim_run_time = timedelta(seconds = sim_run_time-run_time)
         _log.info("adj run time = "+str(adj_sim_run_time)+"; sim run time = "+str(sim_run_time)+"; actual run time = "+str(run_time))
         if self.last_query != None:
@@ -276,8 +276,11 @@ class CPRAgent(Agent):
 
         self.last_query = now
         _log.info("CPR: "+str(self.sim_time_corr))
+        gs_aware_round_start_time = self.gs_start_time.replace(tzinfo=pytz.UTC)
+        gs_adjust = gs_aware - gs_aware_round_start_time
+        _log.info("gs adjust = "+str(gs_adjust))
         next_forecast_start_time = datetime.datetime.strptime(get_schedule(sim_time_corr = self.sim_time_corr,
-                                                                           adj_sim_run_time = adj_sim_run_time),
+                                                                           adj_sim_run_time = adj_sim_run_time-gs_adjust),
                                                               "%Y-%m-%dT%H:%M:%S.%f")
 
         # Need to convert panda series to flat list of timestamps and irradiance data

@@ -434,6 +434,7 @@ class ExecutiveAgent(Agent):
                                                               "get_device_state_vars",
                                                               devices["DeviceID"]).get(timeout=5)
                             _log.info(k+": "+str(dev_state_var[k]))
+
                             entries.sundial_resource.state_vars[k] = dev_state_var[k]
 
                         except KeyError:
@@ -519,10 +520,10 @@ class ExecutiveAgent(Agent):
                             # than one ESS end point in this iteration
                             if (setpoint > 0):  # charging
                                 # todo - check for div by zero
-                                pro_rata_share = float(device_state_vars["SOE_kWh"]) / (float(SOE_kWh)+0.001) * float(setpoint)
+                                pro_rata_share = float(device_state_vars["SOE_kWh"]+0.001) / (float(SOE_kWh)+0.001) * float(setpoint)
                                 #todo - need to check for min SOE - implication of the above is that min = 0
                             else: # discharging
-                                pro_rata_share = float(device_state_vars["MaxSOE_kWh"] - device_state_vars["SOE_kWh"]) /\
+                                pro_rata_share = float(device_state_vars["MaxSOE_kWh"] - device_state_vars["SOE_kWh"]+0.001) /\
                                                  (max_SOE_kWh - float(SOE_kWh)+0.001) * float(setpoint)
                             _log.info("Optimizer: Sending request for " + str(pro_rata_share) + "to " + devices["AgentID"])
                             # send command
@@ -552,8 +553,8 @@ class ExecutiveAgent(Agent):
         now = utils.get_aware_utc_now() # current time
         gs_start_time_aware = self.gs_ts #datetime.strptime(self.gs_ts, "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=pytz.UTC)
 
-        run_time = (now - gs_start_time_aware).seconds
-        sim_run_time = timedelta(seconds = SIM_HRS_PER_HR * run_time).seconds # tells me the elapsed "accelerated" time
+        run_time = (now - gs_start_time_aware).total_seconds()
+        sim_run_time = timedelta(seconds = SIM_HRS_PER_HR * run_time).total_seconds() # tells me the elapsed "accelerated" time
         adj_sim_run_time = timedelta(seconds = sim_run_time - run_time)
         schedule_start_time = datetime.strptime(get_schedule(sim_time_corr=sim_time_corr,
                                                              adj_sim_run_time = adj_sim_run_time),
@@ -585,6 +586,15 @@ class ExecutiveAgent(Agent):
                     sim_time_corr = timedelta(seconds = self.vip.rpc.call("forecast_simagent-0.1_1",
                                                                           "get_sim_time_corr").get())
                     schedule_timestamps = self.generate_schedule_timestamps(sim_time_corr=sim_time_corr)  # associated timestamps # FIXME - should be np array?
+                    if schedule_timestamps[0] == self.system_resources.schedule_vars["timestamp"][0]:
+                        # temporary work around to indicate to optimizer to use previous solution if cost was lower
+                        # fixme - this work around does not account for contingency if forecast or system state changes unexpectedly
+                        # same time window as previously
+                        self.optimizer.persist_lowest_cost = 1
+                    else:
+                        self.optimizer.persist_lowest_cost = 0
+                    _log.info("persist lower cost = "+str(self.optimizer.persist_lowest_cost)+"; new time = "+str(schedule_timestamps[0])+"; old time = "+str(self.system_resources.schedule_vars["timestamp"][0]))
+
                 except:
                     _log.info("Forecast Sim RPC failed!")
                     schedule_timestamps = self.generate_schedule_timestamps()
@@ -620,6 +630,16 @@ class ExecutiveAgent(Agent):
                                             default_units["timestamp"],
                                             "timestamp",
                                             [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.ess_resources.schedule_vars["timestamp"]])
+                HistorianTools.publish_data(self,
+                                            "PVResource/Schedule",
+                                            default_units["DemandForecast_kW"],
+                                            "DemandForecast_kW",
+                                            self.pv_resources.schedule_vars["DemandForecast_kW"])
+                HistorianTools.publish_data(self,
+                                            "PVResource/Schedule",
+                                            default_units["timestamp"],
+                                            "timestamp",
+                                            [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.pv_resources.schedule_vars["timestamp"]])
 
 
     ##############################################################################

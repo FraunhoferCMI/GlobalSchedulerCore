@@ -67,7 +67,7 @@ class SimulatedAnnealer():
         self.nIterations = 50000           # Number of iterations
         self.temp_decrease_pd = 600 # Number of iterations betweeen temperature decrease
         self.jump_decrease_pd = 100 # Number of iterations betweeen jump size decrease
-        self.jump             = 1.0 #0.5 # initial maximum jump
+        self.init_jump        = 1.0 #0.5 # initial maximum jump
         self.fract_jump       = 0.95 # amount by which jump is decreased every jump_decrease_pd steps
         self.fract_T          = 0.85
         self.O2T              = 0.05  # Conversion of objective function into initial T
@@ -78,6 +78,8 @@ class SimulatedAnnealer():
         self.tResolution_min          = SSA_SCHEDULE_RESOLUTION # time resolution of SSA optimizer control signals, in minutes
         self.optimizationPd_hr        = SSA_SCHEDULE_DURATION # period of the SSA time horizon, in hrs
         self.nOptimizationPtsPerPd    = SSA_PTS_PER_SCHEDULE
+
+        self.persist_lowest_cost = 0 # flag to indicate whether to use keep previous solution if cost was lower.
 
     ############################
     def scale_battery_weights(self, max_ess_energy, weight_disch, tResolution_hr):
@@ -194,7 +196,7 @@ class SimulatedAnnealer():
         - self.nIterations - Number of iterations to
         - self.temp_decrease_pd - Number of iterations betweeen temperature decrease
         - self.jump_decrease_pd - Number of iterations betweeen jump size decrease
-        - self.jump - initial maximum jump
+        - self.init_jump - initial maximum jump
         - self.fract_jump - amount by which jump is decreased every jump_decrease_pd iterations
         - self.fract_T - amount by which temperature is decreased every temp_decrease_pd iterations
         - self.O2T  - Conversion of objective function cost into initial T
@@ -252,7 +254,7 @@ class SimulatedAnnealer():
         T0   = abs(self.O2T*init_soln.cost)
         T    = T0;
 
-        _log.info("Jump is: "+str(self.jump))
+        _log.info("Jump is: "+str(self.init_jump))
         _log.info("T is: "+str(T))
         _log.info("Init Least Cost Solution is: "+str(least_cost_soln.total_cost))
 
@@ -263,6 +265,8 @@ class SimulatedAnnealer():
 
         t0 = datetime.now()
 
+        jump = self.init_jump
+
         # From the initial solution, follow the simulated annealing logic: disturb
         # 1 point and check if there is improvement.
         for ii in range(self.nIterations):
@@ -272,15 +276,15 @@ class SimulatedAnnealer():
 
             if ((ii+1) % self.jump_decrease_pd) == 0: # check if it's time to decrease jump size.
                 # decrease jump size
-                self.jump = self.jump*self.fract_jump
-                #print("ii = "+str(ii)+"; Jump decrease - jump = " + str(self.jump))
+                jump = jump*self.fract_jump
+                #print("ii = "+str(ii)+"; Jump decrease - jump = " + str(jump))
 
             if ((ii+1) % self.temp_decrease_pd) == 0: # check if it's time to decrease temperature
                 # decrease temperature, reset jump to the starting value from the last jump decrease
                 T         = self.fract_T*T
                 n         = floor(self.temp_decrease_pd/self.jump_decrease_pd)
-                self.jump = self.jump/(self.fract_jump**n)
-                #print("ii = "+str(ii)+"; Temp decrease - "+str(T)+"; jump = "+str(self.jump))
+                jump = jump/(self.fract_jump**n)
+                #print("ii = "+str(ii)+"; Temp decrease - "+str(T)+"; jump = "+str(jump))
                 #print("ESS Weight is: " + str(self.ess.current_soln.weight))
 
             # FIXME - Much of the following is taking advantage of a simple system topology by directly referencing
@@ -298,7 +302,7 @@ class SimulatedAnnealer():
             # FIXME: currently this just deals with battery charge / discharge instructions - not other resources
             # FIXME: e.g., PV curtailment
             ind = int(floor(random()*self.nOptimizationPtsPerPd))
-            self.ess.state_vars["Weight"][ind]   = self.calc_jump(self.ess.state_vars["Weight"][ind], self.jump, -1, 1)  # FIXME: -1 to 1 should not be fixed.
+            self.ess.state_vars["Weight"][ind]   = self.calc_jump(self.ess.state_vars["Weight"][ind], jump, -1, 1)  # FIXME: -1 to 1 should not be fixed.
 
             # Then: check for constraints.
             # TODO - right now, just checking for battery limit violations.  Eventually put in ability to include
@@ -367,7 +371,15 @@ class SimulatedAnnealer():
         _log.info("loop time: "+str(loop_time)+"; total time: "+str(total_time))
 
         # exports least_cost_soln to sundial_resources.schedule_vars
-        export_schedule(least_cost_soln, timestamps)
+        if (self.persist_lowest_cost == 0):
+            _log.info("SSA: New set of timestamps - generating new solution")
+            export_schedule(least_cost_soln, timestamps)
+        elif least_cost_soln.total_cost<sundial_resources.schedule_vars["total_cost"]:
+            _log.info("SSA: Lower Cost Solution found - using new solution")
+            _log.info("new soln is"+str(least_cost_soln)+"; old soln = "+str(sundial_resources.schedule_vars["total_cost"]))
+            export_schedule(least_cost_soln, timestamps)
+        else:
+            _log.info("SSA: Lower cost solution not found - using previous solution")
         _log.info("Time Stamps are:"+str(least_cost_soln.sundial_resources.schedule_vars["timestamp"]))
         _log.info("ESS profile: "+str(self.ess_least_cost.state_vars["DemandForecast_kW"]))
         _log.info("System profile: " + str(least_cost_soln.state_vars["DemandForecast_kW"]))

@@ -398,7 +398,7 @@ class DERDevice():
         #_log.debug("DERDevice Status: Opstatus - "+opstatus_str)
 
         for k, v in self.state_vars.items():
-            _log.info("Status-" + self.device_id + ": " + k + ": " + str(v))
+            _log.debug("Status-" + self.device_id + ": " + k + ": " + str(v))
 
 
         for cur_device in self.devices:
@@ -595,13 +595,13 @@ class DERDevice():
                      (cur_attribute.units[keyval] == "kWh")):
             if type(cur_attribute.data_dict[keyval]) is list:
                 # FIXME - ugh
-                tmplist = [v/1000 for v in cur_attribute.data_dict[keyval]]
+                tmplist = [float(v)/1000 for v in cur_attribute.data_dict[keyval]]
                 del cur_attribute.data_dict[keyval][:]
                 cur_attribute.data_dict[keyval] = tmplist[:]
                 _log.debug("PopEndpts: converted "+k+"from "+endpt_units+
                           " to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
             else:
-                cur_attribute.data_dict[keyval] /= 1000
+                cur_attribute.data_dict[keyval] = float(cur_attribute.data_dict[keyval])/1000
 
                 if (endpt_units == "Wh"):
                     cur_attribute.data_dict[keyval] *= SIM_HRS_PER_HR #FIXME - temp for doing fast sims
