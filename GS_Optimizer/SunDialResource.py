@@ -759,9 +759,11 @@ class SundialSystemResource(SundialResource):
         # currently set up as a bunch of hard coded values.  Eventually need to parameterize / abstract.
         self.demand_threshold   = 0  # threshold at which demand charges accrue
         self.demand_cost_per_kW = 10 # per kW cost of demand in excess of self.demand_threshold
-        self.obj_fcns = [self.obj_fcn_follow_loadshape]
-        self.obj_fcns_cfg = [self.cfg_loadshape]
+        #self.obj_fcns = [self.obj_fcn_follow_loadshape]
+        #self.obj_fcns_cfg = [self.cfg_loadshape]
         #self.obj_fcns = [self.obj_fcn_abs_energy, self.obj_fcn_demand]
+        self.obj_fcns = [self.obj_fcn_min_backfeed]
+        self.obj_fcn_cfg = []
 
         ##### the following is for setting a target load shape ######
         # assumes 24 hour duration.  Targets 300 kW morning evening / 450  kW in afternoon.
@@ -850,6 +852,30 @@ class SundialSystemResource(SundialResource):
             cost = 0
         return cost
 
+    ##############################################################################
+    def obj_fcn_min_backfeed(self):
+        """
+        placeholder for a function that calculates a demand charge for a given net demand profile
+        :return: cost of executing the profile, in $
+        """
+        max_bf = min(self.profile)
+
+        # tier at 200, 100, 10
+        cost = 0
+        for p in self.profile:
+            cost += max(-1 * p - 300, 0) * 100
+            cost += max(-1 * p - 250, 0) * 50
+            cost += max(-1 * p - 200, 0) * 25
+            cost += max(-1 * p - 150, 0) * 10
+            cost += max(-1 * p - 100, 0) * 10
+            cost += max(-1 * p - 50, 0) * 10
+            cost += max(-1 * p, 0) * 10
+
+        #if max_bf < 0: #self.demand_threshold:
+        #    cost = self.demand_cost_per_kW*(-1*max_bf)
+        #else:
+        #    cost = 0
+        return cost
 
     ##############################################################################
     def cfg_loadshape(self):
