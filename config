@@ -1,0 +1,17 @@
+{
+                "interval":60,	
+                "userName": "schoudhary@cse.fraunhofer.org",
+                "password":"Shines2017",
+                "querystring":{"key":"FRHR3MXX7"},
+                "url" : "https://service.solaranywhere.com/api/v2/Simulation",
+		"url2": "https://service.solaranywhere.com/api/v2/SimulationResult/",
+                "payload":"",
+            	"headers":"",
+                "topic": "devices/cpr",
+                "horizon":24,
+		
+    "agentid": "cpr",
+    "message": "hello"
+
+
+}
