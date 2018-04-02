@@ -110,7 +110,7 @@ class SimulatedAnnealer():
         The new weight is subject to upper and lower bounds set by ub and lb, respectively
         :return:
         """
-        y2 = (random() - .5) * 2 * jump
+        y2 = (random() - .5) * 2.0 * jump
         y3 = x + y2
         return max(min(y3,ub), lb)
 
@@ -258,10 +258,10 @@ class SimulatedAnnealer():
         _log.info("T is: "+str(T))
         _log.info("Init Least Cost Solution is: "+str(least_cost_soln.total_cost))
 
-        copy_time   = 0
-        constraint_time = 0
-        cost_time = 0
-        loop_time = 0
+        copy_time   = 0.0
+        constraint_time = 0.0
+        cost_time = 0.0
+        loop_time = 0.0
 
         t0 = datetime.now()
 
@@ -343,11 +343,11 @@ class SimulatedAnnealer():
             # Calculate delta cost between this test value and the current least cost solution
             delta = total_cost - least_cost_soln.total_cost
 
-            if delta < 0:
+            if delta < 0.0:
                 # Current test value is a new least-cost solution.  Use this!
                 least_cost_soln = self.copy_profile(current_soln, least_cost_soln)  # set least cost soln to current soln
 
-            elif delta > 0:
+            elif delta > 0.0:
                 # Current test value is worse than current least-cost solution
                 # Adopt the current test value along a probabilistic
                 # distribution according to SSA parameters
@@ -423,8 +423,10 @@ if __name__ == '__main__':
     SundialCfgFile = "../cfg/SystemCfg/SundialSystemConfiguration.json"#"SundialSystemConfiguration2.json"
     sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
 
-    gs_start_time = datetime.datetime.strptime(get_schedule(),
-                                               "%Y-%m-%dT%H:%M:%S.%f")
+    #gs_start_time_exact = datetime.utcnow()
+    #gs_start_time = datetime.datetime.strptime(get_schedule(gs_start_time_exact),
+    #                                           "%Y-%m-%dT%H:%M:%S.%f")
+    gs_start_time = datetime.utcnow().replace(microsecond=0)
     sundial_resources = SundialSystemResource(sundial_resource_cfg_list, gs_start_time)
 
     #for resource in sundial_resources:
@@ -442,10 +444,10 @@ if __name__ == '__main__':
 
 
     #### Just load with example values - ######
-    ess_forecast = [0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0]
+    ess_forecast = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
     #ess_forecast = [-51.35175009, -51.37987963, -52.40495415, -55.7941499,
     #                -70.15320262, -193.91606361,   15.24561777, -13.75917004,
@@ -454,21 +456,21 @@ if __name__ == '__main__':
     #                0.0, 0.0, -136.28581942, -96.68917457,
     #                49.07769182, 97.72753814, 111.3388077, 0.0]
 
-    ess_resources.load_scenario(init_SOE=500,
-                                max_soe=2000,
-                                min_soe=0,
-                                max_chg=500,
-                                max_discharge=500,
+    ess_resources.load_scenario(init_SOE=500.0,
+                                max_soe=2000.0,
+                                min_soe=0.0,
+                                max_chg=500.0,
+                                max_discharge=500.0,
                                 chg_eff=0.95,
                                 dischg_eff=0.95,
                                 demand_forecast=ess_forecast)
 
-    pv_forecast = [0, 0, 0, 0,
-                   0, -5.769, -93.4666, -316.934,
+    pv_forecast = [0.0, 0.0, 0.0, 0.0,
+                   0.0, -5.769, -93.4666, -316.934,
                    -544.388, -716.663, -822.318, -888.916,
                    -898.478, -839.905, -706.972, -512.013,
-                   -265.994, -74.6933, -2.0346, 0,
-                   0, 0, 0, 0]
+                   -265.994, -74.6933, -2.0346, 0.0,
+                   0.0, 0.0, 0.0, 0]
 
     demand_forecast = [142.4973, 142.4973, 142.4973, 145.9894,
                        160.094, 289.5996, 339.7752, 572.17,
@@ -478,10 +480,10 @@ if __name__ == '__main__':
                        357.9398, 160.0936, 145.9894, 142.4973]
 
     pv_resources.load_scenario(demand_forecast = pv_forecast,
-                               pk_capacity = 1000)
+                               pk_capacity = 1000.0)
 
     load_resources.load_scenario(demand_forecast = demand_forecast,
-                                 pk_capacity = 1000)
+                                 pk_capacity = 1000.0)
 
     loadshift_resources.load_scenario()
     system_resources.load_scenario()
