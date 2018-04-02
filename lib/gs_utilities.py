@@ -51,14 +51,16 @@ from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
 from volttron.platform.agent import utils
 from volttron.platform.messaging import headers as headers_mod
 
-from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_SCHEDULE_DURATION, USE_VOLTTRON)
+from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_SCHEDULE_DURATION, USE_VOLTTRON, SIM_HRS_PER_HR)
+import pytz
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
 __version__ = '1.0'
 
 ##############################################################################
-def get_schedule(resolution = SSA_SCHEDULE_RESOLUTION,
+def get_schedule(gs_start_time,
+                 resolution = SSA_SCHEDULE_RESOLUTION,
                  sim_time_corr = timedelta(seconds=0),
                  adj_sim_run_time = timedelta(hours=0)):
     """
@@ -66,17 +68,30 @@ def get_schedule(resolution = SSA_SCHEDULE_RESOLUTION,
     Strips out seconds, microseconds, etc.  Rounds to the next SSA_SCHEDULE_RESOLUTION time step
     :return: new_time - the start time of the next dispatch schedule period
     """
+    TimeStamp = get_gs_time(gs_start_time,sim_time_corr)
 
-    if USE_VOLTTRON == 1:
-        # FIXME - implicitly assumes SSA_SCHEDULE_RESOLUTION <= 60 minutes
-        TimeStamp = utils.get_aware_utc_now() - sim_time_corr + adj_sim_run_time
-    else:
-        TimeStamp = datetime.utcnow() - sim_time_corr + adj_sim_run_time
-    minutes = TimeStamp.minute
+    gs_run_time = TimeStamp-gs_start_time   # time, in gs frame of reference, since gs start
+
+    baseline = datetime(year=1900, month=1, day=1) # arbitrary starting point
+
+    minutes = (baseline+gs_run_time).minute
+
+    #if USE_VOLTTRON == 1:
+    #    # FIXME - implicitly assumes SSA_SCHEDULE_RESOLUTION <= 60 minutes
+    #    TimeStamp = utils.get_aware_utc_now() - sim_time_corr + adj_sim_run_time
+    #else:
+    #    TimeStamp = datetime.utcnow() - sim_time_corr + adj_sim_run_time
+
+    #
+    # minutes = TimeStamp.minute
     rem = minutes % resolution
+
+    start_of_schedule = (baseline+(gs_run_time - timedelta(minutes=rem))).replace(second=0, microsecond=0) -baseline # todo - temp fix - moves forecast to tstep-1
+    new_time = gs_start_time+start_of_schedule
+
     #new_time = TimeStamp + timedelta(minutes=SSA_SCHEDULE_RESOLUTION - rem)  # GS_SCHEDULE
-    new_time = TimeStamp - timedelta(minutes=rem) # todo - temp fix - moves forecast to tstep-1
-    new_time = new_time.replace(second=0, microsecond=0)
+    #new_time = TimeStamp - timedelta(minutes=rem) # todo - temp fix - moves forecast to tstep-1
+    #new_time = new_time.replace(second=0, microsecond=0)
 
     # this gives now + gs_schedule period, truncated to the top of the minute
     # e.g., 1208 --> set to 1223.
@@ -84,13 +99,38 @@ def get_schedule(resolution = SSA_SCHEDULE_RESOLUTION,
     # so you want to get minutes mod GS_SCHEDULE - remainder
 
     # new_time  = new_time.replace(minute=0, second=0, microsecond=0)
-    _log.info("Sim time adjustment = "+str(adj_sim_run_time))
+    #_log.info("Sim time adjustment = "+str(adj_sim_run_time))
     _log.info("TimeStamp = " + TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f"))
     _log.info("new_time = " + new_time.strftime("%Y-%m-%dT%H:%M:%S.%f"))
     _log.info("time corr= "+ str(sim_time_corr))
     time_str = new_time.strftime("%Y-%m-%dT%H:%M:%S.%f")
     return time_str
 
+
+##############################################################################
+def get_gs_time(gs_start_time, sim_time_corr):
+    """
+    returns the time in the Global Scheduler frame of reference.
+    :return:
+    """
+
+    # need to fix this so that it works(?) before gs_start_time is assigned?
+    if USE_VOLTTRON == 1:
+        # FIXME - implicitly assumes SSA_SCHEDULE_RESOLUTION <= 60 minutes
+        now = utils.get_aware_utc_now()
+    else:
+        now = datetime.utcnow()
+
+    #gs_aware = gs_start_time.replace(tzinfo=pytz.UTC)
+    _log.info("Cur time: " + now.strftime("%Y-%m-%dT%H:%M:%S") + "; gs start time= " + gs_start_time.strftime("%Y-%m-%dT%H:%M:%S"))
+
+    run_time         = (now - gs_start_time).total_seconds() # tells the elapsed real time
+    sim_run_time     = timedelta(seconds=SIM_HRS_PER_HR * run_time).total_seconds()  # tells the elapsed "accelerated" time
+    #adj_sim_run_time = timedelta(seconds=sim_run_time - run_time)  # difference between GS frame of reference and real time
+
+    _log.info("sim run time = " + str(sim_run_time) + "; actual run time = " + str(run_time))
+
+    return gs_start_time+sim_run_time-sim_time_corr  # current time, in the GS frame of reference
 
 ##############################################################################
 class ForecastObject():
