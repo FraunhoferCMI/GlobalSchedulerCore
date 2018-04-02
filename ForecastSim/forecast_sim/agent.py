@@ -126,8 +126,8 @@ class CPRAgent(Agent):
         self.initialization_complete = 0
         self.last_query = None
         self.sim_time_corr = timedelta(seconds=0)
+        #self.gs_start_time_exact = None
         self.gs_start_time = None
-        self.gs_ts = None
 
     ##############################################################################
     def configure(self,config_name, action, contents):
@@ -198,14 +198,18 @@ class CPRAgent(Agent):
         start_ind = int((SIM_START_DAY - 1) * pts_per_day+SIM_START_HR*MINUTES_PER_HR/csv_time_resolution_min)
 
         try:
-            self.gs_start_time, self.gs_ts = datetime.datetime.strptime(self.vip.rpc.call("executiveagent-1.0_1",
-                                                                                          "get_gs_start_time").get(timeout=5),
-                                                                        "%Y-%m-%dT%H:%M:%S.%f")
+            #v1, v2 = self.vip.rpc.call("executiveagent-1.0_1", "get_gs_start_time").get(timeout=5)
+            #self.gs_start_time       = datetime.datetime.strptime(v1,"%Y-%m-%dT%H:%M:%S.%f") #.replace()
+            #self.gs_start_time_exact = datetime.datetime.strptime(v2,"%Y-%m-%dT%H:%M:%S.%f") #.replace()
+            v1 = self.vip.rpc.call("executiveagent-1.0_1", "get_gs_start_time").get(timeout=5)
+            self.gs_start_time       = datetime.datetime.strptime(v1,"%Y-%m-%dT%H:%M:%S.%f") #.replace()
         except:
             _log.info("Forecast - gs_start_time not found.  Using current time as gs_start_time")
-            self.gs_start_time =  datetime.datetime.strptime(get_schedule(),
-                                                        "%Y-%m-%dT%H:%M:%S.%f")
-            self.gs_ts = utils.get_aware_utc_now()
+            #self.gs_start_time_exact = utils.get_aware_utc_now() #.replace(second=0, microsecond=0)
+            #self.gs_start_time       =  datetime.datetime.strptime(get_schedule(self.gs_start_time_exact),
+            #                                                            "%Y-%m-%dT%H:%M:%S.%f")
+            self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
+
 
         _log.info("start index is: "+str(start_ind)+"; SIM_START_DAY is "+str(SIM_START_DAY))
 
@@ -252,17 +256,14 @@ class CPRAgent(Agent):
         """
 
         # get the start time of the forecast
+
         # to do so: (1) check if we went to sleep since the last forecast retrieved.  If so, use a correction to
         # make it look like no time has elapsed; (2) if accelerated time is being used, translate actual elapsed time
         # into accelerated time
+
         now = utils.get_aware_utc_now()
-        gs_aware = self.gs_ts.replace(tzinfo=pytz.UTC)
-        _log.info("Cur time: " + now.strftime("%Y-%m-%dT%H:%M:%S") + "; gs start time= " + gs_aware.strftime(
-            "%Y-%m-%dT%H:%M:%S"))
-        run_time = (now - gs_aware).total_seconds()
-        sim_run_time = timedelta(seconds = SIM_HRS_PER_HR * run_time).total_seconds() # tells me the elapsed "accelerated" time
-        adj_sim_run_time = timedelta(seconds = sim_run_time-run_time)
-        _log.info("adj run time = "+str(adj_sim_run_time)+"; sim run time = "+str(sim_run_time)+"; actual run time = "+str(run_time))
+        gs_aware = self.gs_start_time.replace(tzinfo=pytz.UTC)
+
         if self.last_query != None:
             delta = now - self.last_query
             expected_delta = timedelta(seconds=CPR_QUERY_INTERVAL)
@@ -275,12 +276,9 @@ class CPRAgent(Agent):
                 _log.info("Cur time: "+now.strftime("%Y-%m-%dT%H:%M:%S")+"; prev time= "+ self.last_query.strftime("%Y-%m-%dT%H:%M:%S"))
 
         self.last_query = now
-        _log.info("CPR: "+str(self.sim_time_corr))
-        gs_aware_round_start_time = self.gs_start_time.replace(tzinfo=pytz.UTC)
-        gs_adjust = gs_aware - gs_aware_round_start_time
-        _log.info("gs adjust = "+str(gs_adjust))
-        next_forecast_start_time = datetime.datetime.strptime(get_schedule(sim_time_corr = self.sim_time_corr,
-                                                                           adj_sim_run_time = adj_sim_run_time-gs_adjust),
+        _log.info("ForecastSim time correction: "+str(self.sim_time_corr))
+        next_forecast_start_time = datetime.datetime.strptime(get_schedule(gs_aware,
+                                                                           sim_time_corr = self.sim_time_corr),
                                                               "%Y-%m-%dT%H:%M:%S.%f")
 
         # Need to convert panda series to flat list of timestamps and irradiance data
