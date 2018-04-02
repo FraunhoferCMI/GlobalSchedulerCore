@@ -78,6 +78,7 @@ default_units = {"CommStatus": "",
                  "Pwr_kW": "kW",
                  "AvgPwr_kW": "kW",
                  "DemandForecast_kW": "kW",
+                 "DemandForecast_t": "utc",
                  "Nameplate_kW": "kW",
                  "MaxSOE_kWh": "kWh",
                  "SOE_kWh": "kWh",
@@ -180,10 +181,11 @@ class DERDevice():
                            "ReadStatus": self.read_status,
                            "WriteStatus": self.write_status,
                            "ControlMode": self.control_mode,
-                           "Pwr_kW": 0,
-                           "AvgPwr_kW": 0,
+                           "Pwr_kW": 0.0,
+                           "AvgPwr_kW": 0.0,
                            "DemandForecast_kW": [0.0] * SSA_PTS_PER_SCHEDULE,
-                           "Nameplate_kW": 0}
+                           "DemandForecast_t": None,
+                           "Nameplate_kW": 0.0}
 
         self.avg_pwr_buffer = []
 
@@ -328,7 +330,7 @@ class DERDevice():
     def check_device_status(self):
         """
         generalized function for checking whether a device's self-reported
-        stated is ok.  Device-specific versions of this method
+        status is ok.  Device-specific versions of this method
         interpret error codes and raise exceptions as needed.
         sets self.device_status
         """
@@ -455,6 +457,7 @@ class DERDevice():
 
         try:
             self.state_vars.update({"DemandForecast_kW": self.forecast.data_dict["Pwr"]})
+            self.state_vars.update({"DemandForecast_t": self.forecast.data_dict["t"]})
             # todo - add in time variable
         except KeyError:
             pass
@@ -595,13 +598,13 @@ class DERDevice():
                      (cur_attribute.units[keyval] == "kWh")):
             if type(cur_attribute.data_dict[keyval]) is list:
                 # FIXME - ugh
-                tmplist = [float(v)/1000 for v in cur_attribute.data_dict[keyval]]
+                tmplist = [float(v)/1000.0 for v in cur_attribute.data_dict[keyval]]
                 del cur_attribute.data_dict[keyval][:]
                 cur_attribute.data_dict[keyval] = tmplist[:]
                 _log.debug("PopEndpts: converted "+k+"from "+endpt_units+
                           " to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
             else:
-                cur_attribute.data_dict[keyval] = float(cur_attribute.data_dict[keyval])/1000
+                cur_attribute.data_dict[keyval] = float(cur_attribute.data_dict[keyval])/1000.0
 
                 if (endpt_units == "Wh"):
                     cur_attribute.data_dict[keyval] *= SIM_HRS_PER_HR #FIXME - temp for doing fast sims
@@ -612,14 +615,14 @@ class DERDevice():
         if (endpt_units == "ScaledW") and (cur_attribute.units[keyval] == "kW"):
             base_name = keyval[:len(keyval)-len("raw")] # assume this has "_raw" on the end of the name
             cur_attribute.data_dict[base_name+"kW"] = \
-                (cur_attribute.data_dict[keyval]*10**cur_attribute.data_dict[base_name+"SF"])/1000
+                (cur_attribute.data_dict[keyval]*10.0**cur_attribute.data_dict[base_name+"SF"])/1000.0
             _log.debug("PopEndpts: converted "+k+"from "+endpt_units+" to "+
                       cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[base_name+"kW"]))
 
         if (endpt_units == "NegScaledW") and (cur_attribute.units[keyval] == "kW"):
             base_name = keyval[:len(keyval)-len("raw")] # assume this has "_raw" on the end of the name
             cur_attribute.data_dict[base_name+"kW"] = \
-                -1*(cur_attribute.data_dict[keyval]*10**cur_attribute.data_dict[base_name+"SF"])/1000
+                -1*(cur_attribute.data_dict[keyval]*10.0**cur_attribute.data_dict[base_name+"SF"])/1000.0
             _log.debug("PopEndpts: converted "+k+"from "+endpt_units+" to "+
                       cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[base_name+"kW"]))
 
@@ -631,13 +634,13 @@ class DERDevice():
             if type(cur_attribute.data_dict[keyval]) is list:
                 _log.debug("converting list from pct to kW")
                 # FIXME - ugh
-                tmplist = [(float(v) / 100) * nameplate for v in cur_attribute.data_dict[keyval]]
+                tmplist = [(float(v) / 100.0) * nameplate for v in cur_attribute.data_dict[keyval]]
                 del cur_attribute.data_dict[keyval][:]
                 cur_attribute.data_dict[keyval] = tmplist[:]
             else: # assume int
                 _log.debug("converting single pt from pct to kW")
                 _log.debug("value is "+str(cur_attribute.data_dict[keyval])+"; nameplate is "+str(nameplate))
-                cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * nameplate)
+                cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100.0) * nameplate)
                 _log.debug("new value is "+str(cur_attribute.data_dict[keyval]))
                 #cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
                 #_log.info("Unsupported data type for conversion pct to kW")
@@ -651,15 +654,15 @@ class DERDevice():
             if type(cur_attribute.data_dict[keyval]) is list:
                 _log.debug("converting list from neg pct to kW")
                 # FIXME - ugh
-                tmplist = [-1*(float(v) / 100) * nameplate for v in cur_attribute.data_dict[keyval]]
+                tmplist = [-1*(float(v) / 100.0) * nameplate for v in cur_attribute.data_dict[keyval]]
                 del cur_attribute.data_dict[keyval][:]
                 cur_attribute.data_dict[keyval] = tmplist[:]
             else:  # assume int
                 _log.debug("converting single pt from pct to kW")
                 _log.debug("value is " + str(cur_attribute.data_dict[keyval]) + "; nameplate is " + str(nameplate))
-                cur_attribute.data_dict[keyval] = int(-1*(float(cur_attribute.data_dict[keyval]) / 100) * nameplate)
+                cur_attribute.data_dict[keyval] = int(-1*(float(cur_attribute.data_dict[keyval]) / 100.0) * nameplate)
                 _log.debug("new value is " + str(cur_attribute.data_dict[keyval]))
-                # cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
+                # cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100.0) * cur_device.get_nameplate())
                 # _log.info("Unsupported data type for conversion pct to kW")
             _log.debug("PopEndpts: converted " + k + "from " + endpt_units + " to " + cur_attribute.units[
                 keyval] + ". New val = " + str(cur_attribute.data_dict[keyval]))
@@ -1211,11 +1214,11 @@ class DERCtrlNode(DERDevice):
         if "ChgEff" in self.state_vars_update_list:
             self.state_vars["ChgEff"] = chg_eff_cnt / \
                                         self.state_vars["MaxChargePwr_kW"] if \
-                (self.state_vars["MaxChargePwr_kW"] != 0) else 1
+                (self.state_vars["MaxChargePwr_kW"] != 0.0) else 1.0
         if "DischgEff" in self.state_vars_update_list:
             self.state_vars["DischgEff"] = dischg_eff_cnt / \
                                            self.state_vars["MaxDischargePwr_kW"] if \
-                (self.state_vars["MaxDischargePwr_kW"] != 0) else 1
+                (self.state_vars["MaxDischargePwr_kW"] != 0.0) else 1.0
 
     ##############################################################################
     def set_power_real(self, val, sitemgr):
