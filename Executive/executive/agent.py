@@ -67,7 +67,7 @@ from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXEC_STARTIN
                            EXECUTIVE_CLKTIME, GS_SCHEDULE, ESS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD,
                            SSA_SCHEDULE_RESOLUTION, SSA_PTS_PER_SCHEDULE, SSA_SCHEDULE_DURATION, SIM_START_TIME,
                            SIM_HRS_PER_HR, START_LATENCY)
-from gs_utilities import get_schedule
+from gs_utilities import get_schedule, get_gs_time
 
 #utils.setup_logging()
 _log = logging.getLogger("Executive")#__name__)
@@ -112,7 +112,7 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     # it is used to determine what the max sustainable charge / discharge rate is for the
     # battery before the next time that we receive a high level schedule request.
     setpoint_cmd_interval = 300 #FIXME - this needs to be tied to globals defined in gs_identities
-    sec_per_hr = 60 * 60
+    sec_per_hr = 60.0 * 60.0
 
     setpoint = targetPwr_kW-curPwr_kW  #FIXME sign convention for charge vs discharge?
     _log.info("Optimizer: target Setpoint ="+str(setpoint))
@@ -195,11 +195,11 @@ class ExecutiveAgent(Agent):
         _log.info("SundialConfig is"+SundialCfgFile)
 
         self.optimizer_info = {}
-        self.optimizer_info.update({"setpoint": 0})
-        self.optimizer_info.update({"targetPwr_kW": 0})
-        self.optimizer_info.update({"curPwr_kW": 0})
-        self.optimizer_info.update({"expectedPwr_kW": 0})
-        self.optimizer_info.update({"netDemand_kW": 0})
+        self.optimizer_info.update({"setpoint": 0.0})
+        self.optimizer_info.update({"targetPwr_kW": 0.0})
+        self.optimizer_info.update({"curPwr_kW": 0.0})
+        self.optimizer_info.update({"expectedPwr_kW": 0.0})
+        self.optimizer_info.update({"netDemand_kW": 0.0})
 
         self.opt_cnt = 0
 
@@ -312,9 +312,11 @@ class ExecutiveAgent(Agent):
         # SiteManager Initialization complete
 
         ###This section instantiates a SundialResource tree based on SystemConfiguration.json, and an Optimizer ########
-        self.gs_start_time     = get_schedule() #utils.get_aware_utc_now()
-        self.gs_ts = utils.get_aware_utc_now()
-        self.sundial_resources = SundialSystemResource(self.sundial_resource_cfg_list, self.gs_start_time)
+        #self.gs_start_time_exact = utils.get_aware_utc_now()
+        #self.gs_start_time       = get_schedule(self.gs_start_time_exact)
+        self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
+        _log.info("GS Start time is "+str(self.gs_start_time))
+        self.sundial_resources = SundialSystemResource(self.sundial_resource_cfg_list, self.get_gs_start_time())
         self.sdr_to_sm_lookup_table = build_SundialResource_to_SiteManager_lookup_table(self.sundial_resource_cfg_list,
                                                                                         self.sundial_resources,
                                                                                         sitemgr_list=self.sitemgr_list,
@@ -340,7 +342,7 @@ class ExecutiveAgent(Agent):
                                     "Executive",
                                     default_units["gs_start_time"],
                                     "gs_start_time",
-                                    self.gs_start_time)
+                                    self.get_gs_start_time())
 
         HistorianTools.publish_data(self,
                                     "Executive",
@@ -398,7 +400,7 @@ class ExecutiveAgent(Agent):
         :return: self.gs_start_time - an ISO8601 datetime string that corresponds to the GS's start time
         Format is: "%Y-%m-%dT%H:%M:%S.%f"
         """
-        return self.gs_start_time, self.gs_ts.strftime("%Y-%m-%dT%H:%M:%S.%f") #start_time_str
+        return self.gs_start_time.strftime("%Y-%m-%dT%H:%M:%S.%f") #, self.gs_start_time_exact.strftime("%Y-%m-%dT%H:%M:%S.%f") #start_time_str
 
     ##############################################################################
     def update_sundial_resources(self, sdr_to_sm_lookup_table):
@@ -478,7 +480,6 @@ class ExecutiveAgent(Agent):
             # FIXME - replace, the schedule (so we would maintain values from previous optimization passes).  Also need
             # FIXME - to consider what happens if optimization pass occurs during a time step
 
-            #next_scheduled_time = datetime.strptime(get_schedule(),"%Y-%m-%dT%H:%M:%S.%f")
             targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][0]
             expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][0]
             _log.info("Target power is " + str(targetPwr_kW))
@@ -549,16 +550,12 @@ class ExecutiveAgent(Agent):
         equal to SSA_SCHEDULE_RESOLUTION, and continuing until SSA_SCHEDULE_DURATION
         """
         MINUTES_PER_HR = 60
+        #schedule_start_time = get_gs_time(self.gs_start_time_exact,
+        #                                  sim_time_corr).replace(second = 0, microsecond=0)
 
-        now = utils.get_aware_utc_now() # current time
-        gs_start_time_aware = self.gs_ts #datetime.strptime(self.gs_ts, "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=pytz.UTC)
-
-        run_time = (now - gs_start_time_aware).total_seconds()
-        sim_run_time = timedelta(seconds = SIM_HRS_PER_HR * run_time).total_seconds() # tells me the elapsed "accelerated" time
-        adj_sim_run_time = timedelta(seconds = sim_run_time - run_time)
-        schedule_start_time = datetime.strptime(get_schedule(sim_time_corr=sim_time_corr,
-                                                             adj_sim_run_time = adj_sim_run_time),
-                                                "%Y-%m-%dT%H:%M:%S.%f")
+        schedule_start_time = datetime.strptime(get_schedule(self.gs_start_time,
+                                                             sim_time_corr=sim_time_corr),
+                                                "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=pytz.UTC)
 
         # generate the list of timestamps that will comprise the next forecast:
         schedule_timestamps = [schedule_start_time +
@@ -566,8 +563,6 @@ class ExecutiveAgent(Agent):
                                                                    SSA_SCHEDULE_DURATION*MINUTES_PER_HR,
                                                                    SSA_SCHEDULE_RESOLUTION)]
         return schedule_timestamps
-
-
 
     ##############################################################################
     @Core.periodic(GS_SCHEDULE)
@@ -585,7 +580,7 @@ class ExecutiveAgent(Agent):
                 try:
                     sim_time_corr = timedelta(seconds = self.vip.rpc.call("forecast_simagent-0.1_1",
                                                                           "get_sim_time_corr").get())
-                    schedule_timestamps = self.generate_schedule_timestamps(sim_time_corr=sim_time_corr)  # associated timestamps # FIXME - should be np array?
+                    schedule_timestamps = self.generate_schedule_timestamps(sim_time_corr=sim_time_corr)  # associated timestamps
                     if schedule_timestamps[0] == self.system_resources.schedule_vars["timestamp"][0]:
                         # temporary work around to indicate to optimizer to use previous solution if cost was lower
                         # fixme - this work around does not account for contingency if forecast or system state changes unexpectedly
@@ -634,7 +629,7 @@ class ExecutiveAgent(Agent):
                                             "PVResource/Schedule",
                                             default_units["DemandForecast_kW"],
                                             "DemandForecast_kW",
-                                            self.pv_resources.schedule_vars["DemandForecast_kW"])
+                                            self.pv_resources.schedule_vars["DemandForecast_kW"].tolist())
                 HistorianTools.publish_data(self,
                                             "PVResource/Schedule",
                                             default_units["timestamp"],
