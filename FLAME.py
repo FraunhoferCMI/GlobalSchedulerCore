@@ -3,6 +3,10 @@
 #from gs_utilities import get_schedule
 from datetime import datetime, timedelta
 
+from websocket import create_connection
+import json
+import pandas as pd
+
 ## Stubbed out version of a standalone FLAME application
 # This is a tool to exchange messagers with the IPKeys webserver FLAME
 
@@ -43,7 +47,8 @@ def get_marginal_cost_curve():
     # forecast period
     return price_map
 
-    pass
+
+
 
 
 ###########################
@@ -216,7 +221,166 @@ class ForecastObject():
                                    "Resolution": {"units": "min", "type": "int"}}
 
         self.forecast_obj = [self.forecast_values, self.forecast_meta_data]
+##############################################################################
+class IPKeys(object):
+    """Parent class for request & response interactions with IPKeys"""
+    def __init__(self, websocket):
+        self.ws = websocket
 
+        # initialize ForecastObject placeholder to indicate unprocessed request
+        self.fo = None
+        return None
 
+    def _send_receive(self):
+        """
+        Sends, receives and error checks response. Ensures request can only be
+        processed once.
+        """
+        # check if request has already been processed
+        if self.fo:
+            print('request already processed')
+            return None
 
+        # (2) send request
+        print("Sending Request")
+        ws.send(self.request)
+
+        # (3) check for response
+        print("Receiving")
+        result_json = ws.recv()
+        self.response = json.loads(result_json)
+
+        # (4) check for errors
+        assert self.response['type'] == self.type, 'msg received is wrong type'
+
+        return None
+
+class Baseline(IPKeys):
+
+    def __init__(self, start, granularity, duration, websocket):
+        IPKeys.__init__(self, websocket)
+
+        self.type = u'BaselineResponse'
+        self.start = start
+        self.granularity = granularity
+        self.duration = duration
+
+        self.request = json.dumps({'type': 'BaselineRequest',
+                                            'msg': {'dstart': start,
+                                                    'granularity': granularity,
+                                                    'duration': duration}
+                                            }
+                                           )
+        return None
+
+    def __repr__(self):
+        return ('\n'.join(['%s(' % self.__class__.__name__,
+                           '%s,' % self.start,
+                           '%s,' % self.granularity,
+                           '%s' % self.duration,
+                           '%s)' % self.websocket.__repr__()]))
+
+    def process(self):
+
+        self._send_receive()
+
+        forecast = parse_Baseline_response(self.response)
+        self.forecast = forecast
+
+        length = len(forecast)
+        units = forecast.units[0]
+        datatype = forecast.value.dtype
+        self.fo = ForecastObject(length, units, datatype)
+
+        return None
+
+class LoadShift(IPKeys):
+
+    def __init__(self, websocket):
+        IPKeys.__init__(self, websocket)
+
+        self.type = u'LoadOptionsResponse'
+        self.request = create_load_request()
+        return None
+
+    def __repr__(self):
+        return ('\n'.join(['%s(' % self.__class__.__name__,
+                           # '%s,' % self.start,
+                           # '%s,' % self.granularity,
+                           # '%s)' % self.duration,
+                           ]))
+    def process(self):
+
+        self._send_receive()
+        forecast = parse_LoadShift_response(self.response)
+        self.forecast = forecast
+
+        # prepare ForecastObject from response values
+        # length = len(forecast)
+        # units = forecast.units[0]
+        # datatype = forecast.value.dtype
+        # self.fo = ForecastObject(length, units, datatype)
+
+        return None
+
+def create_baseline_request(start, granularity, duration):
+    baseline_request = json.dumps({'type': 'BaselineRequest',
+                                   'msg': {'dstart': start,
+                                           'granularity': granularity,
+                                           'duration': duration}
+                                   }
+                                  )
+    return baseline_request
+
+def parse_Baseline_response(result):
+    forecast_values = pd.DataFrame(result['msg']['loadSchedule'])
+    forecast_values.set_index('dstart', inplace=True)
+    return forecast_values
+
+def create_load_request():
+    payload_request = json.dumps({"type": "LoadRequest",
+                                  "msg": {"nLoadOptions": "12",
+                                          "marginalCostCurve": [{"dstart": "2018-01-01T01:00:00",
+                                                                 "duration": "PT1H",
+                                                                 "priceMap": [{"LB": "-Infinity",
+                                                                               "UB": 0,
+                                                                               "price": 0.05},
+                                                                              {"LB": 0,
+                                                                               "UB": 200,
+                                                                               "price": 0.1},
+                                                                              {"LB": 200,
+                                                                               "UB": "Infinity",
+                                                                               "price": 2.94}]},
+                                                                {"dstart": "2018-01-01T23:00:00",
+                                                                 "duration": "PT1H",
+                                                                 "priceMap": [{"LB": "-Infinity",
+                                                                               "UB": 0,
+                                                                               "price": 0},
+                                                                              {"LB": 0,
+                                                                               "UB": 200,
+                                                                               "price": 0},
+                                                                              {"LB": 200,
+                                                                               "UB": "Infinity",
+                                                                               "price": 0}]}]}})
+    return payload_request
+
+def parse_LoadShift_response(response):
+    forecast = response
+    return forecast
+
+###########################
+if __name__ == '__main__':
+
+    ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
+
+    # Baseline
+    start =  '2018-01-01T00:00:00'
+    granularity =  'PT1H'
+    duration = 'PT24H'
+    bl = Baseline(start, granularity, duration, ws)
+    bl.process()
+
+    # LoadShift
+    ls = LoadShift(ws)
+    ls.process()
 
