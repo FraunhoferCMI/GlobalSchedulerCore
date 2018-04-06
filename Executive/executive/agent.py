@@ -334,7 +334,10 @@ class ExecutiveAgent(Agent):
         self.ess_resources = self.sundial_resources.find_resource_type("ESSCtrlNode")[0]
         self.pv_resources  = self.sundial_resources.find_resource_type("PVCtrlNode")[0]
         self.system_resources = self.sundial_resources.find_resource_type("System")[0]
-        self.loadshift_resources = self.sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
+        try:
+            self.loadshift_resources = self.sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
+        except:
+            self.loadshift_resources = []
         self.load_resources = self.sundial_resources.find_resource_type("Load")[0]
 
         # get a time stamp of start time to database
@@ -400,7 +403,7 @@ class ExecutiveAgent(Agent):
         :return: self.gs_start_time - an ISO8601 datetime string that corresponds to the GS's start time
         Format is: "%Y-%m-%dT%H:%M:%S.%f"
         """
-        return self.gs_start_time.strftime("%Y-%m-%dT%H:%M:%S.%f") #, self.gs_start_time_exact.strftime("%Y-%m-%dT%H:%M:%S.%f") #start_time_str
+        return self.gs_start_time.strftime("%Y-%m-%dT%H:%M:%S") #, self.gs_start_time_exact.strftime("%Y-%m-%dT%H:%M:%S.%f") #start_time_str
 
     ##############################################################################
     def update_sundial_resources(self, sdr_to_sm_lookup_table):
