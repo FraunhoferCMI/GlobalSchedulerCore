@@ -316,7 +316,7 @@ class SundialResource():
 
         if USE_SIM == 1:
             # set a time offset that matches gs start time to the desired sim start time
-            self.sim_offset = SIM_START_TIME - datetime.strptime(gs_start_time,"%Y-%m-%dT%H:%M:%S.%f")
+            self.sim_offset = SIM_START_TIME - datetime.strptime(gs_start_time,"%Y-%m-%dT%H:%M:%S")
 
         self.pts_per_schedule = SSA_PTS_PER_SCHEDULE
         self.init_state_vars()
@@ -326,22 +326,25 @@ class SundialResource():
         self.virtual_plants   = []
         # todo: consider replacing with an eval command?
         for virtual_plant in resource_cfg["VirtualPlantList"]:
-            print(virtual_plant["ResourceType"] + " " + virtual_plant["ID"])
-            if virtual_plant["ResourceType"] == 'ESSCtrlNode':
-                self.virtual_plants.append(
-                    ESSResource(virtual_plant, gs_start_time))
-            elif virtual_plant["ResourceType"] == 'PVCtrlNode':
-                self.virtual_plants.append(
-                    PVResource(virtual_plant, gs_start_time))
-            elif (virtual_plant["ResourceType"] == "LoadShiftCtrlNode"):
-                self.virtual_plants.append(
-                    LoadShiftResource(virtual_plant, gs_start_time))
-            elif virtual_plant["ResourceType"] == "Load":
-                self.virtual_plants.append(
-                    BaselineLoadResource(virtual_plant, gs_start_time))
+            if virtual_plant["Use"] == "Y":
+                print(virtual_plant["ResourceType"] + " " + virtual_plant["ID"])
+                if virtual_plant["ResourceType"] == 'ESSCtrlNode':
+                    self.virtual_plants.append(
+                        ESSResource(virtual_plant, gs_start_time))
+                elif virtual_plant["ResourceType"] == 'PVCtrlNode':
+                    self.virtual_plants.append(
+                        PVResource(virtual_plant, gs_start_time))
+                elif (virtual_plant["ResourceType"] == "LoadShiftCtrlNode"):
+                    self.virtual_plants.append(
+                        LoadShiftResource(virtual_plant, gs_start_time))
+                elif virtual_plant["ResourceType"] == "Load":
+                    self.virtual_plants.append(
+                        BaselineLoadResource(virtual_plant, gs_start_time))
+                else:
+                    self.virtual_plants.append(
+                        SundialResource(virtual_plant, gs_start_time))
             else:
-                self.virtual_plants.append(
-                    SundialResource(virtual_plant, gs_start_time))
+                _log.info("Skipping - "+virtual_plant["ID"])
 
     ##############################################################################
     def find_resource(self, resource_id):
@@ -369,7 +372,6 @@ class SundialResource():
         resources = []
         for virtual_plant in self.virtual_plants:
             resources.extend(virtual_plant.find_resource_type(resource_type))
-
         if resource_type == self.resource_type:
             resources.append(self)
         return resources
@@ -1005,16 +1007,19 @@ class SundialResource_to_SiteManager_lookup_table():
             _log.info("SDR: Setting up agents")
             for device in self.device_list:
                 device.update({"isAvailable": 0})
-                for site in sitemgr_list:
-                    if site["identity"] == device["AgentID"]:
-                        _log.info("SunDial Resource: Agent " + device["AgentID"] + " configured successfully")
-                        device["isAvailable"] = 1
-                        break
 
-                if site["identity"] != device["AgentID"]:
-                    # error trapping - make sure that the agent & associated device are valid entries
-                    _log.info("SunDial Resource: Warning - Agent " + device["AgentID"] + " not found.  Skipping...")
+                if device["Use"] == "Y":
+                    for site in sitemgr_list:
+                        if site["identity"] == device["AgentID"]:
+                            _log.info("SunDial Resource: Agent " + device["AgentID"] + " configured successfully")
+                            device["isAvailable"] = 1
+                            break
 
+                    if site["identity"] != device["AgentID"]:
+                        # error trapping - make sure that the agent & associated device are valid entries
+                        _log.info("SunDial Resource: Warning - Agent " + device["AgentID"] + " not found.  Skipping...")
+                else:
+                    _log.info("SunDial Resource: Agent " + device["AgentID"] + " set to ignore.  Skipping...")
 
 ##############################################################################
 def build_SundialResource_to_SiteManager_lookup_table(sundial_resource_cfg,
@@ -1030,11 +1035,12 @@ def build_SundialResource_to_SiteManager_lookup_table(sundial_resource_cfg,
     """
     _log.info("In BuildSundialResource lookup - Use Volttron="+str(use_volttron))
     for virtual_plant in sundial_resource_cfg["VirtualPlantList"]:
-        build_SundialResource_to_SiteManager_lookup_table(virtual_plant,
-                                                          sundial_resources,
-                                                          SDR_to_SM_table,
-                                                          sitemgr_list,
-                                                          use_volttron)
+        if virtual_plant["Use"] == "Y":
+            build_SundialResource_to_SiteManager_lookup_table(virtual_plant,
+                                                              sundial_resources,
+                                                              SDR_to_SM_table,
+                                                              sitemgr_list,
+                                                              use_volttron)
 
     if sundial_resource_cfg["DeviceList"] != []:  # does this SundialResource have associated end point devices?
         # i.e., is this a terminal node in the resource tree?

@@ -6,12 +6,13 @@
       {
         "ID": "SystemLoadShift",
         "ResourceType": "LoadShiftCtrlNode",
-        "Use": "Y",
+        "Use": "N",
         "VirtualPlantList": [],
         "DeviceList": [
           {
             "AgentID": "FLAME",
-            "DeviceID": "FLAME-loadshift"
+            "DeviceID": "FLAME-loadshift",
+            "Use": "N"
           }
         ]
       },
@@ -23,7 +24,8 @@
         "DeviceList": [
           {
             "AgentID": "FLAME",
-            "DeviceID": "FLAME-baseline"
+            "DeviceID": "FLAME-Baseline",
+            "Use": "Y"
           }
         ]
       },
@@ -35,11 +37,13 @@
         "DeviceList": [
           {
             "AgentID": "ShirleySouth",
-            "DeviceID": "ShirleySouth-PVPlant"
+            "DeviceID": "ShirleySouth-PVPlant",
+            "Use": "Y"
           },
           {
             "AgentID": "ShirleyNorth",
-            "DeviceID": "ShirleyNorth-PVPlant"
+            "DeviceID": "ShirleyNorth-PVPlant",
+            "Use": "N"
           }
         ]
       },
@@ -51,11 +55,13 @@
         "DeviceList": [
           {
             "AgentID": "ShirleySouth",
-            "DeviceID": "ShirleySouth-ESSPlant"
+            "DeviceID": "ShirleySouth-ESSPlant",
+            "Use": "Y"
           },
           {
             "AgentID": "ShirleyNorth",
-            "DeviceID": "ShirleyNorth-ESSPlant"
+            "DeviceID": "ShirleyNorth-ESSPlant",
+            "Use": "N"
           }
         ]
       }
