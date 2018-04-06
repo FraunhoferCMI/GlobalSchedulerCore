@@ -761,6 +761,10 @@ class DERDevice():
 
 
         _log.info("Set Point: DERDevice instance - place holder!!!")
+
+        # this should publish the requested data on to the message bus....
+        # or it could do an RPC call
+
         #ret = sitemgr.vip.rpc.call(
         #    "platform.actuator",
         #    "set_point",
@@ -923,6 +927,32 @@ class DERSite(DERDevice):
             for keyval in self.extpt_to_device_dict:
                 _log.info("Key = " + keyval + ", Val = " + self.extpt_to_device_dict[keyval].device_id)
 
+
+    ##############################################################################
+    def set_auto_mode(self, sitemgr):
+        pass
+
+    ##############################################################################
+    def set_interactive_mode(self, sitemgr):
+        pass
+
+    ##############################################################################
+    def check_mode(self):
+        """
+        placeholder
+        """
+        self.control_mode = 0
+        pass
+
+    ##############################################################################
+    def send_watchdog(self, sitemgr):
+        pass
+
+    ##############################################################################
+    def check_site_heartbeat(self):
+        pass
+
+
 ##############################################################################
 class DERModbusDevice(DERDevice):
 
@@ -992,12 +1022,26 @@ class DERModbusDevice(DERDevice):
             _log.info("SetPt: Expected " + str(
                 self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]) + "; Read: " + str(val))
 
+
+##############################################################################
+class FLAMESite(DERSite):
+    pass
+
+
 ##############################################################################
 class ShirleySite(DERSite, DERModbusDevice):
 
     ##############################################################################
     def __init__(self, site_info, parent_device, data_map_dir):
         DERSite.__init__(self, site_info, parent_device, data_map_dir)
+
+        # Each writeable register within this object should have an entry in chkReg
+        # For each writeable register - identify which register(s) should change based on a write to that
+        # register (in writeReg)
+        # writePending - tracks whether a write is pending
+        # nTries - tracks how many attempts the write routine has made to write this command
+        # expectedValue - tracks the value that we are expecting to show up at the end point register
+        # writeError - set to 1 after nTries exceeds the configured timeout
         self.chkReg = ["SysModeStatus", "WatchDogTimeoutEnable"]
         self.chkRegAttributes = {"SysModeStatus": self.mode_status,
                                  "WatchDogTimeoutEnable": self.mode_ctrl}
@@ -1235,6 +1279,19 @@ class DERCtrlNode(DERDevice):
         _log.info("Setting Power to " + str(val))
         self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
         # where does the actual pwr ctrl live???
+
+
+##############################################################################
+class LoadShiftCtrlNode(DERDevice):
+
+    ##############################################################################
+    def set_power_real(self, val, sitemgr):
+        self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": int(val)})
+        _log.info("Selecting Option ID "+str(val))
+        self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
+
+        self.writePending["SetPoint"] = 1
+        self.expectedValue["SetPoint"] = int(val)
 
 
 ##############################################################################

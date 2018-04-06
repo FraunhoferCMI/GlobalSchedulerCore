@@ -1,0 +1,24 @@
+[
+   {
+      "ID":"FLAME",
+      "SiteModel": "FLAME",
+      "Topics":[
+         {
+            "TopicName":"Forecast",
+            "TopicPath":"devices/flame/forecast",
+            "TopicAgent":"cpr",
+            "TopicScrapeTimeout":"DEMAND_FORECAST_QUERY_INTERVAL*2"
+         }
+      ],
+      "Use" :"Y",
+      "Metered" : "Y",
+      "DeviceList":[
+         {
+            "ID": "Baseline",
+            "ResourceType": "Load",
+            "Metered": "Y",
+            "DeviceList": []
+         }
+      ]
+   }
+]
