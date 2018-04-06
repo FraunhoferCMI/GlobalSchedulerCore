@@ -131,7 +131,6 @@ class SimulatedAnnealer():
         if resource_type == sundial_profiles.sundial_resources.resource_type:
             _log.info(sundial_profiles.sundial_resources.resource_id+" is a "+sundial_profiles.sundial_resources.resource_type)
             resources.append(sundial_profiles)
-
         return resources
 
 
@@ -242,7 +241,10 @@ class SimulatedAnnealer():
         # for simple system topology
         # Currently, we are only handling a single SundialResource per resource_type.
         self.load       = self.get_resource(current_soln, "Load")[0]
-        self.load_shift = self.get_resource(current_soln, "LoadShiftCtrlNode")[0]
+        try:
+            self.load_shift = self.get_resource(current_soln, "LoadShiftCtrlNode")[0]
+        except:
+            self.load_shift = []
         self.pv         = self.get_resource(current_soln, "PVCtrlNode")[0]
         self.ess        = self.get_resource(current_soln, "ESSCtrlNode")[0]
         self.system     = self.get_resource(current_soln, "System")[0]
@@ -439,7 +441,10 @@ if __name__ == '__main__':
     ess_resources = sundial_resources.find_resource_type("ESSCtrlNode")[0]
     pv_resources = sundial_resources.find_resource_type("PVCtrlNode")[0]
     system_resources = sundial_resources.find_resource_type("System")[0]
-    loadshift_resources = sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
+    try:
+        loadshift_resources = sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
+    except:
+        loadshift_resources = []
     load_resources = sundial_resources.find_resource_type("Load")[0]
 
 
