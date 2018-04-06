@@ -60,8 +60,7 @@ from volttron.platform.agent.known_identities import (
     VOLTTRON_CENTRAL, VOLTTRON_CENTRAL_PLATFORM, CONTROL, CONFIGURATION_STORE)
 
 from . import settings
-from gs_identities import (INTERACTIVE, AUTO, STARTING, MODBUS_SCRAPE_INTERVAL, ENABLED, DISABLED,
-                           PMC_WATCHDOG_PD, PMC_HEARTBEAT_PD, CPR_QUERY_INTERVAL)
+from gs_identities import *
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -241,8 +240,7 @@ class SiteManagerAgent(Agent):
 
         Input is a timestamp that has been converted to a string
         """
-
-        HistorianTools.publish_data(self, 
+        HistorianTools.publish_data(self,
                                     self.site.device_id+"Agent", 
                                     "", 
                                     "Mode", 
