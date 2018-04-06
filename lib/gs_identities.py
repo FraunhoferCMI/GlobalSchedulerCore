@@ -76,8 +76,8 @@ APPLICATION_CONTROL = 2
 EXEC_STARTING = 3
 
 EXECUTIVE_CLKTIME = 1 # period, in seconds, at which the executive polls system state
-GS_SCHEDULE       = 20  # period, in seconds, at which the GS optimizer runs
-ESS_SCHEDULE      = 2
+GS_SCHEDULE       = 30  # period, in seconds, at which the GS optimizer runs
+ESS_SCHEDULE      = 5
 STATUS_MSG_PD     = 20 # update rate for various status messages
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
 START_LATENCY = 0 # time in seconds, to delay execution
@@ -95,8 +95,10 @@ SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
 
 
 # For configuring w/simulated data
-USE_SIM = 1
-SIM_SCENARIO = 1
+USE_SIM        = 1
+USE_SOLAR_SIM  = 1
+USE_DEMAND_SIM = 1
+SIM_SCENARIO   = 1
 SIM_HRS_PER_HR = 1 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
 if SIM_SCENARIO == 1:
     PV_FORECAST_FILE = "SAM_PVPwr_nyc.csv"  # "irr_1min.csv"
@@ -108,5 +110,9 @@ else:
     PV_FORECAST_FILE_TIME_RESOLUTION_MIN = 1
     SIM_START_DAY = 200  # day 106 #2  # day 202, Hr = 5 # 200, Hr = 7
     SIM_START_HR  = 7
+
+DEMAND_FORECAST_FILE = "NYC_demand.csv"
+DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN = 60
+DEMAND_FORECAST_QUERY_INTERVAL = 10 # seconds
 
 SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0) + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
