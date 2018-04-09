@@ -63,10 +63,7 @@ from . import settings
 import HistorianTools
 
 import DERDevice
-from gs_identities import (IDLE, USER_CONTROL, APPLICATION_CONTROL, EXEC_STARTING,
-                           EXECUTIVE_CLKTIME, GS_SCHEDULE, ESS_SCHEDULE, ENABLED, DISABLED, STATUS_MSG_PD,
-                           SSA_SCHEDULE_RESOLUTION, SSA_PTS_PER_SCHEDULE, SSA_SCHEDULE_DURATION, SIM_START_TIME,
-                           SIM_HRS_PER_HR, START_LATENCY)
+from gs_identities import *
 from gs_utilities import get_schedule, get_gs_time
 
 #utils.setup_logging()
@@ -460,6 +457,7 @@ class ExecutiveAgent(Agent):
         """
 
         if self.OptimizerEnable == ENABLED:
+
             # update sundial_resources instance with the most recent data from end-point devices
             self.update_sundial_resources(self.sdr_to_sm_lookup_table)
 
@@ -494,16 +492,22 @@ class ExecutiveAgent(Agent):
             max_charge_kW = self.ess_resources.state_vars["MaxChargePwr_kW"]
             max_discharge_kW = self.ess_resources.state_vars["MaxDischargePwr_kW"]
 
-            # figure out set point command
-            # note that this returns a setpoint command for a SundialResource ESSCtrlNode, which can group together
-            # potentially multiple ESS end point devices
-            setpoint = calc_ess_setpoint(targetPwr_kW,
-                                         curPwr_kW,
-                                         SOE_kWh,
-                                         min_SOE_kWh,
-                                         max_SOE_kWh,
-                                         max_charge_kW,
-                                         max_discharge_kW)
+            if REGULATE_ESS_OUTPUT == True:
+                # figure out set point command
+                # note that this returns a setpoint command for a SundialResource ESSCtrlNode, which can group together
+                # potentially multiple ESS end point devices
+                setpoint = calc_ess_setpoint(targetPwr_kW,
+                                             curPwr_kW,
+                                             SOE_kWh,
+                                             min_SOE_kWh,
+                                             max_SOE_kWh,
+                                             max_charge_kW,
+                                             max_discharge_kW)
+
+            else:
+                setpoint = self.ess_resources.schedule_vars["DemandForecast_kW"][0]
+
+
             _log.info("Optimizer: setpoint = " + str(setpoint))
 
             # figure out how to divide set point command between and propagate commands to end point devices
@@ -638,7 +642,19 @@ class ExecutiveAgent(Agent):
                                             default_units["timestamp"],
                                             "timestamp",
                                             [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.pv_resources.schedule_vars["timestamp"]])
-
+                try:
+                    HistorianTools.publish_data(self,
+                                                "LoadResource/Schedule",
+                                                default_units["DemandForecast_kW"],
+                                                "DemandForecast_kW",
+                                                self.load_resources.schedule_vars["DemandForecast_kW"].tolist())
+                    HistorianTools.publish_data(self,
+                                                "LoadResource/Schedule",
+                                                default_units["timestamp"],
+                                                "timestamp",
+                                                [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.load_resources.schedule_vars["timestamp"]])
+                except:    # assume demand module is not implemented
+                    pass
 
     ##############################################################################
     @Core.periodic(STATUS_MSG_PD)
