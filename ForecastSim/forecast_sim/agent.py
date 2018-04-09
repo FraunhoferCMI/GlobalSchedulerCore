@@ -62,7 +62,7 @@ from gs_identities import *
 from gs_utilities import get_schedule, ForecastObject
 import csv
 import pandas
-
+from volttron.platform.messaging import headers as header_mod
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -100,6 +100,7 @@ class CPRAgent(Agent):
         self.default_config = {
             "solar_forecast_topic": "devices/cpr/forecast/all",
             "demand_forecast_topic": "devices/flame/forecast/all",
+            "demand_report_topic": "devices/flame/load_report/all",
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "DEFAULT_MESSAGE": 'FORECAST_SIM_Message',
             "DEFAULT_AGENTID": "FORECAST_SIM",
@@ -270,6 +271,38 @@ class CPRAgent(Agent):
 
         return next_forecast_timestamps
 
+
+    ##############################################################################
+    def parse_load_report(self):
+        """
+        Retrieves a demand forecast in units of "kW"
+            - start time of the forecast is defined by calling get_schedule()
+            - Forecast duration is defined by SSA_SCHEDULE_DURATION
+            - Forecast time step is defined by SSA_SCHEDULE_RESOLUTION
+        """
+        next_forecast_timestamps = self.get_timestamps(self.sim_time_corr)
+        next_forecast            = self.demand_series.get(next_forecast_timestamps)
+        self.load_report = next_forecast[0]
+
+
+        #TimeStamp = utils.get_aware_utc_now()  # datetime.now()
+        #TimeStamp_str = TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
+
+        # 2. build a device-compatible msg:
+        msg =[{'load': self.load_report}, {'load': {"units": 'kW',
+                                                   "tz": "UTC",
+                                                   "data_type": "float"}}]
+
+        now = utils.get_aware_utc_now().isoformat() #datetime.strftime(utils.get_aware_utc_now(), "%Y-%m-%dT%H:%M:%S.f")
+
+        # python code to get this is
+        # from datetime import datetime
+        # from volttron.platform.messaging import headers as header_mod
+        header = {header_mod.DATE: datetime.utcnow().isoformat() + 'Z'}
+        #"Date": "2015-11-17T21:24:10.189393Z"
+
+        return msg, header
+
     ##############################################################################
     def parse_demand_query(self):
         """
@@ -363,6 +396,34 @@ class CPRAgent(Agent):
 
 
     ##############################################################################
+    @Core.periodic(period = DEMAND_REPORT_SCHEDULE)
+    def query_load_report(self):
+        """
+        called at interval defined in CPR_QUERY_INTERVAL (gs_identities)
+        publishes forecast corresponding to the next planned optimizer pass
+        """
+        if USE_DEMAND_SIM == 1:
+            if self.initialization_complete == 1:
+                _log.info("querying for load report from database")
+                message, header = self.parse_load_report()
+                self.vip.pubsub.publish(
+                    peer="pubsub",
+                    topic=self._config['demand_report_topic'],
+                    headers=header,
+                    message=message)
+
+                self.vip.pubsub.publish(
+                    peer="pubsub",
+                    topic=self._config['demand_report_topic'],
+                    headers=header,
+                    message=[{"comm_status": 1}, {"comm_status": {'type': 'int', 'units': 'none'} }])
+
+            else:
+                _log.info("initialization incomplete!!")
+
+
+
+    ##############################################################################
     @Core.periodic(period = CPR_QUERY_INTERVAL)
     def query_solar_forecast(self):
         """
@@ -380,7 +441,7 @@ class CPRAgent(Agent):
                     message=message)
             else:
                 _log.info("initialization incomplete!!")
-            
+
 def main(argv=sys.argv):
     '''Main method called by the platform.'''
     utils.vip_main(CPRAgent)
