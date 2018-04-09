@@ -52,6 +52,7 @@ import csv
 import pytz
 import logging
 import os
+from ObjectiveFunctions import *
 from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_PTS_PER_SCHEDULE, USE_SIM, SIM_START_TIME)
 from gs_utilities import get_gs_time
 _log = logging.getLogger("SDR")
@@ -462,9 +463,16 @@ class SundialResource():
         """
         self.profile = profile
         # print ("Profile for "+self.resource_id+" is: "+str(self.profile))
-        cost = 0
-        for fcn in self.obj_fcns:
-            cost += fcn()
+
+
+
+        cost = 0 #[]
+        for obj_fcn in self.obj_fcns:
+            cost += obj_fcn.obj_fcn_cost(profile) # cost.append(obj_fcn.obj_fcn_cost(profile))
+
+        #cost = 0
+        #for fcn in self.obj_fcns:
+        #    cost += fcn()
         return cost
 
     ############################
@@ -820,8 +828,22 @@ class SundialSystemResource(SundialResource):
         #self.obj_fcns = [self.obj_fcn_follow_loadshape]
         #self.obj_fcns_cfg = [self.cfg_loadshape]
         #self.obj_fcns = [self.obj_fcn_abs_energy, self.obj_fcn_demand]
-        self.obj_fcns = [self.obj_fcn_min_backfeed]
+        ###### was this #### self.obj_fcns = [self.obj_fcn_demand]
+        #self.obj_fcns = [self.obj_fcn_energy]
+        #self.obj_fcns = [self.obj_fcn_min_backfeed]
         self.obj_fcn_cfg = []
+
+        #obj_fcn_cfgs = ['EnergyCostObjectiveFunction("energy_price_data.xlsx", schedule_timestamps)',
+        #                'EnergyCostObjectiveFunction("cpp_data.xlsx", schedule_timestamps)',
+        #                'LoadShapeObjectiveFunction("loadshape_data.xlsx", schedule_timestamps)',
+        #                'DemandChargeObjectiveFunction(10.0, 200.0)']
+
+        obj_fcn_cfgs = ['DemandChargeObjectiveFunction(10.0, 0.0)']
+
+        self.obj_fcns = []
+        for obj_fcn in obj_fcn_cfgs:
+            self.obj_fcns.append(eval(obj_fcn))
+
 
         ##### the following is for setting a target load shape ######
         # assumes 24 hour duration.  Targets 300 kW morning evening / 450  kW in afternoon.
@@ -842,10 +864,10 @@ class SundialSystemResource(SundialResource):
         #                                 0.10, 0.10, 0.10, 0.20, 0.20, 0.20,
         #                                 0.20, 0.20, 0.05, 0.05, 0.05, 0.05])
 
-        self.cost_per_kWh = numpy.array([0.05, 0.05, 0.05, 0.05, 0.07, 0.07,
-                                         0.07, 0.07, 0.07, 0.07, 0.02, 0.02,
-                                         0.02, 0.02, 0.02, 0.20, 0.20, 0.20,
-                                         0.20, 0.20, 0.05, 0.05, 0.05, 0.05])
+        self.cost_per_kWh = numpy.array([0.02, 0.02, 0.02, 0.02, 0.07, 0.07,
+                                         0.07, 0.07, 0.07, 0.07, 0.05, 0.05,
+                                         0.05, 0.05, 0.05, 0.20, 0.20, 0.20,
+                                         0.20, 0.20, 0.05, 0.02, 0.02, 0.02])
 
     ############################
     def load_scenario(self):
