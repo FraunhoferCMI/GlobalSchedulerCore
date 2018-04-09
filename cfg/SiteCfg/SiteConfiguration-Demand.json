@@ -8,6 +8,12 @@
             "TopicPath":"devices/flame/forecast",
             "TopicAgent":"cpr",
             "TopicScrapeTimeout":"DEMAND_FORECAST_QUERY_INTERVAL*2"
+         },
+         {
+            "TopicName":"LoadReport",
+            "TopicPath":"devices/flame/load_report",
+            "TopicAgent":"cpr",
+            "TopicScrapeTimeout":"DEMAND_REPORT_SCHEDULE*2"
          }
       ],
       "Use" :"Y",

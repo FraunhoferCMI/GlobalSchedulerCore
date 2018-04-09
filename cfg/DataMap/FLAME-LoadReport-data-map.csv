@@ -1,0 +1,2 @@
+load,FLAME-Baseline,OpStatus,Pwr_kW,,kW
+comm_status,FLAME,HealthStatus,CommsStatus,0,
