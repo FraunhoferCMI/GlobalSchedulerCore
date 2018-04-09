@@ -93,6 +93,7 @@ SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedu
 SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
 SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
 
+REGULATE_ESS_OUTPUT = False
 
 # For configuring w/simulated data
 USE_SIM        = 1
@@ -114,5 +115,6 @@ else:
 DEMAND_FORECAST_FILE = "NYC_demand.csv"
 DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN = 60
 DEMAND_FORECAST_QUERY_INTERVAL = 10 # seconds
+DEMAND_REPORT_SCHEDULE = 10 # SECONDS
 
 SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0) + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
