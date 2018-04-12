@@ -52,7 +52,7 @@ from datetime import timedelta, datetime
 import pytz
 import os
 from volttron.platform.messaging.health import STATUS_GOOD
-from volttron.platform.vip.agent import Agent, PubSub, Core, RPC
+from volttron.platform.vip.agent import Agent, PubSub, Core, RPC, compat
 from volttron.platform.agent import utils
 from volttron.platform.agent.utils import jsonapi
 from volttron.platform.messaging import topics
@@ -64,6 +64,7 @@ import csv
 import pandas
 from volttron.platform.messaging import headers as header_mod
 
+
 utils.setup_logging()
 _log = logging.getLogger(__name__)
 
@@ -73,6 +74,8 @@ __version__="0.1"
 MINUTES_PER_HR = 60
 MINUTES_PER_DAY = 24 * MINUTES_PER_HR
 MINUTES_PER_YR = 365 * MINUTES_PER_DAY
+
+READ_BACK_MSGS = False
 
 
 class CPRAgent(Agent):
@@ -101,6 +104,7 @@ class CPRAgent(Agent):
             "solar_forecast_topic": "devices/cpr/forecast/all",
             "demand_forecast_topic": "devices/flame/forecast/all",
             "demand_report_topic": "devices/flame/load_report/all",
+            "loadshift_report_topic": "devices/flame/loadshift_forecast",
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "DEFAULT_MESSAGE": 'FORECAST_SIM_Message',
             "DEFAULT_AGENTID": "FORECAST_SIM",
@@ -126,6 +130,10 @@ class CPRAgent(Agent):
         self.last_query              = None
         self.sim_time_corr = timedelta(seconds=0)
         self.gs_start_time = None
+
+        if READ_BACK_MSGS == True: # subscribe to any topics of interest for read back / testing
+            self.vip.pubsub.subscribe(peer='pubsub', prefix=self._config["loadshift_report_topic"], callback=self.read_msgs)  # +'/all'
+            self.vip.pubsub.subscribe(peer='pubsub', prefix=self._config["solar_forecast_topic"], callback=self.read_msgs)  # +'/all'
 
     ##############################################################################
     def configure(self,config_name, action, contents):
@@ -275,7 +283,7 @@ class CPRAgent(Agent):
     ##############################################################################
     def parse_load_report(self):
         """
-        Retrieves a demand forecast in units of "kW"
+        Retrieves a load report in units of "kW"
             - start time of the forecast is defined by calling get_schedule()
             - Forecast duration is defined by SSA_SCHEDULE_DURATION
             - Forecast time step is defined by SSA_SCHEDULE_RESOLUTION
@@ -370,10 +378,10 @@ class CPRAgent(Agent):
 
     ##############################################################################
     @Core.periodic(period = DEMAND_FORECAST_QUERY_INTERVAL)
-    def query_demand_forcast(self):
+    def query_demand_forecast(self):
         """
-        called at interval defined in CPR_QUERY_INTERVAL (gs_identities)
-        publishes forecast corresponding to the next planned optimizer pass
+        called at interval defined in DEMAND_FORECAST_QUERY_INTERVAL (gs_identities)
+        publishes demand forecast corresponding to the next planned optimizer pass
         """
         if USE_DEMAND_SIM == 1:
             if self.initialization_complete == 1:
@@ -390,17 +398,60 @@ class CPRAgent(Agent):
                     topic=self._config['demand_forecast_topic'],
                     headers={},
                     message=[{"comm_status": 1}, {"comm_status": {'type': 'int', 'units': 'none'} }])
-
             else:
                 _log.info("initialization incomplete!!")
+
+
+    ##############################################################################
+    #@Core.periodic(period = LOADSHIFT_FORECAST_QUERY_INTERVAL)
+    def query_loadshift_forecast(self):
+        """
+        called at interval defined in LOADSHIFT_FORECAST_QUERY_INTERVAL (gs_identities)
+        publishes loadshift forecast corresponding to the next planned optimizer pass
+        """
+        if USE_DEMAND_SIM == 1:
+            if self.initialization_complete == 1:
+                _log.info("querying for load shift forecast from database")
+
+                load_shift_forecast = ForecastObject(SSA_PTS_PER_SCHEDULE, "kW", "float", nForecasts=10)
+                load_shift_forecast.forecast_values["Time"] = self.demand_forecast.forecast_values["Time"][:]
+                load_shift_forecast.forecast_values["Forecast"] = [[v*ii for v in self.demand_forecast.forecast_values["Forecast"]] for ii in range(0,10)]
+                message = load_shift_forecast.forecast_obj
+
+                self.vip.pubsub.publish(
+                        peer="pubsub",
+                        topic=self._config['loadshift_report_topic']+'/all',
+                        headers={},
+                        message=message)
+
+                #for ii in range(0,10):
+                #    self.vip.pubsub.publish(
+                #        peer="pubsub",
+                #        topic=self._config['test_report_topic']+"/option"+str(ii)+'/all',
+                #        headers={},
+                #        message=message)
+
+                message = [{"nOptions": 10}, {"nOptions": {'type': 'int', 'units': 'none'}}]
+
+                self.vip.pubsub.publish(
+                    peer="pubsub",
+                    topic=self._config['loadshift_report_topic']+'/all',
+                    headers={},
+                    message=message)
+
+
+        else:
+            _log.info("initialization incomplete!!")
+
+
 
 
     ##############################################################################
     @Core.periodic(period = DEMAND_REPORT_SCHEDULE)
     def query_load_report(self):
         """
-        called at interval defined in CPR_QUERY_INTERVAL (gs_identities)
-        publishes forecast corresponding to the next planned optimizer pass
+        called at interval defined in DEMAND_REPORT_SCHEDULE  (gs_identities)
+        publishes load report on current rt load
         """
         if USE_DEMAND_SIM == 1:
             if self.initialization_complete == 1:
@@ -428,7 +479,7 @@ class CPRAgent(Agent):
     def query_solar_forecast(self):
         """
         called at interval defined in CPR_QUERY_INTERVAL (gs_identities)
-        publishes forecast corresponding to the next planned optimizer pass
+        publishes solar forecast corresponding to the next planned optimizer pass
         """
         if USE_SOLAR_SIM == 1:
             if self.initialization_complete == 1:
@@ -441,6 +492,33 @@ class CPRAgent(Agent):
                     message=message)
             else:
                 _log.info("initialization incomplete!!")
+
+
+    ##############################################################################
+    def read_msgs(self, peer, sender, bus, topic, headers, message):
+        """
+        for testing purposes -
+        parses message on IEB published to the specified path and prints.
+        To enable, set READ_BACK_MSGS to True
+        """
+        _log.info("Topic found - "+str(topic))
+        if sender == 'pubsub.compat':
+            message = compat.unpack_legacy_message(headers, message)
+        _log.info("Msg: "+str(message)+"\n")
+
+        try:
+            #_log.info(str(message[0]["Forecast"][2][0:5]))
+            df = pandas.DataFrame(data=message[0]["Forecast"]).transpose()
+            df.index = pandas.Series(message[0]["Time"])
+            print(df)
+        except:
+            try:
+                df = pandas.DataFrame(data=message[0]["Forecast"])
+                df.index = pandas.Series(message[0]["Time"])
+                print(df)
+            except:
+                pass
+
 
 def main(argv=sys.argv):
     '''Main method called by the platform.'''

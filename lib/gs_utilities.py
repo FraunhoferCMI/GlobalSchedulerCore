@@ -137,8 +137,8 @@ class ForecastObject():
     Data class for storing forecast data in a serializable format that is consumable by the VOLTTRON Historian
     """
     ##############################################################################
-    def __init__(self, length, units, datatype):
-        self.forecast_values = {"Forecast": [0.0]*length,
+    def __init__(self, length, units, datatype, nForecasts = 1):
+        self.forecast_values = {"Forecast": [[0.0]*length]*nForecasts,
                                 "Time": [0]*length,
                                 "Duration": SSA_SCHEDULE_DURATION,
                                 "Resolution": SSA_SCHEDULE_RESOLUTION}
