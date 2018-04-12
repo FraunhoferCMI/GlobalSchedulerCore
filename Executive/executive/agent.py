@@ -481,8 +481,25 @@ class ExecutiveAgent(Agent):
             # FIXME - replace, the schedule (so we would maintain values from previous optimization passes).  Also need
             # FIXME - to consider what happens if optimization pass occurs during a time step
 
-            targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][0]
-            expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][0]
+
+            #cur_gs_time_step = get_schedule(self.gs_start_time) # get_gs_time(self.gs_start_time)
+            cur_gs_time = get_gs_time(self.gs_start_time, timedelta(0))
+            ii = 0
+            _log.info(str(cur_gs_time))
+            for t in self.system_resources.schedule_vars["timestamp"]:
+                _log.info(str(t))
+                if cur_gs_time < t:
+                    break
+                ii += 1
+            ii -= 1
+
+            _log.info("Generating dispatch: ii = "+str(ii))
+            if (ii < 0): # shouldn't ever happen
+                ii = 0
+
+            targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ii]
+            expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][ii]
+            _log.info("Expected power is " + str(expectedPwr_kW))
             _log.info("Target power is " + str(targetPwr_kW))
             _log.info("Current power is "+str(curPwr_kW))
 
@@ -656,8 +673,10 @@ class ExecutiveAgent(Agent):
                 except:    # assume demand module is not implemented
                     pass
 
+                self.print_status_msg()
+
     ##############################################################################
-    @Core.periodic(STATUS_MSG_PD)
+    #@Core.periodic(STATUS_MSG_PD)
     def print_status_msg(self):
         """
         prints status to log file and to database
