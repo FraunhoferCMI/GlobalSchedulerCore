@@ -53,9 +53,11 @@ import pytz
 import logging
 import os
 from ObjectiveFunctions import *
-from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_PTS_PER_SCHEDULE, USE_SIM, SIM_START_TIME)
+from gs_identities import * #(SSA_SCHEDULE_RESOLUTION, SSA_PTS_PER_SCHEDULE, USE_SIM, SIM_START_TIME)
 from gs_utilities import get_gs_time
 _log = logging.getLogger("SDR")
+
+MINUTES_PER_HR = 60
 
 ############################
 class SundialResourceProfile():
@@ -141,7 +143,6 @@ class SundialResourceProfile():
 
         self.sundial_resources = sundial_resources
         self.cost = 0.0
-        self.cfg_cost(schedule_timestamps)
         self.total_cost = self.calc_cost()
 
         pass
@@ -185,10 +186,15 @@ class SundialResourceProfile():
 
     ##############################################################################
     def cfg_cost(self, schedule_timestamps):
-        _log.info("cfg cost - SDR")
-        for virtual_plant in self.virtual_plants:
-            virtual_plant.cfg_cost(schedule_timestamps)
-        self.sundial_resources.cfg_cost(schedule_timestamps)
+        """
+        place holder - eventually may / will be needed to reload / refresh / update cost information
+        :param schedule_timestamps:
+        :return:
+        """
+        #for virtual_plant in self.virtual_plants:
+        #    virtual_plant.cfg_cost(schedule_timestamps)
+        #self.sundial_resources.cfg_cost(schedule_timestamps)
+        pass
 
 
     ##############################################################################
@@ -252,10 +258,6 @@ class SundialResource():
                          "PVCtrlNode", "LoadShiftCtrlNode", "Load", and "System"
     (2) self.resource_id - unique identifier for the SundialResource
     (3) self.obj_fcns - list of references to methods that represent the objective functions associated with this resource
-        Todo - add the ability to pass arguments to obj functions
-    (4) self.update_list_attributes,  self.update_list_end_pts: these are dictionaries that hold instructions for mapping
-        from DERDevice end points to SundialResource end points.
-        FIXME - this is temporary.  Will synchronize/standarize naming in subsequent iteration.
     (5) self.virtual_plants - list of children SundialResources associated with this resource.
     (6) self.update_required - this is a flag that tells the optimizer whether the profile of this resource has changed
         and needs to be updated.  Sort of a temporary fix to speed execution, but there are more elegant ways to do this.
@@ -300,21 +302,15 @@ class SundialResource():
         self.update_required      = 0 # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         self.obj_fcns      = []
-        self.obj_fcns_cfg  = []
-        self.schedule_timestamps = [] # fixme temp
+        #self.schedule_timestamps = []
 
         # initialize dictionaries for mapping from DERDevice keys to SundialResource keys.
         # This should go away in future rev.
-        self.update_list_attributes = {}
-        self.update_list_end_pts    = {}
-        self.update_list_attributes.update({"DemandForecast_kW": "Forecast"})
-        self.update_list_attributes.update({"DemandForecast_t": "Forecast"})
-        self.update_list_attributes.update({"Pwr_kW": "OpStatus"})
-        self.update_list_end_pts.update({"DemandForecast_kW": "Pwr"})
-        self.update_list_end_pts.update({"DemandForecast_t": "t"})
-        self.update_list_end_pts.update({"Pwr_kW": "Pwr_kW"})
+        self.update_list_end_pts    = ["DemandForecast_kW",
+                                       "DemandForecast_t",
+                                       "Pwr_kW"]
 
-
+        self.gs_start_time = gs_start_time
         if USE_SIM == 1:
             # set a time offset that matches gs start time to the desired sim start time
             self.sim_offset = SIM_START_TIME - datetime.strptime(gs_start_time,"%Y-%m-%dT%H:%M:%S")
@@ -389,7 +385,10 @@ class SundialResource():
                            "Pwr_kW": 0.0,
                            "Nameplate": 0.0,  # placeholder to avoid div by zero
                            "DemandForecast_kW": numpy.array([0.0] * self.pts_per_schedule),
-                           "DemandForecast_t": None,
+                           "DemandForecast_t": [datetime.strptime(self.gs_start_time,"%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC) +
+                                                timedelta(minutes=t) for t in range(0,
+                                                                                    SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                                                    SSA_SCHEDULE_RESOLUTION)],
                            "EnergyAvailableForecast_kWh": numpy.array([0.0] * self.pts_per_schedule)}
 
     ##############################################################################
@@ -401,14 +400,17 @@ class SundialResource():
         self.schedule_vars = {"DemandForecast_kW": numpy.array([0.0] * self.pts_per_schedule),
                               "EnergyAvailableForecast_kWh": numpy.array([0.0] * self.pts_per_schedule),
                               "DeltaEnergy_kWh": numpy.array([0.0] * self.pts_per_schedule),
-                              "timestamp": numpy.array([0] * self.pts_per_schedule),
+                              "timestamp": [datetime.strptime(self.gs_start_time,"%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC) +
+                                            timedelta(minutes=t) for t in range(0,
+                                                                                SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                                                SSA_SCHEDULE_RESOLUTION)],
                               "total_cost": 0.0}
 
 
     ##############################################################################
-    def load_scenario(self, demand_forecast=[0.0]*SSA_PTS_PER_SCHEDULE, pk_capacity=0.0):
+    def load_scenario(self, demand_forecast=[0.0]*SSA_PTS_PER_SCHEDULE, pk_capacity=0.0, t= None):
         self.state_vars["DemandForecast_kW"] = numpy.array(demand_forecast)
-        self.state_vars["DemandForecast_t"]  = None
+        self.state_vars["DemandForecast_t"]  = t
         self.state_vars["Nameplate"] = pk_capacity
 
     ##############################################################################
@@ -464,8 +466,6 @@ class SundialResource():
         self.profile = profile
         # print ("Profile for "+self.resource_id+" is: "+str(self.profile))
 
-
-
         cost = 0 #[]
         for obj_fcn in self.obj_fcns:
             cost += obj_fcn.obj_fcn_cost(profile) # cost.append(obj_fcn.obj_fcn_cost(profile))
@@ -474,14 +474,6 @@ class SundialResource():
         #for fcn in self.obj_fcns:
         #    cost += fcn()
         return cost
-
-    ############################
-    def cfg_cost(self, schedule_timestamps):
-        """
-        """
-        self.schedule_timestamps = schedule_timestamps
-        for fcn in self.obj_fcns_cfg:
-            fcn()
 
 
 ##############################################################################
@@ -504,26 +496,14 @@ class ESSResource(SundialResource):
         self.update_required = 1  # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         # define a bunch of ESS-specific end points to update
-        self.update_list_attributes.update({"MaxSOE_kWh":"OpStatus"})
-        self.update_list_attributes.update({"MinSOE_kWh":"Config"})
-        self.update_list_attributes.update({"SOE_kWh": "OpStatus"})
-        self.update_list_attributes.update({"ChgEff": "Config"})
-        self.update_list_attributes.update({"DischgEff": "Config"})
-        self.update_list_attributes.update({"MaxChargePwr_kW": "OpStatus"})
-        self.update_list_attributes.update({"MaxDischargePwr_kW": "OpStatus"})
-        self.update_list_attributes.update({"Nameplate": "Config"})
-
-        self.update_list_end_pts.update({"MaxSOE_kWh":"FullChargeEnergy_kWh"})
-        self.update_list_end_pts.update({"MinSOE_kWh":"MinEnergy_kWh"})
-        self.update_list_end_pts.update({"SOE_kWh": "Energy_kWh"})
-        self.update_list_end_pts.update({"ChgEff": "ChgEff"})
-        self.update_list_end_pts.update({"DischgEff": "DischgEff"})
-        self.update_list_end_pts.update({"MaxChargePwr_kW": "MaxChargePwr_kW"})
-        self.update_list_end_pts.update({"MaxDischargePwr_kW": "MaxDischargePwr_kW"})
-        self.update_list_end_pts.update({"Nameplate": "Nameplate_kW"})
-
-        pass
-
+        self.update_list_end_pts.extend(["MaxSOE_kWh",
+                                         "MinSOE_kWh",
+                                         "SOE_kWh",
+                                         "ChgEff",
+                                         "DischgEff",
+                                         "MaxChargePwr_kW",
+                                         "MaxDischargePwr_kW",
+                                         "Nameplate"])
 
     ##############################################################################
     def init_state_vars(self):
@@ -549,12 +529,12 @@ class ESSResource(SundialResource):
 
     ##############################################################################
     def load_scenario(self, init_SOE=0.0, max_soe=0.0, min_soe=0.0, max_chg=0.0,
-                      max_discharge=0.0, chg_eff=1.0, dischg_eff=1.0, demand_forecast=[0.0]*SSA_PTS_PER_SCHEDULE):
+                      max_discharge=0.0, chg_eff=1.0, dischg_eff=1.0, demand_forecast=[0.0]*SSA_PTS_PER_SCHEDULE, t = None):
         self.state_vars["MaxSOE_kWh"] = max_soe
         self.state_vars["MinSOE_kWh"] = min_soe
         self.state_vars["SOE_kWh"]    = init_SOE
         self.state_vars["DemandForecast_kW"] = numpy.array(demand_forecast)
-        self.state_vars["DemandForecast_t"]  = None #FIXME need to pass values
+        self.state_vars["DemandForecast_t"]  = t
         self.state_vars["EnergyAvailableForecast_kWh"] = numpy.array([self.state_vars["SOE_kWh"]]*SSA_PTS_PER_SCHEDULE)
         self.state_vars["ChgEff"]    = chg_eff
         self.state_vars["DischgEff"] = dischg_eff
@@ -821,17 +801,11 @@ class SundialSystemResource(SundialResource):
         self.update_required = 1  # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         #########################################################
-        # set up objective functions to apply for the system
+        # set up the specific set of objective functions to apply for the system
+
         # currently set up as a bunch of hard coded values.  Eventually need to parameterize / abstract.
         self.demand_threshold   = 0.0  # threshold at which demand charges accrue
         self.demand_cost_per_kW = 10.0 # per kW cost of demand in excess of self.demand_threshold
-        #self.obj_fcns = [self.obj_fcn_follow_loadshape]
-        #self.obj_fcns_cfg = [self.cfg_loadshape]
-        #self.obj_fcns = [self.obj_fcn_abs_energy, self.obj_fcn_demand]
-        ###### was this #### self.obj_fcns = [self.obj_fcn_demand]
-        #self.obj_fcns = [self.obj_fcn_energy]
-        #self.obj_fcns = [self.obj_fcn_min_backfeed]
-        self.obj_fcn_cfg = []
 
         #obj_fcn_cfgs = ['EnergyCostObjectiveFunction("energy_price_data.xlsx", schedule_timestamps)',
         #                'EnergyCostObjectiveFunction("cpp_data.xlsx", schedule_timestamps)',
@@ -840,34 +814,10 @@ class SundialSystemResource(SundialResource):
 
         #obj_fcn_cfgs = ['DemandChargeObjectiveFunction(10.0, 0.0)']
         obj_fcn_cfgs = ['TieredEnergyObjectiveFunction()']
+
         self.obj_fcns = []
         for obj_fcn in obj_fcn_cfgs:
             self.obj_fcns.append(eval(obj_fcn))
-
-
-        ##### the following is for setting a target load shape ######
-        # assumes 24 hour duration.  Targets 300 kW morning evening / 450  kW in afternoon.
-        self.target_profile = numpy.array([0.0]*SSA_PTS_PER_SCHEDULE)
-        for ii in range(0,6*int(60/SSA_SCHEDULE_RESOLUTION)):
-            self.target_profile[ii] = 300.0
-
-        for ii in range(6 * int(60 / SSA_SCHEDULE_RESOLUTION),21*int(60/SSA_SCHEDULE_RESOLUTION)):
-            self.target_profile[ii] = 450.0
-
-        for ii in range(21*int(60/SSA_SCHEDULE_RESOLUTION), 24*int(60/SSA_SCHEDULE_RESOLUTION)):
-            self.target_profile[ii] = 300.0
-
-
-        ###### for setting a per kWh price #####
-        #self.cost_per_kWh = numpy.array([0.05, 0.05, 0.05, 0.05, 0.07, 0.07,
-        #                                 0.07, 0.07, 0.07, 0.07, 0.10, 0.10,
-        #                                 0.10, 0.10, 0.10, 0.20, 0.20, 0.20,
-        #                                 0.20, 0.20, 0.05, 0.05, 0.05, 0.05])
-
-        self.cost_per_kWh = numpy.array([0.02, 0.02, 0.02, 0.02, 0.07, 0.07,
-                                         0.07, 0.07, 0.07, 0.07, 0.05, 0.05,
-                                         0.05, 0.05, 0.05, 0.20, 0.20, 0.20,
-                                         0.20, 0.20, 0.05, 0.02, 0.02, 0.02])
 
     ############################
     def load_scenario(self):
@@ -884,8 +834,12 @@ class SundialSystemResource(SundialResource):
             # propagate values from child nodes upwards
             #print("virtual plant is "+virtual_plant.resource_id)
             for k,v in self.state_vars.items():
-                self.state_vars[k] += virtual_plant.state_vars[k]
                 #print("k="+k+"; v= "+str(self.state_vars[k]))
+                if k == "DemandForecast_t":
+                    if (virtual_plant.state_vars[k] != None):
+                        self.state_vars[k] = virtual_plant.state_vars[k]  # fixme - tmp fix, assumes all forecasts are aligned
+                else:
+                    self.state_vars[k] += virtual_plant.state_vars[k]
 
     ##############################################################################
     def init_test_values(self, length):
@@ -893,119 +847,6 @@ class SundialSystemResource(SundialResource):
         _log.info("Resource "+self.resource_id)
         for k, v in self.state_vars.items():
             _log.info(k+": "+str(v))
-
-
-    ##############################################################################
-    def obj_fcn_abs_energy(self):
-        """
-        placeholder for a function that calculates an energy cost for a given net demand profile
-        :return:cost - the cost of executing the profile, in $
-        """
-
-        # note that this is not a real fcn - just useful for tuning / testing.
-        # it is charging you to import OR export energy (abs(demand)
-
-        demand = numpy.array(self.profile)
-        cost = sum(self.cost_per_kWh * abs(demand))
-        return cost
-
-    ##############################################################################
-    def obj_fcn_energy(self):
-        """
-        placeholder for a function that calculates an energy cost for a given net demand profile
-        :return:cost - the cost of executing the profile, in $
-        """
-        demand = numpy.array(self.profile)
-        cost = sum(self.cost_per_kWh * demand)
-        return cost
-
-    ##############################################################################
-    def obj_fcn_demand(self):
-        """
-        placeholder for a function that calculates a demand charge for a given net demand profile
-        :return: cost of executing the profile, in $
-        """
-        max_demand = max(self.profile)
-        if max_demand > self.demand_threshold:
-            cost = self.demand_cost_per_kW*(max_demand-self.demand_threshold)
-        else:
-            cost = 0.0
-        return cost
-
-    ##############################################################################
-    def obj_fcn_min_backfeed(self):
-        """
-        placeholder for a function that calculates a demand charge for a given net demand profile
-        :return: cost of executing the profile, in $
-        """
-        max_bf = min(self.profile)
-
-        # tier at 200, 100, 10
-        cost = 0.0
-        for p in self.profile:
-            cost += max(-1 * p - 300.0, 0) * 100.0
-            cost += max(-1 * p - 250.0, 0) * 50.0
-            cost += max(-1 * p - 200.0, 0) * 25.0
-            cost += max(-1 * p - 150.0, 0) * 10.0
-            cost += max(-1 * p - 100.0, 0) * 10.0
-            cost += max(-1 * p - 50.0, 0) * 10.0
-            cost += max(-1 * p, 0.0) * 10.0
-
-        #if max_bf < 0: #self.demand_threshold:
-        #    cost = self.demand_cost_per_kW*(-1*max_bf)
-        #else:
-        #    cost = 0
-        return cost
-
-    ##############################################################################
-    def cfg_loadshape(self):
-        loadshape_file = "loadshape.csv"
-        self.volttron_root = os.getcwd()
-        self.volttron_root = self.volttron_root + "/../../../../gs_cfg/"
-        csv_name           = (self.volttron_root + loadshape_file)
-        _log.info(csv_name)
-
-        #gs_start_time = datetime.datetime.strptime(self.vip.rpc.call("executiveagent-1.0_1",
-        #                                                             "get_gs_start_time").get(timeout=5),
-        #                                           "%Y-%m-%dT%H:%M:%S.%f")
-
-        ls_array = []
-        ts_array = []
-
-        try:
-            with open(csv_name, 'rb') as csvfile:
-                csv_data = csv.reader(csvfile)
-
-                for row in csv_data:
-                    ts_array.append(datetime.strptime(row[0], "%Y-%m-%dT%H:%M:%S"))
-                    ls_array.append(float(row[1]))
-        except IOError as e:
-            _log.info("loadshape database " + csv_name + " not found")
-
-        loadshapes = pandas.Series(data=ls_array, index=ts_array)
-        offset_ts = [t+self.sim_offset for t in self.schedule_timestamps]
-        #+SIM_TIME_CORR
-        self.target_profile = numpy.array(loadshapes.get(offset_ts))
-        _log.info("Load Shape time stamps are:"+str(offset_ts))
-        #_log.info("load shape: "+str(get_sim_time_corr())) #gs_identities.SIM_TIME_CORR["val"]))
-        _log.info("load shape is: "+str(self.target_profile))
-
-        pass
-
-    ##############################################################################
-    def obj_fcn_follow_loadshape(self):
-        """
-        imposes a cost for deviations from a target load shape.
-        cost is calculated as square of the error relative to the target load shape.
-        :return: cost of executing proposed profile, in $
-        """
-        price  = 10.0 # sort of arbitrary.    objfcn_params.loadshape.weight;
-        demand = numpy.array(self.profile)
-
-        err  = (demand-self.target_profile)**2
-        cost = sum(err)*price
-        return cost
-
 
 ##############################################################################
 class SundialResource_to_SiteManager_lookup_table():
@@ -1097,6 +938,14 @@ def export_schedule(profile, timestamps):
     profile.sundial_resources.schedule_vars["DeltaEnergy_kWh"] = profile.state_vars["DeltaEnergy_kWh"]
     profile.sundial_resources.schedule_vars["timestamp"] = copy.deepcopy(timestamps)
     profile.sundial_resources.schedule_vars["total_cost"] = profile.total_cost
+
+
+    demand_df = pandas.DataFrame(data=[profile.sundial_resources.schedule_vars["DemandForecast_kW"],
+                                       profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"]]).transpose()
+    demand_df.columns = ["Demand-"+profile.sundial_resources.resource_id, "Energy-"+profile.sundial_resources.resource_id]
+    demand_df.index = pandas.Series(profile.sundial_resources.schedule_vars["timestamp"])
+    print(demand_df)
+
     pass
 
 if __name__ == "__main__":

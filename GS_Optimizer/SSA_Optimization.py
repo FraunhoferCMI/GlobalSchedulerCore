@@ -57,6 +57,7 @@ from gs_utilities import get_schedule
 
 _log = logging.getLogger("SSA")
 
+MINUTES_PER_HR = 60
 
 ############################
 class SimulatedAnnealer():
@@ -319,6 +320,9 @@ class SimulatedAnnealer():
             # update overall "system" with new ESS profile - above, subtracted old ESS profile.  next line adds new profile
             self.system.state_vars["DemandForecast_kW"] = self.system.state_vars["DemandForecast_kW"] + \
                                                           self.ess.state_vars["DemandForecast_kW"]
+            self.system.state_vars["EnergyAvailableForecast_kWh"] = self.ess.state_vars["EnergyAvailableForecast_kWh"][:]
+
+
             #current_soln.update_state() # not implemented
 
 
@@ -382,14 +386,14 @@ class SimulatedAnnealer():
             export_schedule(least_cost_soln, timestamps)
         else:
             _log.info("SSA: Lower cost solution not found - using previous solution")
-        _log.info("Time Stamps are:"+str(least_cost_soln.sundial_resources.schedule_vars["timestamp"]))
-        _log.info("ESS profile: "+str(self.ess_least_cost.state_vars["DemandForecast_kW"]))
-        _log.info("System profile: " + str(least_cost_soln.state_vars["DemandForecast_kW"]))
-        _log.info("System profile: " + str(least_cost_soln.sundial_resources.schedule_vars["DemandForecast_kW"]))
-        for virtual_plant in least_cost_soln.virtual_plants:
-            _log.info(virtual_plant.sundial_resources.resource_id+": "+str(virtual_plant.state_vars["DemandForecast_kW"]))
-            _log.info(virtual_plant.sundial_resources.resource_id + ": " +
-                      str(virtual_plant.sundial_resources.schedule_vars["DemandForecast_kW"]))
+        #_log.info("Time Stamps are:"+str(least_cost_soln.sundial_resources.schedule_vars["timestamp"]))
+        #_log.info("ESS profile: "+str(self.ess_least_cost.state_vars["DemandForecast_kW"]))
+        #_log.info("System profile: " + str(least_cost_soln.state_vars["DemandForecast_kW"]))
+        #_log.info("System profile: " + str(least_cost_soln.sundial_resources.schedule_vars["DemandForecast_kW"]))
+        #for virtual_plant in least_cost_soln.virtual_plants:
+        #    _log.info(virtual_plant.sundial_resources.resource_id+": "+str(virtual_plant.state_vars["DemandForecast_kW"]))
+        #    _log.info(virtual_plant.sundial_resources.resource_id + ": " +
+        #              str(virtual_plant.sundial_resources.schedule_vars["DemandForecast_kW"]))
 
 
         # dump some data to a csv file
@@ -429,7 +433,8 @@ if __name__ == '__main__':
     #gs_start_time = datetime.datetime.strptime(get_schedule(gs_start_time_exact),
     #                                           "%Y-%m-%dT%H:%M:%S.%f")
     gs_start_time = datetime.utcnow().replace(microsecond=0)
-    sundial_resources = SundialSystemResource(sundial_resource_cfg_list, gs_start_time)
+    gs_start_time_str = gs_start_time.strftime("%Y-%m-%dT%H:%M:%S")
+    sundial_resources = SundialSystemResource(sundial_resource_cfg_list, gs_start_time_str)
 
     #for resource in sundial_resources:
     #    print("Device ID: "+resource.resource_id, "; Device Type = "+resource.resource_type)
@@ -446,6 +451,12 @@ if __name__ == '__main__':
     except:
         loadshift_resources = []
     load_resources = sundial_resources.find_resource_type("Load")[0]
+
+
+    forecast_timestamps = [gs_start_time +
+                           timedelta(minutes=t) for t in range(0,
+                                                               SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                               SSA_SCHEDULE_RESOLUTION)]
 
 
     #### Just load with example values - ######
@@ -490,7 +501,10 @@ if __name__ == '__main__':
     load_resources.load_scenario(demand_forecast = demand_forecast,
                                  pk_capacity = 1000.0)
 
-    loadshift_resources.load_scenario()
+    try:
+        loadshift_resources.load_scenario()
+    except:
+        pass
     system_resources.load_scenario()
 
 
@@ -500,5 +514,10 @@ if __name__ == '__main__':
 
     ##### This section replicates the periodic call of the optimizer ######
     # calls the actual optimizer.
-    optimizer.run_ssa_optimization(sundial_resources,[])
+    schedule_timestamps = [gs_start_time +
+                           timedelta(minutes=t) for t in range(0,
+                                                               SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                               SSA_SCHEDULE_RESOLUTION)]
+
+    optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps)
 

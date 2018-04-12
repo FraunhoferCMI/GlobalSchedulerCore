@@ -424,9 +424,9 @@ class ExecutiveAgent(Agent):
                 # TODO: Right here is where we would check the health status, availability, etc of end point devices
                 # TODO: to see if we should include within the next optimization pass
 
-                for (k,v) in entries.sundial_resource.update_list_end_pts.items(): #(a, v) in zip(entries.sundial_resource.update_list_attributes, entries.sundial_resource.update_list_end_pts):
+                for k in entries.sundial_resource.update_list_end_pts:
                     # now map data end points from devices to SundialResources
-                    _log.debug("UpdateSDR: "+entries.sundial_resource.resource_id+": SM Device ="+devices["DeviceID"]+"; k="+str(k)+"v="+str(v))
+                    _log.debug("UpdateSDR: "+entries.sundial_resource.resource_id+": SM Device ="+devices["DeviceID"]+"; k="+str(k))
                     if devices["isAvailable"] == 1:
                         # FIXME - should this extrapolate values to schedule start time.
                         # FIXME - e.g., assuming battery continues to charge / discharge at present rate what would the
@@ -435,7 +435,7 @@ class ExecutiveAgent(Agent):
                             dev_state_var = self.vip.rpc.call(str(devices["AgentID"]),
                                                               "get_device_state_vars",
                                                               devices["DeviceID"]).get(timeout=5)
-                            _log.info(k+": "+str(dev_state_var[k]))
+                            _log.info(str(k)+": "+str(dev_state_var[k]))
 
                             entries.sundial_resource.state_vars[k] = dev_state_var[k]
 
