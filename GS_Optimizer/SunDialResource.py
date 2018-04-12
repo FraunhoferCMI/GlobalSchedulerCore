@@ -838,8 +838,8 @@ class SundialSystemResource(SundialResource):
         #                'LoadShapeObjectiveFunction("loadshape_data.xlsx", schedule_timestamps)',
         #                'DemandChargeObjectiveFunction(10.0, 200.0)']
 
-        obj_fcn_cfgs = ['DemandChargeObjectiveFunction(10.0, 0.0)']
-
+        #obj_fcn_cfgs = ['DemandChargeObjectiveFunction(10.0, 0.0)']
+        obj_fcn_cfgs = ['TieredEnergyObjectiveFunction()']
         self.obj_fcns = []
         for obj_fcn in obj_fcn_cfgs:
             self.obj_fcns.append(eval(obj_fcn))

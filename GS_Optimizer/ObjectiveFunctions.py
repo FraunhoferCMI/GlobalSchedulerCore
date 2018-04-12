@@ -61,6 +61,40 @@ class DemandChargeObjectiveFunction():
             cost = 0.0
         return cost
 
+##############################################################################
+class TieredEnergyObjectiveFunction():
+    """
+    placeholder for a function that calculates a demand charge for a given net demand profile
+    :return: cost of executing the profile, in $
+    """
+    ##############################################################################
+    def __init__(self):
+        # fname, schedule_timestamps, sim_offset=timedelta(0)
+        pass
+
+
+    ##############################################################################
+    def obj_fcn_cost(self, profile):
+
+        max_bf = max(profile)
+
+        # tier at 200, 100, 10
+        cost = 0.0
+        for p in profile:
+            cost += max(p - 400.0, 0) * 100.0
+            cost += max(p - 250.0, 0) * 50.0
+            cost += max(p - 200.0, 0) * 25.0
+            cost += max(p - 150.0, 0) * 10.0
+            cost += max(p - 100.0, 0) * 5.0
+            cost += max(p - 50.0, 0) * 3.0
+            cost += max(p, 0.0) * 1.0
+
+        # if max_bf < 0: #self.demand_threshold:
+        #    cost = self.demand_cost_per_kW*(-1*max_bf)
+        # else:
+        #    cost = 0
+        return cost
+
 
 ##############################################################################
 class LoadShapeObjectiveFunction(ObjectiveFunction):
