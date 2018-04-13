@@ -62,6 +62,10 @@ from gs_utilities import get_schedule, ForecastObject
 import csv
 import pandas
 
+from .FLAME import Baseline, LoadShift
+from websocket import create_connection
+WEBSOCKET_URL = "ws://flame.ipkeys.com:8888/socket/msg"
+
 utils.setup_logging()
 _log = logging.getLogger(__name__)
 
@@ -152,16 +156,26 @@ class FLAMECommsAgent(Agent):
 
 
     ##############################################################################
-    @Core.periodic(period=DEMAND_FORECAST_QUERY_INTERVAL)   #### code for calling something periodically
-    def query_demand_forcast(self):
+    # @Core.periodic(period=DEMAND_FORECAST_QUERY_INTERVAL)   #### code for calling something periodically
+    def query_baseline(self):
         """
         queries the FLAME server for baseline message
         """
         if self.initialization_complete == 1:
             _log.info("querying for demand forecast from database")
+            # Baseline
+            start =  '2018-01-01T00:00:00'
+            granularity =  'PT1H'
+            duration = 'PT24H'
+            ws = create_connection(WEBSOCKET_URL, timeout=None)
+            bl = Baseline(start, granularity, duration, ws)
+            bl.process()
+            ws.close()
 
             #### code for publishing to the volttron bus
-            message = self.baseline_msg.process()    # call to demand forecast object class thingie
+            message = bl.fo.forecast_values    # call to demand forecast object class thingie
+            # message = bl.forecast    # call to demand forecast object class thingie
+            # message = self.baseline_msg.process()    # call to demand forecast object class thingie
             comm_status = 1 # were there errors?
             self.vip.pubsub.publish(
                 peer="pubsub",
@@ -184,26 +198,34 @@ class FLAMECommsAgent(Agent):
 
     ##############################################################################
     @Core.periodic(period=LOADSHIFT_QUERY_INTERVAL)
-    def query_demand_forcast(self):
+    def query_loadshift(self):
         """
         queries the FLAME server for baseline message
         """
         if self.initialization_complete == 1:
             _log.info("querying for demand forecast from database")
-            message = self.load_shift_msg.process()    # call to demand forecast object class thingie
+
+
+            ws = create_connection(WEBSOCKET_URL, timeout=None)
+            ls = LoadShift(ws)
+            ls.process()
+            # message = ls.fo.forecast_values    # call to demand forecast object class thingie
+            ws.close()
+            # message = self.load_shift_msg.process()    # call to demand forecast object class thingie
             comm_status = 1 # were there errors?
-            self.vip.pubsub.publish(
-                peer="pubsub",
-                topic=self._config['loadshift_forecast_topic'],
-                headers={},
-                message=message)
+            for option, message in ls.fos.items():
+                self.vip.pubsub.publish(
+                    peer="pubsub",
+                    topic=self._config['loadshift_forecast_topic'],
+                    headers={},
+                    message=message.forecast_values)
 
 
-            self.vip.pubsub.publish(
-                peer="pubsub",
-                topic=self._config['loadshift_forecast_topic'],
-                headers={},
-                message=[{"comm_status": 1}, {"comm_status": {'type': 'int', 'units': 'none'}}])
+            # self.vip.pubsub.publish(
+            #     peer="pubsub",
+            #     topic=self._config['loadshift_forecast_topic'],
+            #     headers={},
+            #     message=[{"comm_status": 1}, {"comm_status": {'type': 'int', 'units': 'none'}}])
 
         else:
             _log.info("initialization incomplete!!")

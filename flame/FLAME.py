@@ -7,6 +7,8 @@ from websocket import create_connection
 import json
 import pandas as pd
 
+import logging
+
 ## Stubbed out version of a standalone FLAME application
 # This is a tool to exchange messagers with the IPKeys webserver FLAME
 
@@ -31,6 +33,7 @@ LOADSHIFT_FORECAST_SCHEDULE = 60 # minutes.  currently unused
 
 test_start_time  = datetime.utcnow()
 
+_log = logging.getLogger(__name__)
 
 ###########################
 def get_marginal_cost_curve():
@@ -210,9 +213,9 @@ class ForecastObject():
     Data class for storing forecast data in a serializable format that is consumable by the VOLTTRON Historian
     """
     ##############################################################################
-    def __init__(self, length, units, datatype):
-        self.forecast_values = {"Forecast": [0.0]*length,
-                                "Time": [0]*length,
+    def __init__(self, forecast, time, units, datatype):
+        self.forecast_values = {"Forecast": forecast,
+                                "Time": time,
                                 "Duration": SSA_SCHEDULE_DURATION,
                                 "Resolution": SSA_SCHEDULE_RESOLUTION}
         self.forecast_meta_data = {"Forecast": {"units": units, "type": datatype},
@@ -238,16 +241,16 @@ class IPKeys(object):
         """
         # check if request has already been processed
         if self.fo:
-            print('request already processed')
+            _log.info('request already processed')
             return None
 
         # (2) send request
-        print("Sending Request")
-        ws.send(self.request)
+        _log.info("Sending Request")
+        self.ws.send(self.request)
 
         # (3) check for response
-        print("Receiving")
-        result_json = ws.recv()
+        _log.info("Receiving")
+        result_json = self.ws.recv()
         self.response = json.loads(result_json)
 
         # (4) check for errors
@@ -290,7 +293,9 @@ class Baseline(IPKeys):
         length = len(forecast)
         units = forecast.units[0]
         datatype = forecast.value.dtype
-        self.fo = ForecastObject(length, units, datatype)
+        forecast = forecast['value'].tolist()
+        time = forecast.index.tolist()
+        self.fo = ForecastObject(forecast, time, units, datatype)
 
         return None
 
@@ -318,10 +323,17 @@ class LoadShift(IPKeys):
         self.forecast = forecast
 
         # prepare ForecastObject from response values
-        # length = len(forecast)
         # units = forecast.units[0]
-        # datatype = forecast.value.dtype
-        # self.fo = ForecastObject(length, units, datatype)
+
+        # units = self.response['msg']['loadSchedule'][0]['units']
+        # print(self.response['msg']['options'][0]['loadSchedule'].keys())
+        self.fos = {}
+        for optionNum, profile in forecast.items():
+            datatype = profile.dtype
+            self.fos[optionNum] = ForecastObject(profile.tolist(),
+                                                 profile.index.tolist(),
+                                                 optionNum,
+                                                 datatype)
 
         return None
 
