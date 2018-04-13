@@ -309,10 +309,12 @@ class LoadShift(IPKeys):
                            # '%s,' % self.granularity,
                            # '%s)' % self.duration,
                            ]))
+
     def process(self):
 
         self._send_receive()
-        forecast = parse_LoadShift_response(self.response)
+        forecast, costs = parse_LoadShift_response(self.response)
+        self.costs = costs
         self.forecast = forecast
 
         # prepare ForecastObject from response values
@@ -365,8 +367,24 @@ def create_load_request():
     return payload_request
 
 def parse_LoadShift_response(response):
-    forecast = response
-    return forecast
+    # forecast = response
+    # ops = ls.forecast['msg']['options']
+    response_options = response['msg']['options']
+    ind_options = []
+    costs = {}
+    for option in response_options:
+        implementationCost = option['implementationCost']
+        optionID = option['optionID']
+        costs[optionID] = implementationCost
+
+        loadSchedule = option['loadSchedule']
+        df = pd.DataFrame(loadSchedule)
+        option_values = df.set_index('dstart')['value']
+        option_values.name = optionID
+        ind_options.append(option_values)
+    forecast = pd.concat(ind_options, axis=1)
+
+    return forecast, costs
 
 ###########################
 if __name__ == '__main__':
@@ -383,4 +401,3 @@ if __name__ == '__main__':
     # LoadShift
     ls = LoadShift(ws)
     ls.process()
-
