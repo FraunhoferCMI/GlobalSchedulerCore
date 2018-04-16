@@ -1,6 +1,7 @@
 import numpy
 import pandas
 import os
+import pytz
 from datetime import datetime, timedelta
 import csv
 
@@ -19,10 +20,26 @@ class ObjectiveFunction():
         :return:
         """
         #### Read data from a file into a data structure that stores the complete time series.
-        obj_fcn_data = pandas.read_excel(fname, header=0, index_col=0)
+        volttron_root = os.getcwd()
+        volttron_root = volttron_root + "/../../../../gs_cfg/"
+
+        fname_fullpath = volttron_root+fname
+        obj_fcn_data = pandas.read_excel(fname_fullpath, header=0, index_col=0)
         offset_ts = [t +sim_offset for t in schedule_timestamps]   #todo - revist for non sim case
         #### Find the time window corresponding to the current set of timestamps:
-        self.cur_cost = obj_fcn_data.loc[offset_ts].interpolate(method='linear')
+
+        #nearest_time_ind = np.argmin(
+        #    np.abs(np.array([pd.Timestamp(t).to_pydatetime() for t in cur_data.ts.values]) - tgt_time))
+        #cur_forecast_str = cur_data.iloc[nearest_time_ind].value_string
+
+        # slow!~ could be optimized.
+        indices = [numpy.argmin(
+            numpy.abs(
+                numpy.array([pandas.Timestamp(t).replace(tzinfo=pytz.UTC).to_pydatetime() for t in obj_fcn_data.index]) -
+                (ts.replace(minute=0, second=0, microsecond=0) + sim_offset))) for ts in schedule_timestamps]
+
+
+        self.cur_cost = obj_fcn_data.iloc[indices]  #obj_fcn_data.loc[offset_ts].interpolate(method='linear')
         #return cur_data
 
 
@@ -88,6 +105,10 @@ class TieredEnergyObjectiveFunction():
             cost += max(p - 100.0, 0) * 5.0
             cost += max(p - 50.0, 0) * 3.0
             cost += max(p, 0.0) * 1.0
+
+            #if p > 0:
+            #    cost += p*p
+
 
         # if max_bf < 0: #self.demand_threshold:
         #    cost = self.demand_cost_per_kW*(-1*max_bf)

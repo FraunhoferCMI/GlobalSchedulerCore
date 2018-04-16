@@ -59,6 +59,8 @@ _log = logging.getLogger("SDR")
 
 MINUTES_PER_HR = 60
 
+forecast_keys = ["DemandForecast_kW", "EnergyAvailableForecast_kWh", "DemandForecast_t"]
+
 ############################
 class SundialResourceProfile():
     """
@@ -142,6 +144,8 @@ class SundialResourceProfile():
             pass
 
         self.sundial_resources = sundial_resources
+        self.cfg_cost(schedule_timestamps)
+
         self.cost = 0.0
         self.total_cost = self.calc_cost()
 
@@ -191,9 +195,14 @@ class SundialResourceProfile():
         :param schedule_timestamps:
         :return:
         """
-        #for virtual_plant in self.virtual_plants:
-        #    virtual_plant.cfg_cost(schedule_timestamps)
+        for virtual_plant in self.virtual_plants:
+            virtual_plant.cfg_cost(schedule_timestamps)
         #self.sundial_resources.cfg_cost(schedule_timestamps)
+
+        self.sundial_resources.obj_fcns = []
+        for obj_fcn in self.sundial_resources.obj_fcn_cfgs:
+            self.sundial_resources.obj_fcns.append(eval(obj_fcn))
+
         pass
 
 
@@ -302,6 +311,7 @@ class SundialResource():
         self.update_required      = 0 # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         self.obj_fcns      = []
+        self.obj_fcn_cfgs = []
         #self.schedule_timestamps = []
 
         # initialize dictionaries for mapping from DERDevice keys to SundialResource keys.
@@ -428,11 +438,84 @@ class SundialResource():
                 # retrieve data from child nodes and sum
                 virtual_plant.update_sundial_resource()
                 for k,v in self.state_vars.items():
-                    if k == "DemandForecast_t":
-                        if (virtual_plant.state_vars[k] != None):
-                            self.state_vars[k] = virtual_plant.state_vars[k]  # fixme - tmp fix, assumes all forecasts are aligned
-                    else:
+                    #if k == "DemandForecast_t":
+                    #    if (virtual_plant.state_vars[k] != None):
+                    #        self.state_vars[k] = virtual_plant.state_vars[k]
+                    #else:
+                    if k not in forecast_keys:
                         self.state_vars[k] += virtual_plant.state_vars[k]
+
+    ##############################################################################
+    def interpolate_forecast(self, schedule_timestamps):
+        """
+        interpolates forecasts
+        traverse tree.  if it's a terminal node - interpolate.  If it's a non-terminal node, sum up the children
+        :param schedule_timestamps:
+        :return:
+        """
+
+        if self.virtual_plants == []: # terminal node
+            ## do interpolation
+            _log.info(str(self.state_vars["DemandForecast_kW"]))
+            self.state_vars["DemandForecast_kW"]           = self.interpolate_values(schedule_timestamps,
+                                                                                     self.state_vars["DemandForecast_kW"])
+            self.state_vars["EnergyAvailableForecast_kWh"] = self.interpolate_values(schedule_timestamps,
+                                                                                     self.state_vars["EnergyAvailableForecast_kWh"])
+            self.state_vars["DemandForecast_t"]            = schedule_timestamps
+        else:
+            self.state_vars["DemandForecast_t"] = schedule_timestamps
+            self.state_vars["DemandForecast_kW"] = numpy.array([0.0] * self.pts_per_schedule)
+            self.state_vars["EnergyAvailableForecast_kWh"] = numpy.array([0.0] * self.pts_per_schedule)
+
+
+            for virtual_plant in self.virtual_plants:
+                # retrieve data from child nodes and sum
+                virtual_plant.interpolate_forecast(schedule_timestamps)
+                _log.info(self.resource_id)
+                _log.info(virtual_plant.resource_id)
+                _log.info(virtual_plant.resource_id)
+                self.state_vars["DemandForecast_kW"]           += virtual_plant.state_vars["DemandForecast_kW"]
+                self.state_vars["EnergyAvailableForecast_kWh"] += virtual_plant.state_vars["EnergyAvailableForecast_kWh"]
+
+            _log.info(str(self.state_vars["DemandForecast_kW"]))
+            _log.info(str(self.state_vars["EnergyAvailableForecast_kWh"]))
+
+    ##############################################################################
+    def interpolate_values(self, schedule_timestamps, init_demand):
+        """
+
+        :param schedule_start_time: start time for schedule, in GS frame of reference
+        :return:
+        """
+        ind = 1  # index into timestamp list -- 1 = forecast at t+1, 0 = forecast at t-1
+        SEC_PER_MIN = 60.0
+
+        _log.info(self.resource_id)
+        _log.info(str(self.state_vars["DemandForecast_t"]))
+        _log.info("Timestamps are: "+str(schedule_timestamps))
+
+
+        if self.state_vars["DemandForecast_t"] != None:
+            time_elapsed = float((schedule_timestamps[0] -
+                                  datetime.strptime(self.state_vars["DemandForecast_t"][0],
+                                                    "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)).total_seconds())   # seconds since the first forecast ts
+            _log.info("time elapsed = "+str(time_elapsed))
+            scale_factor = time_elapsed / float(SSA_SCHEDULE_RESOLUTION*SEC_PER_MIN)
+            _log.info("scale factor= "+str(scale_factor))
+            _log.info("demand forecast orig = "+str(init_demand))
+            demand_list = [init_demand[ii-1] +
+                           (init_demand[ii] -
+                            init_demand[ii-1]) * scale_factor
+                           for ii in range(1,SSA_PTS_PER_SCHEDULE)]
+
+            demand_list.append(init_demand[SSA_PTS_PER_SCHEDULE-1]) # FIXME - tmp fix to pad last element
+
+        else:
+            demand_list = [0.0]*SSA_PTS_PER_SCHEDULE
+        _log.info(self.resource_id+": demand forecast is "+str(demand_list))
+
+        return numpy.array(demand_list)
+
 
     ############################
     def init_test_values(self, length):
@@ -519,7 +602,10 @@ class ESSResource(SundialResource):
                            "Pwr_kW": 0.0,
                            "Nameplate": 0.0,  # placeholder to avoid div by zero
                            "DemandForecast_kW": numpy.array([0.0] * self.pts_per_schedule),
-                           "DemandForecast_t": None,
+                           "DemandForecast_t": [datetime.strptime(self.gs_start_time,"%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC) +
+                                                timedelta(minutes=t) for t in range(0,
+                                                                                    SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                                                    SSA_SCHEDULE_RESOLUTION)],
                            "EnergyAvailableForecast_kWh": numpy.array([0.0] * self.pts_per_schedule),
                            "ChgEff": 0.95,
                            "DischgEff": 0.95,
@@ -729,7 +815,7 @@ class PVResource(SundialResource):
                                                  -265.994, -74.6933, -2.0346, 0.0,
                                                  0.0, 0.0, 0.0, 0.0]
         self.state_vars["Nameplate"] += 1000.0
-        self.state_vars["DemandForecast_t"] = None
+        #self.state_vars["DemandForecast_t"] = None
 
         _log.info("Resource "+self.resource_id)
         for k, v in self.state_vars.items():
@@ -779,7 +865,7 @@ class BaselineLoadResource(SundialResource):
 
         self.state_vars["DemandForecast_kW"] += [0.0]*24 #[250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
                                                 # 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250]
-        self.state_vars["DemandForecast_t"]   = None
+        #self.state_vars["DemandForecast_t"]   = None
 
         self.state_vars["Nameplate"] += 1000.0
 
@@ -804,7 +890,7 @@ class SundialSystemResource(SundialResource):
         # set up the specific set of objective functions to apply for the system
 
         # currently set up as a bunch of hard coded values.  Eventually need to parameterize / abstract.
-        self.demand_threshold   = 0.0  # threshold at which demand charges accrue
+        self.demand_threshold   = 250.0  # threshold at which demand charges accrue
         self.demand_cost_per_kW = 10.0 # per kW cost of demand in excess of self.demand_threshold
 
         #obj_fcn_cfgs = ['EnergyCostObjectiveFunction("energy_price_data.xlsx", schedule_timestamps)',
@@ -812,12 +898,11 @@ class SundialSystemResource(SundialResource):
         #                'LoadShapeObjectiveFunction("loadshape_data.xlsx", schedule_timestamps)',
         #                'DemandChargeObjectiveFunction(10.0, 200.0)']
 
-        #obj_fcn_cfgs = ['DemandChargeObjectiveFunction(10.0, 0.0)']
-        obj_fcn_cfgs = ['TieredEnergyObjectiveFunction()']
+        self.obj_fcn_cfgs = ['EnergyCostObjectiveFunction("energy_price_data.xlsx", schedule_timestamps)',
+                             'DemandChargeObjectiveFunction(10.0, self.sundial_resources.demand_threshold)']
+        #obj_fcn_cfgs = ['TieredEnergyObjectiveFunction()']
 
         self.obj_fcns = []
-        for obj_fcn in obj_fcn_cfgs:
-            self.obj_fcns.append(eval(obj_fcn))
 
     ############################
     def load_scenario(self):
@@ -938,7 +1023,6 @@ def export_schedule(profile, timestamps):
     profile.sundial_resources.schedule_vars["DeltaEnergy_kWh"] = profile.state_vars["DeltaEnergy_kWh"]
     profile.sundial_resources.schedule_vars["timestamp"] = copy.deepcopy(timestamps)
     profile.sundial_resources.schedule_vars["total_cost"] = profile.total_cost
-
 
     demand_df = pandas.DataFrame(data=[profile.sundial_resources.schedule_vars["DemandForecast_kW"],
                                        profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"]]).transpose()

@@ -47,6 +47,7 @@ import copy
 import json
 import csv
 import sys
+import pytz
 import numpy
 from random import *
 from SunDialResource import SundialSystemResource, SundialResource, SundialResourceProfile, export_schedule
@@ -453,10 +454,10 @@ if __name__ == '__main__':
     load_resources = sundial_resources.find_resource_type("Load")[0]
 
 
-    forecast_timestamps = [gs_start_time +
-                           timedelta(minutes=t) for t in range(0,
-                                                               SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
-                                                               SSA_SCHEDULE_RESOLUTION)]
+    forecast_timestamps = [(gs_start_time +
+                           timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%S") for t in range(0,
+                                                                                              SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                                                              SSA_SCHEDULE_RESOLUTION)]
 
 
     #### Just load with example values - ######
@@ -479,7 +480,8 @@ if __name__ == '__main__':
                                 max_discharge=500.0,
                                 chg_eff=0.95,
                                 dischg_eff=0.95,
-                                demand_forecast=ess_forecast)
+                                demand_forecast=ess_forecast,
+                                t=forecast_timestamps)
 
     pv_forecast = [0.0, 0.0, 0.0, 0.0,
                    0.0, -5.769, -93.4666, -316.934,
@@ -496,10 +498,12 @@ if __name__ == '__main__':
                        357.9398, 160.0936, 145.9894, 142.4973]
 
     pv_resources.load_scenario(demand_forecast = pv_forecast,
-                               pk_capacity = 1000.0)
+                               pk_capacity = 1000.0,
+                               t=forecast_timestamps)
 
     load_resources.load_scenario(demand_forecast = demand_forecast,
-                                 pk_capacity = 1000.0)
+                                 pk_capacity = 1000.0,
+                                 t=forecast_timestamps)
 
     try:
         loadshift_resources.load_scenario()
@@ -514,10 +518,11 @@ if __name__ == '__main__':
 
     ##### This section replicates the periodic call of the optimizer ######
     # calls the actual optimizer.
-    schedule_timestamps = [gs_start_time +
-                           timedelta(minutes=t) for t in range(0,
+    toffset = 20
+    schedule_timestamps = [gs_start_time.replace(tzinfo=pytz.UTC) +
+                           timedelta(minutes=t+toffset) for t in range(0,
                                                                SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
                                                                SSA_SCHEDULE_RESOLUTION)]
-
+    sundial_resources.interpolate_forecast(schedule_timestamps)
     optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps)
 

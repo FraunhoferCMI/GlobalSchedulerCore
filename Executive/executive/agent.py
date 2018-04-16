@@ -563,7 +563,7 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["curPwr_kW"] = curPwr_kW
             self.optimizer_info["expectedPwr_kW"] = expectedPwr_kW
             self.optimizer_info["netDemand_kW"]   = netDemand_kW
-
+            self.print_status_msg()
 
     ##############################################################################
     def generate_schedule_timestamps(self, sim_time_corr = timedelta(seconds=0)):
@@ -574,12 +574,12 @@ class ExecutiveAgent(Agent):
         equal to SSA_SCHEDULE_RESOLUTION, and continuing until SSA_SCHEDULE_DURATION
         """
         MINUTES_PER_HR = 60
-        #schedule_start_time = get_gs_time(self.gs_start_time_exact,
-        #                                  sim_time_corr).replace(second = 0, microsecond=0)
+        schedule_start_time = get_gs_time(self.gs_start_time,
+                                          sim_time_corr).replace(second = 0, microsecond=0)
 
-        schedule_start_time = datetime.strptime(get_schedule(self.gs_start_time,
-                                                             sim_time_corr=sim_time_corr),
-                                                "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=pytz.UTC)
+        #schedule_start_time = datetime.strptime(get_schedule(self.gs_start_time,
+        #                                                     sim_time_corr=sim_time_corr),
+        #                                        "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=pytz.UTC)
 
         # generate the list of timestamps that will comprise the next forecast:
         schedule_timestamps = [schedule_start_time +
@@ -617,6 +617,8 @@ class ExecutiveAgent(Agent):
                 except:
                     _log.info("Forecast Sim RPC failed!")
                     schedule_timestamps = self.generate_schedule_timestamps()
+
+                self.sundial_resources.interpolate_forecast(schedule_timestamps)
                 self.optimizer.run_ssa_optimization(self.sundial_resources, schedule_timestamps) # SSA optimization
 
                 HistorianTools.publish_data(self,
@@ -673,7 +675,7 @@ class ExecutiveAgent(Agent):
                 except:    # assume demand module is not implemented
                     pass
 
-                self.print_status_msg()
+                self.send_ess_commands()
 
     ##############################################################################
     #@Core.periodic(STATUS_MSG_PD)
