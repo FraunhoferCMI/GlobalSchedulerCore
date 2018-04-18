@@ -5,6 +5,7 @@ import pytz
 from datetime import datetime, timedelta
 import csv
 
+STANDALONE = False
 
 ##############################################################################
 class ObjectiveFunction():
@@ -20,11 +21,15 @@ class ObjectiveFunction():
         :return:
         """
         #### Read data from a file into a data structure that stores the complete time series.
-        volttron_root = os.getcwd()
-        volttron_root = volttron_root + "/../../../../gs_cfg/"
-
+        if STANDALONE == False:
+            volttron_root = os.getcwd()
+            volttron_root = volttron_root + "/../../../../gs_cfg/"
+        else:
+            volttron_root = ""
         fname_fullpath = volttron_root+fname
         obj_fcn_data = pandas.read_excel(fname_fullpath, header=0, index_col=0)
+
+        print("sim_offset = "+str(sim_offset))
         offset_ts = [t +sim_offset for t in schedule_timestamps]   #todo - revist for non sim case
         #### Find the time window corresponding to the current set of timestamps:
 
@@ -40,6 +45,7 @@ class ObjectiveFunction():
 
 
         self.cur_cost = obj_fcn_data.iloc[indices]  #obj_fcn_data.loc[offset_ts].interpolate(method='linear')
+        print(self.cur_cost)
         #return cur_data
 
 
@@ -51,6 +57,18 @@ class EnergyCostObjectiveFunction(ObjectiveFunction):
         demand = numpy.array(profile)
         cost = sum(self.cur_cost["Cost"] * demand)
         return cost
+
+
+##############################################################################
+class dkWObjectiveFunction():
+    """
+    assigns a cost to change in power (dPwr/dt)
+    """
+    def __init__(self):
+        self.cost_per_dkW = 0.005
+
+    def obj_fcn_cost(self, profile):
+        return sum(abs(numpy.ediff1d(profile)))*self.cost_per_dkW
 
 
 ##############################################################################
