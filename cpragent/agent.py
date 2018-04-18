@@ -62,8 +62,8 @@ def CPRPub(config_path,**kwargs):
             _log.info("Initializing - STEP 3")
 
 
-            self.start_date = datetime.datetime(year=2018, month=3, day=27, hour=0).replace(tzinfo=pytz.UTC)
-            self.end_date   = datetime.datetime(year=2018, month=3, day=27, hour=4).replace(tzinfo=pytz.UTC)
+            self.start_date = datetime.datetime(year=2018, month=3, day=30, hour=0).replace(tzinfo=pytz.UTC)
+            self.end_date   = datetime.datetime(year=2018, month=3, day=30, hour=4).replace(tzinfo=pytz.UTC)
 
 	    self.default_config = {
             "interval": 60,
@@ -158,24 +158,62 @@ TimeResolution_Minutes="60"/>
           #  self.cnt+=1
         
 
-        @Core.periodic(period = query_interval)  
-                  
+        #@Core.periodic(period = query_interval)
+
+        @Core.periodic(period=2)
+        ##############################################################################
         def query_cpr(self):
             status_pending = 1
             time_request = 0
             time_now = 0
 
 
-            self.start_date = self.start_date+timedelta(seconds=3600)
-            self.end_date   = self.end_date+timedelta(seconds=3600)
+            #self.start_date = self.start_date+timedelta(seconds=3600)
+            #self.end_date   = self.end_date+timedelta(seconds=3600)
+            self.start_date, self.end_date = get_date()
+
+
+
             _log.info("start date = "+str(self.start_date)+"; end date is "+str(self.end_date))
 
             if self.initialization_complete == 1:     # queries server only after config steps are completed
+                now = utils.get_aware_utc_now()
+
+                if self.cmd_pending == 1:
+                    # get status
+                    root1 = ET.fromstring(data.content)
+                    status = root1.attrib.get("Status")
+                    _log.info("Get Request Status {}".format(status))
+                    if status == "Pending":
+                        status_pending = 1
+                        time.sleep(2)
+                        _log.info("SEE ME 4")
+                        time_now = time.time()
+
+
+                elif (now - self.last_query_time) > timedelta(query_interval):
+                    self.cmd_pending = 1
+                    data = requests.get(url2 + publicId, auth=HTTPBasicAuth(userName, password))
 
                     cur_payload = self.payload_base
                     _log.info("cur payload is {}".format(cur_payload))
 
-                    cur_payload = cur_payload.format(datetime.datetime.isoformat(self.start_date), datetime.datetime.isoformat(self.end_date))
+                    cur_payload = cur_payload.format(self.start_date,
+                                                     self.end_date)  # datetime.datetime.isoformat(self.start_date), datetime.datetime.isoformat(self.end_date))
+                    _log.info("new payload is {}".format(cur_payload))
+
+                    _log.info("SEE ME 1")
+                    response = requests.post(conf['url'],
+                                             auth=HTTPBasicAuth(conf['userName'], conf['password']),
+                                             data=cur_payload,  # self.default_config['payload'],
+                                             headers=self.default_config['headers'],
+                                             params=conf['querystring'])
+                    _log.info("Request Status Code{}".format(response.status_code))
+
+                    cur_payload = self.payload_base
+                    _log.info("cur payload is {}".format(cur_payload))
+
+                    cur_payload = cur_payload.format(self.start_date, self.end_date) #datetime.datetime.isoformat(self.start_date), datetime.datetime.isoformat(self.end_date))
                     _log.info("new payload is {}".format(cur_payload))
 
 
