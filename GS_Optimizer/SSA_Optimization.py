@@ -401,6 +401,7 @@ class SimulatedAnnealer():
         csv_name = ("/home/parallels/sundial/ssa_results.csv")
         with open(csv_name, 'wb') as csvfile:
             results_writer = csv.writer(csvfile)
+            results_writer.writerow([t.strftime("%Y-%m-%dT%H:%M:%S") for t in timestamps])
             results_writer.writerow(least_cost_soln.state_vars["DemandForecast_kW"])
             results_writer.writerow(init_soln.state_vars["DemandForecast_kW"])
             results_writer.writerow(self.ess_least_cost.state_vars["DemandForecast_kW"])
@@ -489,6 +490,13 @@ if __name__ == '__main__':
                    -898.478, -839.905, -706.972, -512.013,
                    -265.994, -74.6933, -2.0346, 0.0,
                    0.0, 0.0, 0.0, 0]
+
+    #pv_forecast = [0.5 * v for v in [0.0, 0.0, 0.0, 0.0,
+    #                                 0.0, -5.769, -93.4666, -316.934,
+    #                                 -544.388, -716.663, -822.318, -888.916,
+    #                                 -898.478, -839.905, -706.972, -512.013,
+    #                                 -265.994, -74.6933, -2.0346, 0.0,
+    #                                 0.0, 0.0, 0.0, 0]]
 
     demand_forecast = [142.4973, 142.4973, 142.4973, 145.9894,
                        160.094, 289.5996, 339.7752, 572.17,
