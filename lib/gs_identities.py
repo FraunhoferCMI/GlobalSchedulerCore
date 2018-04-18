@@ -75,8 +75,8 @@ USER_CONTROL = 1
 APPLICATION_CONTROL = 2
 EXEC_STARTING = 3
 
-EXECUTIVE_CLKTIME = 1 # period, in seconds, at which the executive polls system state
-GS_SCHEDULE       = 30  # period, in seconds, at which the GS optimizer runs
+EXECUTIVE_CLKTIME = 2 # period, in seconds, at which the executive polls system state
+GS_SCHEDULE       = 600  # period, in seconds, at which the GS optimizer runs
 ESS_SCHEDULE      = 5
 STATUS_MSG_PD     = 20 # update rate for various status messages
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
@@ -93,7 +93,7 @@ SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedu
 SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
 SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
 
-REGULATE_ESS_OUTPUT = False
+REGULATE_ESS_OUTPUT = True #False
 
 # For configuring w/simulated data
 USE_SIM        = 1

@@ -395,10 +395,10 @@ class SundialResource():
                            "Pwr_kW": 0.0,
                            "Nameplate": 0.0,  # placeholder to avoid div by zero
                            "DemandForecast_kW": numpy.array([0.0] * self.pts_per_schedule),
-                           "DemandForecast_t": [datetime.strptime(self.gs_start_time,"%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC) +
+                           "DemandForecast_t": [str_t.strftime("%Y-%m-%dT%H:%M:%S") for str_t in [datetime.strptime(self.gs_start_time,"%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC) +
                                                 timedelta(minutes=t) for t in range(0,
                                                                                     SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
-                                                                                    SSA_SCHEDULE_RESOLUTION)],
+                                                                                    SSA_SCHEDULE_RESOLUTION)]],
                            "EnergyAvailableForecast_kWh": numpy.array([0.0] * self.pts_per_schedule)}
 
     ##############################################################################
@@ -897,9 +897,9 @@ class SundialSystemResource(SundialResource):
         #                'EnergyCostObjectiveFunction("cpp_data.xlsx", schedule_timestamps)',
         #                'LoadShapeObjectiveFunction("loadshape_data.xlsx", schedule_timestamps)',
         #                'DemandChargeObjectiveFunction(10.0, 200.0)']
-
-        self.obj_fcn_cfgs = ['EnergyCostObjectiveFunction("energy_price_data.xlsx", schedule_timestamps)',
-                             'DemandChargeObjectiveFunction(10.0, self.sundial_resources.demand_threshold)']
+        self.obj_fcn_cfgs = ['EnergyCostObjectiveFunction("energy_price_data.xlsx", schedule_timestamps, self.sundial_resources.sim_offset)',
+                             'DemandChargeObjectiveFunction(10.0, self.sundial_resources.demand_threshold)',
+                             'dkWObjectiveFunction()']
         #obj_fcn_cfgs = ['TieredEnergyObjectiveFunction()']
 
         self.obj_fcns = []

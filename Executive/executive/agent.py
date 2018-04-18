@@ -108,7 +108,7 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     # setpoint_cmd_interval indicates how frequently the target setpoint is recalculated.
     # it is used to determine what the max sustainable charge / discharge rate is for the
     # battery before the next time that we receive a high level schedule request.
-    setpoint_cmd_interval = 300 #FIXME - this needs to be tied to globals defined in gs_identities
+    setpoint_cmd_interval = GS_SCHEDULE #FIXME - this needs to be tied to globals defined in gs_identities
     sec_per_hr = 60.0 * 60.0
 
     setpoint = targetPwr_kW-curPwr_kW  #FIXME sign convention for charge vs discharge?
@@ -733,6 +733,8 @@ class ExecutiveAgent(Agent):
                 self.enable_site_interactive_mode()
                 self.OptimizerEnable = ENABLED
                 self.UICtrlEnable = DISABLED
+                self.update_sundial_resources(self.sdr_to_sm_lookup_table)
+                self.run_optimizer()
                 # instantiate and build a new sundial resource manager when we switch to app ctrl mode
 
                 # (re)start optimizer - would call "build_sundial"

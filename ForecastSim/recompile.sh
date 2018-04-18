@@ -1,5 +1,7 @@
-cp SAM_PVPwr_nyc.csv  ~/.volttron/gs_cfg/SAM_PVPwr_nyc.csv
-cp NYC_demand.csv  ~/.volttron/gs_cfg/NYC_demand.csv
+#cp SAM_PVPwr_nyc.csv  ~/.volttron/gs_cfg/SAM_PVPwr_nyc.csv
+cp SAM_PVPwr_nyc_avg.csv ~/.volttron/gs_cfg/SAM_PVPwr_nyc.csv
+#cp NYC_demand.csv  ~/.volttron/gs_cfg/NYC_demand.csv
+cp NYC_demand_avg.csv  ~/.volttron/gs_cfg/NYC_demand.csv
 cp irr_1min.csv  ~/.volttron/gs_cfg/irr_1min.csv
 volttron-ctl remove  --tag cpr
 volttron-pkg package .
