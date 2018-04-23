@@ -159,7 +159,7 @@ class SimulatedAnnealer():
 
 
     ############################
-    def run_ssa_optimization(self, sundial_resources, timestamps):
+    def run_ssa_optimization(self, sundial_resources, timestamps, tariffs):
 
         """
         Executes simulated Annealing optimization algorithm.
@@ -233,9 +233,9 @@ class SimulatedAnnealer():
 
         # get an initial set of commands to seed the ssa process
         # then, set least_cost_soln AND current_soln to initiate the SSA
-        init_soln       = SundialResourceProfile(sundial_resources, timestamps)
-        current_soln    = SundialResourceProfile(sundial_resources, timestamps)
-        least_cost_soln = SundialResourceProfile(sundial_resources, timestamps)
+        init_soln       = SundialResourceProfile(sundial_resources, timestamps, tariffs)
+        current_soln    = SundialResourceProfile(sundial_resources, timestamps, tariffs)
+        least_cost_soln = SundialResourceProfile(sundial_resources, timestamps, tariffs)
 
 
         # For convenience - this extracts specific resource types from the Sundial tree structure and puts them
@@ -520,6 +520,7 @@ if __name__ == '__main__':
     system_resources.load_scenario()
 
 
+    tariffs = {"demand_charge_threshold": DEMAND_CHARGE_THRESHOLD}
 
     #########
 
@@ -532,5 +533,5 @@ if __name__ == '__main__':
                                                                SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
                                                                SSA_SCHEDULE_RESOLUTION)]
     sundial_resources.interpolate_forecast(schedule_timestamps)
-    optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps)
+    optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps, tariffs)
 

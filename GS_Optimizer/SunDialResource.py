@@ -99,7 +99,7 @@ class SundialResourceProfile():
     """
 
     ##############################################################################
-    def __init__(self, sundial_resources, schedule_timestamps):
+    def __init__(self, sundial_resources, schedule_timestamps, tariffs):
         """
         Recursively constructs a SundialResourceProfile tree.
         The SundialResourceProfile tree replicates the tree structure of the passed sundial_resource.  Nodes in the
@@ -114,13 +114,13 @@ class SundialResourceProfile():
         - all other variables initialized to 0
         :param sundial_resources: An instance of SundialResource class
         """
-
+        self.tariffs = tariffs
         self.virtual_plants = []
         INTERPOLATE_FORECASTS = False
 
         # call SundialResourceProfile constructor for children of the associated sundial_resource instance
         for virtual_plant in sundial_resources.virtual_plants:
-            self.virtual_plants.append(SundialResourceProfile(virtual_plant, schedule_timestamps))
+            self.virtual_plants.append(SundialResourceProfile(virtual_plant, schedule_timestamps, self.tariffs))
 
         # initialize self.state_vars - length = SSA_PTS_PER_SCHEDULE
         # DemandForecast_kW is set to the baseline forecast for the resource in question.
@@ -318,7 +318,8 @@ class SundialResource():
         # This should go away in future rev.
         self.update_list_end_pts    = ["DemandForecast_kW",
                                        "DemandForecast_t",
-                                       "Pwr_kW"]
+                                       "Pwr_kW",
+                                       "AvgPwr_kW"]
 
         self.gs_start_time = gs_start_time
         if USE_SIM == 1:
@@ -393,6 +394,7 @@ class SundialResource():
                            "MinSOE_kWh": 0.0,
                            "SOE_kWh": 0.0,
                            "Pwr_kW": 0.0,
+                           "AvgPwr_kW": 0.0,
                            "Nameplate": 0.0,  # placeholder to avoid div by zero
                            "DemandForecast_kW": numpy.array([0.0] * self.pts_per_schedule),
                            "DemandForecast_t": [str_t.strftime("%Y-%m-%dT%H:%M:%S") for str_t in [datetime.strptime(self.gs_start_time,"%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC) +
@@ -600,6 +602,7 @@ class ESSResource(SundialResource):
                            "MinSOE_kWh": 0.0,
                            "SOE_kWh": 0.0,
                            "Pwr_kW": 0.0,
+                           "AvgPwr_kW": 0.0,
                            "Nameplate": 0.0,  # placeholder to avoid div by zero
                            "DemandForecast_kW": numpy.array([0.0] * self.pts_per_schedule),
                            "DemandForecast_t": [datetime.strptime(self.gs_start_time,"%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC) +
@@ -898,7 +901,8 @@ class SundialSystemResource(SundialResource):
         #                'LoadShapeObjectiveFunction("loadshape_data.xlsx", schedule_timestamps)',
         #                'DemandChargeObjectiveFunction(10.0, 200.0)']
         self.obj_fcn_cfgs = ['EnergyCostObjectiveFunction("energy_price_data.xlsx", schedule_timestamps, self.sundial_resources.sim_offset)',
-                             'DemandChargeObjectiveFunction(10.0, self.sundial_resources.demand_threshold)',
+                             #'DemandChargeObjectiveFunction(10.0, self.sundial_resources.demand_threshold)',
+                             'DemandChargeObjectiveFunction(10.0, self.tariffs["demand_charge_threshold"])',
                              'dkWObjectiveFunction()']
         #obj_fcn_cfgs = ['TieredEnergyObjectiveFunction()']
 

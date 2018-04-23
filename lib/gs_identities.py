@@ -84,7 +84,7 @@ START_LATENCY = 0 # time in seconds, to delay execution
 
 #FIXME - Placeholder!
 MODBUS_SCRAPE_INTERVAL = 1 # period in seconds for modbus device to post on the IEB bus
-MODBUS_AVERAGING_WINDOW = 60 # period in seconds over which to average instantaneous readings
+MODBUS_AVERAGING_WINDOW = 180 # period in seconds over which to average instantaneous readings
 MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
 CPR_QUERY_INTERVAL = 5 # period in seconds for forecasts to arrive
 MODBUS_WRITE_ATTEMPTS  = 5  # number of modbus reads before a write error is thrown
@@ -119,3 +119,6 @@ LOADSHIFT_QUERY_INTERVAL = 30 # seconds
 DEMAND_REPORT_SCHEDULE = 10 # SECONDS
 
 SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0) + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
+
+
+DEMAND_CHARGE_THRESHOLD = 250

@@ -83,10 +83,12 @@ default_units = {"setpoint":"kW",
                  "DemandForecast_kW": "kW",
                  "EnergyAvailableForecast_kWh": "kWh",
                  "netDemand_kW": "kW",
+                 "netDemandAvg_kW": "kW",
                  "timestamp": "datetime",
                  "gs_start_time": "datetime",
                  "SIM_START_TIME": "datetime",
-                 "total_cost": ""}
+                 "total_cost": "",
+                 "DemandChargeThreshold": "kW"}
 
 ##############################################################################
 def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW, max_discharge_kW):
@@ -108,10 +110,10 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     # setpoint_cmd_interval indicates how frequently the target setpoint is recalculated.
     # it is used to determine what the max sustainable charge / discharge rate is for the
     # battery before the next time that we receive a high level schedule request.
-    setpoint_cmd_interval = GS_SCHEDULE #FIXME - this needs to be tied to globals defined in gs_identities
+    setpoint_cmd_interval = GS_SCHEDULE
     sec_per_hr = 60.0 * 60.0
 
-    setpoint = targetPwr_kW-curPwr_kW  #FIXME sign convention for charge vs discharge?
+    setpoint = targetPwr_kW-curPwr_kW
     _log.info("Optimizer: target Setpoint ="+str(setpoint))
 
     # check that we are within power limits of the storage system
@@ -156,7 +158,7 @@ class ExecutiveAgent(Agent):
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "log-level":"INFO"
         }
-        self._config = self.default_config.copy()
+        self._config = self.default_config.copy()f
         self._agent_id = self._config.get("DEFAULT_AGENTID")
         self._message = self._config.get("DEFAULT_MESSAGE")
         self._heartbeat_period = self._config.get('DEFAULT_HEARTBEAT_PERIOD')
@@ -197,9 +199,10 @@ class ExecutiveAgent(Agent):
         self.optimizer_info.update({"curPwr_kW": 0.0})
         self.optimizer_info.update({"expectedPwr_kW": 0.0})
         self.optimizer_info.update({"netDemand_kW": 0.0})
+        self.optimizer_info.update({"netDemandAvg_kW": 0.0})
 
         self.opt_cnt = 0
-
+        self.init_tariffs()
 
 
     ##############################################################################
@@ -402,6 +405,26 @@ class ExecutiveAgent(Agent):
         """
         return self.gs_start_time.strftime("%Y-%m-%dT%H:%M:%S") #, self.gs_start_time_exact.strftime("%Y-%m-%dT%H:%M:%S.%f") #start_time_str
 
+
+    ##############################################################################
+    def init_tariffs(self):
+        self.tariffs = {"demand_charge_threshold": DEMAND_CHARGE_THRESHOLD}
+
+    ##############################################################################
+    def update_tariffs(self):
+        if self.system_resources.state_vars["AvgPwr_kW"] > 1.2*self.tariffs["demand_charge_threshold"]:
+            self.tariffs["demand_charge_threshold"] = self.system_resources.state_vars["AvgPwr_kW"]/1.2
+
+            HistorianTools.publish_data(self,
+                                        "Tariffs",
+                                        default_units["DemandChargeThreshold"],
+                                        "DemandChargeThreshold",
+                                        self.tariffs["demand_charge_threshold"])
+
+        #self.tariffs["demand_charge_threshold"] = max(self.tariffs["demand_charge_threshold"],self.system_resources.state_vars["Pwr_kW"])
+        pass
+
+
     ##############################################################################
     def update_sundial_resources(self, sdr_to_sm_lookup_table):
         """
@@ -428,9 +451,6 @@ class ExecutiveAgent(Agent):
                     # now map data end points from devices to SundialResources
                     _log.debug("UpdateSDR: "+entries.sundial_resource.resource_id+": SM Device ="+devices["DeviceID"]+"; k="+str(k))
                     if devices["isAvailable"] == 1:
-                        # FIXME - should this extrapolate values to schedule start time.
-                        # FIXME - e.g., assuming battery continues to charge / discharge at present rate what would the
-                        # FIXME - value be at that time?
                         try:
                             dev_state_var = self.vip.rpc.call(str(devices["AgentID"]),
                                                               "get_device_state_vars",
@@ -441,8 +461,8 @@ class ExecutiveAgent(Agent):
 
                         except KeyError:
                             _log.debug("Key not found!!")
-
         self.sundial_resources.update_sundial_resource() # propagates new data to non-terminal nodes
+        self.update_tariffs()
 
 
 
@@ -471,18 +491,8 @@ class ExecutiveAgent(Agent):
             # taking a shortcut here - implicit assumption that there is a single pool of ESS
             curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
             netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
+            netDemandAvg_kW = self.system_resources.state_vars["AvgPwr_kW"]
             # retrieve the current scheduled value:
-            # Taking a shortcut where we just grab the zero element of the most recently generated schedule.
-            # This is fine (For now) - BUT presents a known issue as follows -
-            # FIXME - The schedule generated by SimulatedAnnealer starts one time step in the future - so the zero
-            # FIXME - elements of the schedule corresponds to current_t+1.  But this routine treats the retrieved
-            # FIXME - schedule value as the **current** target.  This is a definite issue to be addressed!!
-            # FIXME - possible fixes - (1) modify SSA to generate schedules started at t=now; (2) append, rather than
-            # FIXME - replace, the schedule (so we would maintain values from previous optimization passes).  Also need
-            # FIXME - to consider what happens if optimization pass occurs during a time step
-
-
-            #cur_gs_time_step = get_schedule(self.gs_start_time) # get_gs_time(self.gs_start_time)
             cur_gs_time = get_gs_time(self.gs_start_time, timedelta(0))
             ii = 0
             _log.info(str(cur_gs_time))
@@ -563,6 +573,7 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["curPwr_kW"] = curPwr_kW
             self.optimizer_info["expectedPwr_kW"] = expectedPwr_kW
             self.optimizer_info["netDemand_kW"]   = netDemand_kW
+            self.optimizer_info["netDemandAvg_kW"] = netDemandAvg_kW
             self.print_status_msg()
 
     ##############################################################################
@@ -619,7 +630,7 @@ class ExecutiveAgent(Agent):
                     schedule_timestamps = self.generate_schedule_timestamps()
 
                 self.sundial_resources.interpolate_forecast(schedule_timestamps)
-                self.optimizer.run_ssa_optimization(self.sundial_resources, schedule_timestamps) # SSA optimization
+                self.optimizer.run_ssa_optimization(self.sundial_resources, schedule_timestamps, self.tariffs) # SSA optimization
 
                 HistorianTools.publish_data(self,
                                             "SystemResource/Schedule",
@@ -689,7 +700,6 @@ class ExecutiveAgent(Agent):
 
         for k,v in self.optimizer_info.items():
             _log.info("ExecutiveStatus: " + k + "=" + str(v))
-            #TODO - still need to add meta data associated with optimizer_info to the historian message
             units = default_units[k]
             HistorianTools.publish_data(self, 
                                         "Executive", 
