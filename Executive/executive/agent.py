@@ -158,7 +158,7 @@ class ExecutiveAgent(Agent):
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "log-level":"INFO"
         }
-        self._config = self.default_config.copy()f
+        self._config = self.default_config.copy()
         self._agent_id = self._config.get("DEFAULT_AGENTID")
         self._message = self._config.get("DEFAULT_MESSAGE")
         self._heartbeat_period = self._config.get('DEFAULT_HEARTBEAT_PERIOD')
