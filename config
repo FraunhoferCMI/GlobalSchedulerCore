@@ -1,5 +1,6 @@
 {
-                "interval":60,	
+                "query_interval":60,
+                "receive_interval":5,
                 "userName": "schoudhary@cse.fraunhofer.org",
                 "password":"Shines2017",
                 "querystring":{"key":"FRHR3MXX7"},
@@ -9,7 +10,7 @@
             	"headers":"",
                 "topic": "devices/cpr",
                 "horizon":24,
-		
+
     "agentid": "cpr",
     "message": "hello"
 
