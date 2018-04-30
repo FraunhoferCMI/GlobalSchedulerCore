@@ -900,10 +900,10 @@ class SundialSystemResource(SundialResource):
         #                'EnergyCostObjectiveFunction("cpp_data.xlsx", schedule_timestamps)',
         #                'LoadShapeObjectiveFunction("loadshape_data.xlsx", schedule_timestamps)',
         #                'DemandChargeObjectiveFunction(10.0, 200.0)']
-        self.obj_fcn_cfgs = ['EnergyCostObjectiveFunction("energy_price_data.xlsx", schedule_timestamps, self.sundial_resources.sim_offset)',
-                             #'DemandChargeObjectiveFunction(10.0, self.sundial_resources.demand_threshold)',
-                             'DemandChargeObjectiveFunction(10.0, self.tariffs["demand_charge_threshold"])',
-                             'dkWObjectiveFunction()']
+        self.obj_fcn_cfgs = [#'EnergyCostObjectiveFunction("energy_price_data.xlsx", schedule_timestamps, self.sundial_resources.sim_offset, "EnergyPrice")',
+                             'LoadShapeObjectiveFunction("loadshape_data_load.xlsx", schedule_timestamps, self.sundial_resources.sim_offset, "LoadShape")',
+                             #'DemandChargeObjectiveFunction(10.0, self.tariffs["demand_charge_threshold"], "DemandCharge")',
+                             'dkWObjectiveFunction("dkW")']
         #obj_fcn_cfgs = ['TieredEnergyObjectiveFunction()']
 
         self.obj_fcns = []
@@ -1027,6 +1027,10 @@ def export_schedule(profile, timestamps):
     profile.sundial_resources.schedule_vars["DeltaEnergy_kWh"] = profile.state_vars["DeltaEnergy_kWh"]
     profile.sundial_resources.schedule_vars["timestamp"] = copy.deepcopy(timestamps)
     profile.sundial_resources.schedule_vars["total_cost"] = profile.total_cost
+
+    for obj_fcn in profile.sundial_resources.obj_fcns:
+        profile.sundial_resources.schedule_vars[obj_fcn.desc] = obj_fcn.obj_fcn_data()
+
 
     demand_df = pandas.DataFrame(data=[profile.sundial_resources.schedule_vars["DemandForecast_kW"],
                                        profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"]]).transpose()

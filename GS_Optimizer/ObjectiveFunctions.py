@@ -11,7 +11,7 @@ STANDALONE = False
 class ObjectiveFunction():
 
     ##############################################################################
-    def __init__(self, fname, schedule_timestamps, sim_offset=timedelta(0)):
+    def __init__(self, fname, schedule_timestamps, sim_offset=timedelta(0), desc=""):
         """
         loads a file of dates / values.  retrieves a pandas data frame of for the specified time window.
         1. load data file
@@ -46,7 +46,12 @@ class ObjectiveFunction():
 
         self.cur_cost = obj_fcn_data.iloc[indices]  #obj_fcn_data.loc[offset_ts].interpolate(method='linear')
         print(self.cur_cost)
+        self.desc = desc
         #return cur_data
+
+    ##############################################################################
+    def obj_fcn_data(self):
+        return self.cur_cost
 
 
 ##############################################################################
@@ -58,28 +63,34 @@ class EnergyCostObjectiveFunction(ObjectiveFunction):
         cost = sum(self.cur_cost["Cost"] * demand)
         return cost
 
+    ##############################################################################
+    def obj_fcn_data(self):
+        return self.cur_cost["Cost"].tolist()
 
 ##############################################################################
 class dkWObjectiveFunction():
     """
     assigns a cost to change in power (dPwr/dt)
     """
-    def __init__(self):
+    def __init__(self, desc):
         self.cost_per_dkW = 0.005
+        self.desc = desc
 
     def obj_fcn_cost(self, profile):
         return sum(abs(numpy.ediff1d(profile)))*self.cost_per_dkW
 
+    def obj_fcn_data(self):
+        return self.cost_per_dkW
 
 ##############################################################################
 class DemandChargeObjectiveFunction():
 
     ##############################################################################
-    def __init__(self, cost_per_kW, threshold):
+    def __init__(self, cost_per_kW, threshold, desc):
         # fname, schedule_timestamps, sim_offset=timedelta(0)
         self.threshold   = threshold
         self.cost_per_kW = cost_per_kW
-
+        self.desc        = desc
 
     ##############################################################################
     def obj_fcn_cost(self, profile):
@@ -96,6 +107,11 @@ class DemandChargeObjectiveFunction():
             cost = 0.0
         return cost
 
+    ##############################################################################
+    def obj_fcn_data(self):
+        return self.threshold
+
+
 ##############################################################################
 class TieredEnergyObjectiveFunction():
     """
@@ -103,7 +119,7 @@ class TieredEnergyObjectiveFunction():
     :return: cost of executing the profile, in $
     """
     ##############################################################################
-    def __init__(self):
+    def __init__(self, desc):
         # fname, schedule_timestamps, sim_offset=timedelta(0)
         pass
 
@@ -152,6 +168,9 @@ class LoadShapeObjectiveFunction(ObjectiveFunction):
         cost = sum(err) * price
         return cost
 
+    ##############################################################################
+    def obj_fcn_data(self):
+        return self.cur_cost["Load"].tolist()
 
 ##############################################################################
 def cfg_fcns():

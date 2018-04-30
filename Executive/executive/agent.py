@@ -73,6 +73,7 @@ __version__ = '1.0'
 import DERDevice
 import json
 import numpy
+import pandas
 from SunDialResource import SundialSystemResource, SundialResource, SundialResourceProfile, build_SundialResource_to_SiteManager_lookup_table
 from SSA_Optimization import SimulatedAnnealer
 
@@ -408,7 +409,23 @@ class ExecutiveAgent(Agent):
 
     ##############################################################################
     def init_tariffs(self):
+
+        #fname = "energy_price_data.xlsx"
+        #volttron_root = os.getcwd()
+        #volttron_root = volttron_root + "/../../../../gs_cfg/"
+        #fname_fullpath = volttron_root+fname
+        #self.energy_price_data = pandas.read_excel(fname_fullpath, header=0, index_col=0)
+
         self.tariffs = {"demand_charge_threshold": DEMAND_CHARGE_THRESHOLD}
+        #self.tariffs = {"energy_price": }
+
+        #indices = [numpy.argmin(
+        #    numpy.abs(
+        #        numpy.array([pandas.Timestamp(t).replace(tzinfo=pytz.UTC).to_pydatetime() for t in self.energy_price_data.index]) -
+        #        (ts.replace(minute=0, second=0, microsecond=0) + sim_offset))) for ts in schedule_timestamps]
+        #self.cur_cost = obj_fcn_data.iloc[indices]  #obj_fcn_data.loc[offset_ts].interpolate(method='linear')
+
+
 
     ##############################################################################
     def update_tariffs(self):
@@ -509,6 +526,21 @@ class ExecutiveAgent(Agent):
 
             targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ii]
             expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][ii]
+
+            for obj_fcn in self.system_resources.obj_fcns:
+                try:
+                    HistorianTools.publish_data(self,
+                                                "System/Cost",
+                                                "",
+                                                obj_fcn.desc,
+                                                self.system_resources.schedule_vars[obj_fcn.desc][ii])
+                except:
+                    HistorianTools.publish_data(self,
+                                                "System/Cost",
+                                                "",
+                                                obj_fcn.desc,
+                                                self.system_resources.schedule_vars[obj_fcn.desc])
+
             _log.info("Expected power is " + str(expectedPwr_kW))
             _log.info("Target power is " + str(targetPwr_kW))
             _log.info("Current power is "+str(curPwr_kW))
