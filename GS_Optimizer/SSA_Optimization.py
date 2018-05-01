@@ -53,7 +53,7 @@ from random import *
 from SunDialResource import SundialSystemResource, SundialResource, SundialResourceProfile, export_schedule
 from datetime import datetime, timedelta
 import logging
-from gs_identities import (SSA_SCHEDULE_RESOLUTION, SSA_SCHEDULE_DURATION, SSA_PTS_PER_SCHEDULE)
+from gs_identities import *
 from gs_utilities import get_schedule
 
 _log = logging.getLogger("SSA")
@@ -474,11 +474,11 @@ if __name__ == '__main__':
     #                0.0, 0.0, -136.28581942, -96.68917457,
     #                49.07769182, 97.72753814, 111.3388077, 0.0]
 
-    ess_resources.load_scenario(init_SOE=500.0,
-                                max_soe=2000.0,
+    ess_resources.load_scenario(init_SOE=4000.0,
+                                max_soe=10000.0,
                                 min_soe=0.0,
-                                max_chg=500.0,
-                                max_discharge=500.0,
+                                max_chg=1000.0,
+                                max_discharge=1000.0,
                                 chg_eff=0.95,
                                 dischg_eff=0.95,
                                 demand_forecast=ess_forecast,
