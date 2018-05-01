@@ -59,7 +59,7 @@ from volttron.platform.messaging import topics
 from volttron.platform.messaging import headers as headers_mod
 import xml.etree.ElementTree as ET
 from gs_identities import *
-from gs_utilities import get_schedule, ForecastObject
+from gs_utilities import get_schedule, ForecastObject, Forecast
 import csv
 import pandas
 from volttron.platform.messaging import headers as header_mod
@@ -75,7 +75,7 @@ MINUTES_PER_HR = 60
 MINUTES_PER_DAY = 24 * MINUTES_PER_HR
 MINUTES_PER_YR = 365 * MINUTES_PER_DAY
 
-READ_BACK_MSGS = False
+READ_BACK_MSGS = True
 
 
 class CPRAgent(Agent):
@@ -403,7 +403,7 @@ class CPRAgent(Agent):
 
 
     ##############################################################################
-    #@Core.periodic(period = LOADSHIFT_FORECAST_QUERY_INTERVAL)
+    @Core.periodic(period = LOADSHIFT_FORECAST_QUERY_INTERVAL)
     def query_loadshift_forecast(self):
         """
         called at interval defined in LOADSHIFT_FORECAST_QUERY_INTERVAL (gs_identities)
@@ -413,11 +413,23 @@ class CPRAgent(Agent):
             if self.initialization_complete == 1:
                 _log.info("querying for load shift forecast from database")
 
-                load_shift_forecast = ForecastObject(SSA_PTS_PER_SCHEDULE, "kW", "float", nForecasts=10)
-                load_shift_forecast.forecast_values["Time"] = self.demand_forecast.forecast_values["Time"][:]
-                load_shift_forecast.forecast_values["Forecast"] = [[v*ii for v in self.demand_forecast.forecast_values["Forecast"]] for ii in range(0,10)]
-                message = load_shift_forecast.forecast_obj
+                # # before refactor
+                # load_shift_forecast = ForecastObject(SSA_PTS_PER_SCHEDULE, "kW", "float", nForecasts=10)
+                # load_shift_forecast.forecast_values["Time"] = self.demand_forecast.forecast_values["Time"][:]
+                # load_shift_forecast.forecast_values["Forecast"] = [[v*ii for v in self.demand_forecast.forecast_values["Forecast"]] for ii in range(0,10)]
+                # message = load_shift_forecast.forecast_obj
 
+                # Cam refactor
+                forecast = self.format_forecast()
+                # forecast = [[v*ii for v in self.demand_forecast.forecast_values["Forecast"]] for ii in range(0,10)]
+                time = self.demand_forecast.forecast_values["Time"][:]
+                units = "kW"
+                datatype = "float"
+                loadShiftForecast = Forecast(forecast,
+                                             time,
+                                             units,
+                                             datatype)
+                message = loadShiftForecast.forecast_obj
                 self.vip.pubsub.publish(
                         peer="pubsub",
                         topic=self._config['loadshift_report_topic']+'/all',
@@ -445,6 +457,17 @@ class CPRAgent(Agent):
 
 
 
+    def format_forecast(self):
+        raw_forecast = self.demand_forecast.forecast_values["Forecast"]
+        formatted_forecast = []
+        for ii in range(0,10):
+            vals = []
+            for v in raw_forecast:
+                val = v * ii
+                vals.append(val)
+            formatted_forecast.append(vals)
+
+        return formatted_forecast
 
     ##############################################################################
     @Core.periodic(period = DEMAND_REPORT_SCHEDULE)

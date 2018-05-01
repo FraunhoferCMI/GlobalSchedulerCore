@@ -149,5 +149,52 @@ class ForecastObject():
 
         self.forecast_obj = [self.forecast_values, self.forecast_meta_data]
 
+class Forecast():
+    """
+    Stores forecast data in a serializable format that is consumable by the
+    VOLTTRON Historian
+    """
+    def __init__(self, forecast, time, units, datatype):
+        assert isinstance(forecast, list)
+        assert isinstance(time, list)
+        self.forecast = forecast
+        self.time = time
+        self.units = units
+        self.datatype = datatype
+
+        self.serialize()
+        return None
+
+    def serialize(self):
+        self.forecast_values = {"Forecast": self.forecast,
+                                "Time": self.time,
+                                "Duration": SSA_SCHEDULE_DURATION,
+                                "Resolution": SSA_SCHEDULE_RESOLUTION}
+        self.forecast_meta_data = {"Forecast": {"units": self.units, "type": self.datatype},
+                                   "Time": {"units": "UTC", "type": "str"},
+                                   "Duration": {"units": "hr", "type": "int"},
+                                   "Resolution": {"units": "min", "type": "int"}}
+
+        self.forecast_obj = [self.forecast_values, self.forecast_meta_data]
+
+        return self.forecast_obj
+
+    def check_forecast(self):
+        "Check the consistency of data of Forecast attributes"
+        assert len(self.forecast_values["Forecast"]) == len(self.forecast_values["Time"])
+        return None
 
 
+def from_df(df):
+    """ UNDER CONSTRUCTION!!!
+    Construct a Forecast from a provided Pandas DataFrame
+    """
+
+    kwargs = dict(
+        forecast = [val.tolist() for key, val in df.items()],
+        time = df.index.tolist(),
+        # duration =
+        # resolution =
+        )
+    forecast_class = Forecast(**kwargs)
+    return forecast_class
