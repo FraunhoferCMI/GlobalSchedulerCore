@@ -2,6 +2,12 @@ import xml.etree.ElementTree as ET
 from  xml.etree.ElementTree import tostring
 from xml.dom import minidom
 
+import datetime
+from  datetime import timedelta
+import pytz
+import requests
+from requests.auth import HTTPBasicAuth
+
 def create_xml_query(start, end):
     "Create xml query to CPR model"
 
@@ -65,7 +71,6 @@ def create_xml_query(start, end):
 
     return xml_string
 
-
 def parse_query(query):
     """ Function to parse XML response from API"""
     xmldoc = minidom.parseString(query)
@@ -90,20 +95,20 @@ if __name__ == "__main__":
 
     ##
     print("Request model")
-    complete_payload = payload.format(start, end)
     generated = create_xml_query(start, end)
     response = requests.post(url,
                              auth=HTTPBasicAuth(userName, password),
                              data=generated.decode(),
-                             # data=complete_payload,
                              headers=headers,
                              params=querystring)
 
+    simulationId = ET.fromstring(response.content).attrib.get("SimulationId")
     ##
     print("Receive model request")
-    url2 =  "https://service.solaranywhere.com/api/v2/SimulationResult/" + self.simulationId
+    url2 =  "https://service.solaranywhere.com/api/v2/SimulationResult/" + simulationId
     data = requests.get(url2,
                         auth = HTTPBasicAuth(userName, password)
                         )
     parsed_response = parse_query(data.content)
     ##
+
