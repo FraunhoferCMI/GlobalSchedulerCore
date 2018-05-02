@@ -87,8 +87,9 @@ def parse_query(query):
         time = time,
         units = "kWh",
         # tz = "UTC-5",
-        data_type = "float"
+        datatype = "float"
     )
+
     return parsed_forecast
 
 if __name__ == "__main__":

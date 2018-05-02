@@ -17,6 +17,8 @@ from volttron.platform.agent.utils import jsonapi
 from volttron.platform.messaging import topics
 from volttron.platform.messaging import headers as headers_mod
 
+from gs_utilities import Forecast
+
 from .CPRinteraction import create_xml_query, parse_query
 
 utils.setup_logging()
@@ -85,7 +87,7 @@ class CPRPub(Agent):
         if self.initialization_complete == True:     # queries server only after config steps are completed
 
             _log.info("Attempting to make a model request")
-            if self.status_pending is not True:
+            if self.status_pending is False:
 
                 _log.info("Creating cpr request")
                 self.start_date, self.end_date = get_date()
@@ -115,20 +117,22 @@ class CPRPub(Agent):
         if (self.initialization_complete == True) and (self.status_pending == True):
 
             url2 =  "https://service.solaranywhere.com/api/v2/SimulationResult/" + self.simulationId
-            data = requests.get(url2,
-                                auth = HTTPBasicAuth(self._conf['userName'], self._conf['password'])
-                                )
+            auth = HTTPBasicAuth(self._conf['userName'],
+                                 self._conf['password'])
+            data = requests.get(url2, auth = auth)
             status = ET.fromstring(data.content).attrib.get('Status')
 
             if status == 'Done':
                 parsed_response = parse_query(data.content)
-
                 _log.info("Model received, Parsed Response Sending: {}".format(parsed_response))
+                cprModel = Forecast(**parsed_response)
+
+                message = cprModel.forecast_obj
                 self.vip.pubsub.publish(
                     peer="pubsub",
                     topic=self._conf['topic'],
                     headers={},
-                    message=parsed_response)
+                    message=message)
 
                 self.status_pending = False # allow new model requests to be made
 
