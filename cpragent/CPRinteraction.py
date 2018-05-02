@@ -75,13 +75,21 @@ def parse_query(query):
     """ Function to parse XML response from API"""
     xmldoc = minidom.parseString(query)
     SimPd = xmldoc.getElementsByTagName('SimulationPeriod')
-    results ={"results":[[sim.attributes['StartTime'].value,float(sim.attributes['PowerAC_kW'].value)]
-                for sim in SimPd],
-            "Units":"kWh",
-            "tz": "UTC-5",
-            "data_type":"float"
-        }
-    return results
+
+    time = []
+    forecast = []
+    for sim in SimPd:
+        time.append(sim.attributes['StartTime'].value)
+        forecast.append(float(sim.attributes['PowerAC_kW'].value))
+
+    parsed_forecast = dict(
+        forecast = forecast,
+        time = time,
+        units = "kWh",
+        # tz = "UTC-5",
+        data_type = "float"
+    )
+    return parsed_forecast
 
 if __name__ == "__main__":
     headers =  {'content-type': "text/xml; charset=utf-8",
@@ -110,5 +118,7 @@ if __name__ == "__main__":
                         auth = HTTPBasicAuth(userName, password)
                         )
     parsed_response = parse_query(data.content)
+    parsed_response
     ##
+
 
