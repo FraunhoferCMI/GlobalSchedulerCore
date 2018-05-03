@@ -3,6 +3,7 @@ import pandas
 import os
 import pytz
 from datetime import datetime, timedelta
+import copy
 import csv
 
 STANDALONE = False
@@ -44,7 +45,7 @@ class ObjectiveFunction():
                 (ts.replace(minute=0, second=0, microsecond=0) + sim_offset))) for ts in schedule_timestamps]
 
 
-        self.cur_cost = obj_fcn_data.iloc[indices]  #obj_fcn_data.loc[offset_ts].interpolate(method='linear')
+        self.cur_cost = numpy.array(obj_fcn_data.iloc[indices].transpose())  #obj_fcn_data.loc[offset_ts].interpolate(method='linear')
         print(self.cur_cost)
         self.desc = desc
         #return cur_data
@@ -59,13 +60,12 @@ class EnergyCostObjectiveFunction(ObjectiveFunction):
 
     ##############################################################################
     def obj_fcn_cost(self, profile):
-        demand = numpy.array(profile)
-        cost = sum(self.cur_cost["Cost"] * demand)
+        cost = sum(self.cur_cost[0] * profile)
         return cost
 
     ##############################################################################
     def obj_fcn_data(self):
-        return self.cur_cost["Cost"].tolist()
+        return self.cur_cost[0].tolist()
 
 ##############################################################################
 class dkWObjectiveFunction():
@@ -155,91 +155,25 @@ class TieredEnergyObjectiveFunction():
 class LoadShapeObjectiveFunction(ObjectiveFunction):
 
     ##############################################################################
+    def __init__(self, fname, schedule_timestamps, sim_offset=timedelta(0), desc=""):
+        ObjectiveFunction.__init__(self,fname, schedule_timestamps, sim_offset, desc)
+        self.cost = 0.0
+        self.err  = 0.0
+
+    ##############################################################################
     def obj_fcn_cost(self, profile):
         """
         imposes a cost for deviations from a target load shape.
         cost is calculated as square of the error relative to the target load shape.
         :return: cost of executing proposed profile, in $
         """
-        price = 10.0  # sort of arbitrary.    objfcn_params.loadshape.weight;
-        demand = numpy.array(profile)
+        price = 10.0  # sort of arbitrary, just needs to be a number big enough to drive behavior in the desired direction.
+        #demand = numpy.array(profile)
 
-        err = (demand - self.cur_cost["Load"]) ** 2
-        cost = sum(err) * price
-        return cost
+        self.err = (profile - self.cur_cost[0]) ** 2
+        self.cost = sum(self.err) * price
+        return self.cost
 
     ##############################################################################
     def obj_fcn_data(self):
-        return self.cur_cost["Load"].tolist()
-
-##############################################################################
-def cfg_fcns():
-    """
-    sample script for testing
-    (1) Set demand equal to a demand profile - interpreted as demand as a fcn of time, in kW
-    (2) Set obj_fcn_cfgs equal to a list of constructors for objective functions that you wish to apply
-    :return: cost - the total cost of implementing the target profile
-             obj_fcns - list of instances of target objective functions
-
-    """
-    schedule_timestamps = [datetime(year=2018, month=1, day=1, hour=10, minute=0, second=0) +
-                           timedelta(hours=t) for t in range(0, 8)]
-
-    demand = [100, 200, 300, 400, 500, 600, 500, 400]
-    #obj_fcn_cfg
-    obj_fcn_cfgs = ['EnergyCostObjectiveFunction("energy_price_data.xlsx", schedule_timestamps)',
-                    'EnergyCostObjectiveFunction("cpp_data.xlsx", schedule_timestamps)',
-                    'LoadShapeObjectiveFunction("loadshape_data.xlsx", schedule_timestamps)',
-                    'DemandChargeObjectiveFunction(10.0, 200.0)']
-
-    obj_fcns = []
-    for obj_fcn in obj_fcn_cfgs:
-        obj_fcns.append(eval(obj_fcn))
-
-    cost = []
-    for obj_fcn in obj_fcns:
-        cost.append(obj_fcn.obj_fcn_cost(demand))
-
-
-    return obj_fcns, cost
-
-##############################################################################
-def obj_fcn_min_backfeed(self):
-    """
-    placeholder for a function that calculates a demand charge for a given net demand profile
-    :return: cost of executing the profile, in $
-    """
-    max_bf = min(self.profile)
-
-    # tier at 200, 100, 10
-    cost = 0.0
-    for p in self.profile:
-        cost += max(-1 * p - 300.0, 0) * 100.0
-        cost += max(-1 * p - 250.0, 0) * 50.0
-        cost += max(-1 * p - 200.0, 0) * 25.0
-        cost += max(-1 * p - 150.0, 0) * 10.0
-        cost += max(-1 * p - 100.0, 0) * 10.0
-        cost += max(-1 * p - 50.0, 0) * 10.0
-        cost += max(-1 * p, 0.0) * 10.0
-
-    # if max_bf < 0: #self.demand_threshold:
-    #    cost = self.demand_cost_per_kW*(-1*max_bf)
-    # else:
-    #    cost = 0
-    return cost
-
-
-##############################################################################
-def obj_linear_energy_cost(self):
-    """
-    placeholder for a function that calculates a demand charge for a given net demand profile
-    :return: cost of executing the profile, in $
-    """
-    max_bf = min(self.profile)
-
-    # tier at 200, 100, 10
-    cost = 0.0
-
-    pass
-
-    return cost
+        return self.cur_cost[0].tolist()

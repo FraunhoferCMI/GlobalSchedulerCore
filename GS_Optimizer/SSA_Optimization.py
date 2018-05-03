@@ -66,13 +66,13 @@ class SimulatedAnnealer():
     def __init__(self):
         # SSA configuration parameters:
         self.init_run    = 1            # number of runs to estimate initial temperature and weight
-        self.nIterations = 50000           # Number of iterations
-        self.temp_decrease_pd = 600 # Number of iterations betweeen temperature decrease
-        self.jump_decrease_pd = 100 # Number of iterations betweeen jump size decrease
+        self.nIterations = 100000           # Number of iterations
+        self.temp_decrease_pd = 1500 # Number of iterations betweeen temperature decrease
+        self.jump_decrease_pd = 30 # Number of iterations betweeen jump size decrease
         self.init_jump        = 1.0 #0.5 # initial maximum jump
         self.fract_jump       = 0.95 # amount by which jump is decreased every jump_decrease_pd steps
         self.fract_T          = 0.85
-        self.O2T              = 0.05  # Conversion of objective function into initial T
+        self.O2T              = 0.5 #05  # Conversion of objective function into initial T
 
 
         self.display_pd = 5000; # update output for printing m and drawning
@@ -114,7 +114,21 @@ class SimulatedAnnealer():
         """
         y2 = (random() - .5) * 2.0 * jump
         y3 = x + y2
+        #y4 = z - y2
+        return max(min(y3,ub), lb)   #, max(min(y4,ub), lb)
+
+
+    ############################
+    def calc_jump(self, x, jump, lb, ub):
+        """
+        Returns a new value for an SSA weight by perturbing the current weight x by a random amount between +/- jump.
+        The new weight is subject to upper and lower bounds set by ub and lb, respectively
+        :return:
+        """
+        y2 = (random() - .5) * 2.0 * jump
+        y3 = x + y2
         return max(min(y3,ub), lb)
+
 
 
     ############################
@@ -150,9 +164,7 @@ class SimulatedAnnealer():
             target_child = self.copy_profile(source_child, target_child)
 
         if target.sundial_resources.update_required == 1:
-            target.state_vars = copy.deepcopy(source.state_vars)
-            target.cost       = source.cost #copy.deepcopy(source.cost)
-            target.total_cost = source.total_cost #copy.deepcopy(source.total_cost)
+            target.copy_profile(source)
 
         return target
 
@@ -253,7 +265,6 @@ class SimulatedAnnealer():
 
         self.ess_least_cost = self.get_resource(least_cost_soln, "ESSCtrlNode")[0]
 
-
         # set initial tempearture
         T0   = abs(self.O2T*init_soln.cost)
         T    = T0;
@@ -266,6 +277,11 @@ class SimulatedAnnealer():
         constraint_time = 0.0
         cost_time = 0.0
         loop_time = 0.0
+
+        rand_time = 0.0
+        essupdate_time = 0.0
+        sysupdate_time = 0.0
+
 
         t0 = datetime.now()
 
@@ -302,19 +318,42 @@ class SimulatedAnnealer():
             deltaT     = t3-t2
             copy_time += deltaT.total_seconds()  # running tally of how long we spend on copy operations
 
+            # remove battery from net load -
+            self.system.state_vars["DemandForecast_kW"] = self.system.state_vars["DemandForecast_kW"] - \
+                                                          self.ess.state_vars["DemandForecast_kW"]
+
             # Randomly perturb a single point by a random value dictated by the size of the jump parameter
             # FIXME: currently this just deals with battery charge / discharge instructions - not other resources
             # FIXME: e.g., PV curtailment
             ind = int(floor(random()*self.nOptimizationPtsPerPd))
-            self.ess.state_vars["Weight"][ind]   = self.calc_jump(self.ess.state_vars["Weight"][ind], jump, -1, 1)  # FIXME: -1 to 1 should not be fixed.
+            #ind2 = ind
+            #while ind2<>ind:
+            #    ind2 = int(floor(random()*self.nOptimizationPtsPerPd))
+            self.ess.state_vars["DemandForecast_kW"][ind] = self.calc_jump(self.ess.state_vars["DemandForecast_kW"][ind],
+                                                                           jump*(self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"]+self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])/2,
+                                                                           -1*self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"],
+                                                                           self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])
+
+            #self.ess.state_vars["Weight"][ind2]
+            #self.ess.state_vars["Weight"][ind2] = self.calc_jump(self.ess.state_vars["Weight"][ind2], 0, -1, 1)
+
 
             # Then: check for constraints.
             # TODO - right now, just checking for battery limit violations.  Eventually put in ability to include
             # TODO - additional constraints
-            self.system.state_vars["DemandForecast_kW"] = self.system.state_vars["DemandForecast_kW"] - \
-                                                          self.ess.state_vars["DemandForecast_kW"]
-            self.ess.state_vars["DemandForecast_kW"] = self.ess.state_vars["Weight"] * self.ess.sundial_resources.state_vars["Nameplate"]
-            self.ess.state_vars    = self.ess.sundial_resources.check_constraints(self.ess.state_vars, ind)
+
+            #self.ess.state_vars["DemandForecast_kW"][ind] = self.ess.state_vars["Weight"][ind] * self.ess.sundial_resources.state_vars["Nameplate"]
+            #self.ess.state_vars["DemandForecast_kW"] = self.ess.state_vars["Weight"] * self.ess.sundial_resources.state_vars["Nameplate"]
+
+            tconstraint2         = datetime.now() # time stamp at end of copy
+            deltaT     = tconstraint2-t3
+            rand_time += deltaT.total_seconds()  # running tally of how long we spend on copy operations
+
+            self.ess.state_vars    = self.ess.sundial_resources.check_constraints2(self.ess.state_vars, ind)
+
+            tconstraint1         = datetime.now() # time stamp at end of copy
+            deltaT     = tconstraint1-tconstraint2
+            essupdate_time += deltaT.total_seconds()  # running tally of how long we spend on copy operations
 
 
             # then: update resources.  This is a shortcut
@@ -323,6 +362,9 @@ class SimulatedAnnealer():
                                                           self.ess.state_vars["DemandForecast_kW"]
             self.system.state_vars["EnergyAvailableForecast_kWh"] = self.ess.state_vars["EnergyAvailableForecast_kWh"][:]
 
+            tconstraint2         = datetime.now() # time stamp at end of copy
+            deltaT     = tconstraint2-tconstraint1
+            sysupdate_time += deltaT.total_seconds()  # running tally of how long we spend on copy operations
 
             #current_soln.update_state() # not implemented
 
@@ -342,6 +384,7 @@ class SimulatedAnnealer():
 
             # Now calculate cost of the current solution and get timing for cumulative time on doing cost calcs.
             total_cost = current_soln.calc_cost()
+
             #print ("total cost = "+str(total_cost))
             t6         = datetime.now()
             deltaT     = t6-t5
@@ -376,6 +419,8 @@ class SimulatedAnnealer():
               str(constraint_time)+"Cost: "+str(cost_time))
 
         _log.info("loop time: "+str(loop_time)+"; total time: "+str(total_time))
+        _log.info("time results: rand time: "+str(rand_time)+"; ESS Updates: "+
+              str(essupdate_time)+"Sys updates: "+str(sysupdate_time))
 
         # exports least_cost_soln to sundial_resources.schedule_vars
         if (self.persist_lowest_cost == 0):
