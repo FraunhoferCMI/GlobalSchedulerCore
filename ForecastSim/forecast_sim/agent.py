@@ -403,7 +403,7 @@ class CPRAgent(Agent):
 
 
     ##############################################################################
-    @Core.periodic(period = LOADSHIFT_FORECAST_QUERY_INTERVAL)
+    @Core.periodic(period = LOADSHIFT_QUERY_INTERVAL)
     def query_loadshift_forecast(self):
         """
         called at interval defined in LOADSHIFT_FORECAST_QUERY_INTERVAL (gs_identities)
