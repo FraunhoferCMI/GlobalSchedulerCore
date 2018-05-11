@@ -812,6 +812,14 @@ class LoadShiftResource(SundialResource):
     """
 
     ##############################################################################
+    def __init__(self, resource_cfg, gs_start_time):
+        SundialResource.__init__(self, resource_cfg, gs_start_time)
+
+        # define a bunch of ESS-specific end points to update
+        self.update_list_end_pts.extend(["LoadShiftOptions_kW",
+                                         "LoadShiftOptions_t"])
+
+    ##############################################################################
     def init_test_values(self, length):
         """
         Populates with a known load shift forecast for testing, and initializes nameplate - which does not have much

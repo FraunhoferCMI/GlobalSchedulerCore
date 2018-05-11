@@ -48,7 +48,7 @@
                   "ID":"Inverter1",
                   "ResourceType":"Solectria",
                   "Mfr": "Solectria",
-                  "nameplate_rating_kW": "500",
+                  "nameplate_rating_kW": "1000",
                   "Metered":"Y",
                   "DeviceList":[]
                }
@@ -71,8 +71,13 @@
             "TopicPath":"devices/flame/load_report",
             "TopicAgent":"cpr",
             "TopicScrapeTimeout":"DEMAND_REPORT_SCHEDULE*2"
+         },
+         {
+            "TopicName":"LoadShift",
+            "TopicPath":"devices/flame/loadshift_forecast",
+            "TopicAgent":"cpr",
+            "TopicScrapeTimeout":"LOADSHIFT_QUERY_INTERVAL*2"
          }
-
       ],
       "Use" :"Y",
       "Metered" : "Y",
@@ -82,6 +87,12 @@
             "ResourceType": "Load",
             "Metered": "Y",
             "DeviceList": []
+         },
+         {
+            "ID":"LoadShift",
+            "ResourceType":"LoadShiftCtrlNode",
+            "Metered": "N",
+            "DeviceList":[]
          }
       ]
    }
