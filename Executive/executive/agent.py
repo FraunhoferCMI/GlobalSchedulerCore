@@ -466,7 +466,7 @@ class ExecutiveAgent(Agent):
 
                 for k in entries.sundial_resource.update_list_end_pts:
                     # now map data end points from devices to SundialResources
-                    _log.debug("UpdateSDR: "+entries.sundial_resource.resource_id+": SM Device ="+devices["DeviceID"]+"; k="+str(k))
+                    _log.debug("UpdateSDR: "+entries.sundial_resource.resource_id+": SM Device ="+devices["DeviceID"]+"; k="+str(k)+"; agent="+str(devices["AgentID"]))
                     if devices["isAvailable"] == 1:
                         try:
                             dev_state_var = self.vip.rpc.call(str(devices["AgentID"]),
@@ -662,7 +662,8 @@ class ExecutiveAgent(Agent):
                     schedule_timestamps = self.generate_schedule_timestamps()
 
                 self.sundial_resources.interpolate_forecast(schedule_timestamps)
-                self.optimizer.run_ssa_optimization(self.sundial_resources, schedule_timestamps, self.tariffs) # SSA optimization
+                self.sundial_resources.cfg_cost(schedule_timestamps, self.tariffs) # queue up time-differentiated cost data
+                self.optimizer.run_ssa_optimization(self.sundial_resources, schedule_timestamps) # SSA optimization
 
                 HistorianTools.publish_data(self,
                                             "SystemResource/Schedule",
