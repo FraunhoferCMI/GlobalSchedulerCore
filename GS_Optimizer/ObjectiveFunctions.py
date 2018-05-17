@@ -8,7 +8,7 @@ import copy
 import csv
 from gs_identities import *
 
-STANDALONE = True
+STANDALONE = False
 
 ##############################################################################
 class ObjectiveFunction():
@@ -102,7 +102,7 @@ class ObjectiveFunction():
         #    numpy.abs(
         #        numpy.array([pandas.Timestamp(t).replace(tzinfo=pytz.UTC).to_pydatetime() for t in self.obj_fcn_data.index]) -
         #        (ts.replace(minute=0, second=0, microsecond=0) + sim_offset))) for ts in schedule_timestamps]
-
+        print(cur_data)
         return numpy.array(cur_data.transpose())
         #numpy.array(self.obj_fcn_data.iloc[indices].transpose())  #obj_fcn_data.loc[offset_ts].interpolate(method='linear')
 
@@ -190,11 +190,13 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
     ##############################################################################
     def obj_fcn_cfg(self, **kwargs):
         for k, v in self.init_params.iteritems():
+            print("k="+str(k)+"; v="+str(v))
             try:
-                self.init_params.update({k: kwargs[k]})
+                self.init_params.update({k: kwargs["tariffs"][k]})
             except:
                 pass
 
+        print(self.init_params)
         #self.init_params["threshold"] = kwargs["threshold"]
         #self.init_params["cost_per_kW"] = kwargs["cost_per_kW"]
 
@@ -287,10 +289,10 @@ class LoadShapeObjectiveFunction(ObjectiveFunction):
         price = 10.0  # sort of arbitrary, just needs to be a number big enough to drive behavior in the desired direction.
         #demand = numpy.array(profile)
 
-        self.err = (profile - self.params["cur_cost"][0]) ** 2
+        self.err = (profile - self.init_params["cur_cost"][0]) ** 2
         self.cost = sum(self.err) * price
         return self.cost
 
     ##############################################################################
     def get_obj_fcn_data(self):
-        return self.params["cur_cost"][0].tolist()
+        return self.init_params["cur_cost"][0].tolist()

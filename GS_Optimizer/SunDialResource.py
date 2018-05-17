@@ -438,7 +438,7 @@ class SundialResource():
             self.state_vars["EnergyAvailableForecast_kWh"] = numpy.array([0.0] * self.pts_per_schedule)
             self.state_vars["LoadShiftOptions_kW"] =  numpy.array([[0.0] * self.pts_per_schedule]*20)
 
-
+            len_load_options = 0
             for virtual_plant in self.virtual_plants:
                 # retrieve data from child nodes and sum
                 virtual_plant.interpolate_forecast(schedule_timestamps)
@@ -950,7 +950,7 @@ class SundialSystemResource(SundialResource):
 
         # set up the specific set of objective functions to apply for the system
         self.obj_fcns = [EnergyCostObjectiveFunction(desc="EnergyPrice", fname="energy_price_data.xlsx"),
-                         #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_data_load.xlsx"),
+                         #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_data_load.xlsx")]#,
                          DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0),
                          dkWObjectiveFunction(desc="dkW")]
 

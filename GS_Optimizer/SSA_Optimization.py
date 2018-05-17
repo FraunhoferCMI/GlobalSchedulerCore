@@ -453,6 +453,20 @@ class SimulatedAnnealer():
         return least_cost_soln
 
 
+    def search_single_option(self, sundial_resources, timestamps):
+        least_cost_soln = self.run_ssa_optimization(sundial_resources, timestamps)
+        # exports least_cost_soln to sundial_resources.schedule_vars
+        if (self.persist_lowest_cost == 0):
+            _log.info("SSA: New set of timestamps - generating new solution")
+            export_schedule(least_cost_soln, timestamps)
+        elif least_cost_soln.total_cost<sundial_resources.schedule_vars["total_cost"]:
+            _log.info("SSA: Lower Cost Solution found - using new solution")
+            _log.info("new soln is"+str(least_cost_soln)+"; old soln = "+str(sundial_resources.schedule_vars["total_cost"]))
+            export_schedule(least_cost_soln, timestamps)
+        else:
+            _log.info("SSA: Lower cost solution not found - using previous solution")
+
+
     def search_load_shift_options(self, sundial_resources, loadshift_resources, timestamps):
 
         least_cost_soln_list      = []
@@ -464,7 +478,7 @@ class SimulatedAnnealer():
             loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii]
             sundial_resources.state_vars["DemandForecast_kW"]   = sundial_resources.state_vars["LoadShiftOptions_kW"][ii]
         #    sundial_resources.interpolate_forecast(schedule_timestamps)
-            least_cost_soln = optimizer.run_ssa_optimization(sundial_resources,timestamps)
+            least_cost_soln = self.run_ssa_optimization(sundial_resources,timestamps)
             least_cost_soln_list.append(least_cost_soln)
             least_cost_soln_cost_list.append(least_cost_soln.total_cost)
 
@@ -559,8 +573,8 @@ if __name__ == '__main__':
     ess_resources.load_scenario(init_SOE=1000.0,
                                 max_soe=2000.0,
                                 min_soe=0.0,
-                                max_chg=1000.0,
-                                max_discharge=1000.0,
+                                max_chg=500.0,
+                                max_discharge=500.0,
                                 chg_eff=0.95,
                                 dischg_eff=0.95,
                                 demand_forecast=ess_forecast,
@@ -606,7 +620,7 @@ if __name__ == '__main__':
     system_resources.load_scenario()
 
 
-    tariffs = {"demand_charge_threshold": 100} #DEMAND_CHARGE_THRESHOLD}
+    tariffs = {"threshold": 100} #DEMAND_CHARGE_THRESHOLD}
 
     #########
 
@@ -632,6 +646,7 @@ if __name__ == '__main__':
     #    optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps, tariffs)
     sundial_resources.interpolate_forecast(schedule_timestamps)
     sundial_resources.cfg_cost(schedule_timestamps, tariffs)
-    optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
+    #optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
+    optimizer.search_single_option(sundial_resources, schedule_timestamps)
     #optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps)
 
