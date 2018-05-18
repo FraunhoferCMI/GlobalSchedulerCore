@@ -49,6 +49,7 @@ import csv
 import sys
 import pytz
 import numpy
+import pandas
 from random import *
 from SunDialResource import SundialSystemResource, SundialResource, SundialResourceProfile, export_schedule
 from datetime import datetime, timedelta
@@ -66,13 +67,13 @@ class SimulatedAnnealer():
     def __init__(self):
         # SSA configuration parameters:
         self.init_run    = 1            # number of runs to estimate initial temperature and weight
-        self.nIterations = 50000           # Number of iterations
-        self.temp_decrease_pd = 600 # Number of iterations betweeen temperature decrease
-        self.jump_decrease_pd = 100 # Number of iterations betweeen jump size decrease
+        self.nIterations = 100000           # Number of iterations
+        self.temp_decrease_pd = 1500 # Number of iterations betweeen temperature decrease
+        self.jump_decrease_pd = 30 # Number of iterations betweeen jump size decrease
         self.init_jump        = 1.0 #0.5 # initial maximum jump
         self.fract_jump       = 0.95 # amount by which jump is decreased every jump_decrease_pd steps
         self.fract_T          = 0.85
-        self.O2T              = 0.05  # Conversion of objective function into initial T
+        self.O2T              = 0.5 #05  # Conversion of objective function into initial T
 
 
         self.display_pd = 5000; # update output for printing m and drawning
@@ -114,7 +115,21 @@ class SimulatedAnnealer():
         """
         y2 = (random() - .5) * 2.0 * jump
         y3 = x + y2
+        #y4 = z - y2
+        return max(min(y3,ub), lb)   #, max(min(y4,ub), lb)
+
+
+    ############################
+    def calc_jump(self, x, jump, lb, ub):
+        """
+        Returns a new value for an SSA weight by perturbing the current weight x by a random amount between +/- jump.
+        The new weight is subject to upper and lower bounds set by ub and lb, respectively
+        :return:
+        """
+        y2 = (random() - .5) * 2.0 * jump
+        y3 = x + y2
         return max(min(y3,ub), lb)
+
 
 
     ############################
@@ -150,16 +165,14 @@ class SimulatedAnnealer():
             target_child = self.copy_profile(source_child, target_child)
 
         if target.sundial_resources.update_required == 1:
-            target.state_vars = copy.deepcopy(source.state_vars)
-            target.cost       = source.cost #copy.deepcopy(source.cost)
-            target.total_cost = source.total_cost #copy.deepcopy(source.total_cost)
+            target.copy_profile(source)
 
         return target
 
 
 
     ############################
-    def run_ssa_optimization(self, sundial_resources, timestamps, tariffs):
+    def run_ssa_optimization(self, sundial_resources, timestamps):
 
         """
         Executes simulated Annealing optimization algorithm.
@@ -233,10 +246,10 @@ class SimulatedAnnealer():
 
         # get an initial set of commands to seed the ssa process
         # then, set least_cost_soln AND current_soln to initiate the SSA
-        init_soln       = SundialResourceProfile(sundial_resources, timestamps, tariffs)
-        current_soln    = SundialResourceProfile(sundial_resources, timestamps, tariffs)
-        least_cost_soln = SundialResourceProfile(sundial_resources, timestamps, tariffs)
-
+        init_soln = SundialResourceProfile(sundial_resources, timestamps)
+        current_soln = SundialResourceProfile(sundial_resources, timestamps)
+        least_cost_soln = SundialResourceProfile(sundial_resources, timestamps)
+        final_soln      = SundialResourceProfile(sundial_resources, timestamps)
 
         # For convenience - this extracts specific resource types from the Sundial tree structure and puts them
         # in a flat list, grouped by resource type.  Just simplifies data handling, speeds execution, particularly
@@ -254,6 +267,21 @@ class SimulatedAnnealer():
         self.ess_least_cost = self.get_resource(least_cost_soln, "ESSCtrlNode")[0]
 
 
+        #### what I'm thinking is that you put in a for loop right here.
+        ## it needs to change current solution to
+        ## ESS - init solution
+        ## system resources - next load shift option
+        ## load - init solution
+        ## pv - init solution
+        ## load shift - next load shift option
+
+
+        ## in the nIterations for loop - we are setting current solution to least cost solution
+        ## but....
+
+        ## need to have least_cost_soln - global, and least_cost_soln - for the current load shift profile
+
+
         # set initial tempearture
         T0   = abs(self.O2T*init_soln.cost)
         T    = T0;
@@ -266,6 +294,11 @@ class SimulatedAnnealer():
         constraint_time = 0.0
         cost_time = 0.0
         loop_time = 0.0
+
+        rand_time = 0.0
+        essupdate_time = 0.0
+        sysupdate_time = 0.0
+
 
         t0 = datetime.now()
 
@@ -302,19 +335,42 @@ class SimulatedAnnealer():
             deltaT     = t3-t2
             copy_time += deltaT.total_seconds()  # running tally of how long we spend on copy operations
 
+            # remove battery from net load -
+            self.system.state_vars["DemandForecast_kW"] = self.system.state_vars["DemandForecast_kW"] - \
+                                                          self.ess.state_vars["DemandForecast_kW"]
+
             # Randomly perturb a single point by a random value dictated by the size of the jump parameter
             # FIXME: currently this just deals with battery charge / discharge instructions - not other resources
             # FIXME: e.g., PV curtailment
             ind = int(floor(random()*self.nOptimizationPtsPerPd))
-            self.ess.state_vars["Weight"][ind]   = self.calc_jump(self.ess.state_vars["Weight"][ind], jump, -1, 1)  # FIXME: -1 to 1 should not be fixed.
+            #ind2 = ind
+            #while ind2<>ind:
+            #    ind2 = int(floor(random()*self.nOptimizationPtsPerPd))
+            self.ess.state_vars["DemandForecast_kW"][ind] = self.calc_jump(self.ess.state_vars["DemandForecast_kW"][ind],
+                                                                           jump*(self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"]+self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])/2,
+                                                                           -1*self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"],
+                                                                           self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])
+
+            #self.ess.state_vars["Weight"][ind2]
+            #self.ess.state_vars["Weight"][ind2] = self.calc_jump(self.ess.state_vars["Weight"][ind2], 0, -1, 1)
+
 
             # Then: check for constraints.
             # TODO - right now, just checking for battery limit violations.  Eventually put in ability to include
             # TODO - additional constraints
-            self.system.state_vars["DemandForecast_kW"] = self.system.state_vars["DemandForecast_kW"] - \
-                                                          self.ess.state_vars["DemandForecast_kW"]
-            self.ess.state_vars["DemandForecast_kW"] = self.ess.state_vars["Weight"] * self.ess.sundial_resources.state_vars["Nameplate"]
-            self.ess.state_vars    = self.ess.sundial_resources.check_constraints(self.ess.state_vars, ind)
+
+            #self.ess.state_vars["DemandForecast_kW"][ind] = self.ess.state_vars["Weight"][ind] * self.ess.sundial_resources.state_vars["Nameplate"]
+            #self.ess.state_vars["DemandForecast_kW"] = self.ess.state_vars["Weight"] * self.ess.sundial_resources.state_vars["Nameplate"]
+
+            tconstraint2         = datetime.now() # time stamp at end of copy
+            deltaT     = tconstraint2-t3
+            rand_time += deltaT.total_seconds()  # running tally of how long we spend on copy operations
+
+            self.ess.state_vars    = self.ess.sundial_resources.check_constraints2(self.ess.state_vars, ind)
+
+            tconstraint1         = datetime.now() # time stamp at end of copy
+            deltaT     = tconstraint1-tconstraint2
+            essupdate_time += deltaT.total_seconds()  # running tally of how long we spend on copy operations
 
 
             # then: update resources.  This is a shortcut
@@ -323,9 +379,9 @@ class SimulatedAnnealer():
                                                           self.ess.state_vars["DemandForecast_kW"]
             self.system.state_vars["EnergyAvailableForecast_kWh"] = self.ess.state_vars["EnergyAvailableForecast_kWh"][:]
 
-
-            #current_soln.update_state() # not implemented
-
+            tconstraint2         = datetime.now() # time stamp at end of copy
+            deltaT     = tconstraint2-tconstraint1
+            sysupdate_time += deltaT.total_seconds()  # running tally of how long we spend on copy operations
 
             # Sanity check to make sure that constraint check is working.  probably unnecessary at this pont.
             if max(self.ess.state_vars["EnergyAvailableForecast_kWh"])>float(self.ess.sundial_resources.state_vars["MaxSOE_kWh"])+0.001:
@@ -342,6 +398,7 @@ class SimulatedAnnealer():
 
             # Now calculate cost of the current solution and get timing for cumulative time on doing cost calcs.
             total_cost = current_soln.calc_cost()
+
             #print ("total cost = "+str(total_cost))
             t6         = datetime.now()
             deltaT     = t6-t5
@@ -376,26 +433,8 @@ class SimulatedAnnealer():
               str(constraint_time)+"Cost: "+str(cost_time))
 
         _log.info("loop time: "+str(loop_time)+"; total time: "+str(total_time))
-
-        # exports least_cost_soln to sundial_resources.schedule_vars
-        if (self.persist_lowest_cost == 0):
-            _log.info("SSA: New set of timestamps - generating new solution")
-            export_schedule(least_cost_soln, timestamps)
-        elif least_cost_soln.total_cost<sundial_resources.schedule_vars["total_cost"]:
-            _log.info("SSA: Lower Cost Solution found - using new solution")
-            _log.info("new soln is"+str(least_cost_soln)+"; old soln = "+str(sundial_resources.schedule_vars["total_cost"]))
-            export_schedule(least_cost_soln, timestamps)
-        else:
-            _log.info("SSA: Lower cost solution not found - using previous solution")
-        #_log.info("Time Stamps are:"+str(least_cost_soln.sundial_resources.schedule_vars["timestamp"]))
-        #_log.info("ESS profile: "+str(self.ess_least_cost.state_vars["DemandForecast_kW"]))
-        #_log.info("System profile: " + str(least_cost_soln.state_vars["DemandForecast_kW"]))
-        #_log.info("System profile: " + str(least_cost_soln.sundial_resources.schedule_vars["DemandForecast_kW"]))
-        #for virtual_plant in least_cost_soln.virtual_plants:
-        #    _log.info(virtual_plant.sundial_resources.resource_id+": "+str(virtual_plant.state_vars["DemandForecast_kW"]))
-        #    _log.info(virtual_plant.sundial_resources.resource_id + ": " +
-        #              str(virtual_plant.sundial_resources.schedule_vars["DemandForecast_kW"]))
-
+        _log.info("time results: rand time: "+str(rand_time)+"; ESS Updates: "+
+              str(essupdate_time)+"Sys updates: "+str(sysupdate_time))
 
         # dump some data to a csv file
         csv_name = ("/home/parallels/sundial/ssa_results.csv")
@@ -410,6 +449,64 @@ class SimulatedAnnealer():
             results_writer.writerow(self.load.state_vars["DemandForecast_kW"])
             #results_writer.writerow(self.pv.init_solution.schedule)
             #results_writer.writerow(self.demand.least_cost_soln.schedule)
+
+        return least_cost_soln
+
+
+    def search_single_option(self, sundial_resources, timestamps):
+        least_cost_soln = self.run_ssa_optimization(sundial_resources, timestamps)
+        # exports least_cost_soln to sundial_resources.schedule_vars
+        if (self.persist_lowest_cost == 0):
+            _log.info("SSA: New set of timestamps - generating new solution")
+            export_schedule(least_cost_soln, timestamps)
+        elif least_cost_soln.total_cost<sundial_resources.schedule_vars["total_cost"]:
+            _log.info("SSA: Lower Cost Solution found - using new solution")
+            _log.info("new soln is"+str(least_cost_soln)+"; old soln = "+str(sundial_resources.schedule_vars["total_cost"]))
+            export_schedule(least_cost_soln, timestamps)
+        else:
+            _log.info("SSA: Lower cost solution not found - using previous solution")
+
+
+    def search_load_shift_options(self, sundial_resources, loadshift_resources, timestamps):
+
+        least_cost_soln_list      = []
+        least_cost_soln_cost_list = []
+
+
+        for ii in range(0, len(loadshift_resources.state_vars["LoadShiftOptions_kW"])):
+
+            loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii]
+            sundial_resources.state_vars["DemandForecast_kW"]   = sundial_resources.state_vars["LoadShiftOptions_kW"][ii]
+        #    sundial_resources.interpolate_forecast(schedule_timestamps)
+            least_cost_soln = self.run_ssa_optimization(sundial_resources,timestamps)
+            least_cost_soln_list.append(least_cost_soln)
+            least_cost_soln_cost_list.append(least_cost_soln.total_cost)
+
+            # now copy the least cost solution for this load shift option to the lcs list
+            # once all load shift options have been searched, we will choose the global least cost
+            #least_cost_soln_list.append(self.copy_profile(least_cost_soln, final_soln))
+            #
+            # end of main loop (n load shift options)
+
+        # now find global least cost solution
+        lcs_ind         = least_cost_soln_cost_list.index(min(least_cost_soln_cost_list))
+        least_cost_soln = least_cost_soln_list[lcs_ind]
+
+        _log.info("ind is "+str(lcs_ind))
+        #_log.info("")
+        _log.info("LCS is "+str(least_cost_soln_cost_list[lcs_ind]))
+
+        # exports least_cost_soln to sundial_resources.schedule_vars
+        if (self.persist_lowest_cost == 0):
+            _log.info("SSA: New set of timestamps - generating new solution")
+            export_schedule(least_cost_soln, timestamps)
+        elif least_cost_soln.total_cost<sundial_resources.schedule_vars["total_cost"]:
+            _log.info("SSA: Lower Cost Solution found - using new solution")
+            _log.info("new soln is"+str(least_cost_soln)+"; old soln = "+str(sundial_resources.schedule_vars["total_cost"]))
+            export_schedule(least_cost_soln, timestamps)
+        else:
+            _log.info("SSA: Lower cost solution not found - using previous solution")
+
 
 
 
@@ -441,7 +538,6 @@ if __name__ == '__main__':
     #for resource in sundial_resources:
     #    print("Device ID: "+resource.resource_id, "; Device Type = "+resource.resource_type)
 
-    optimizer = SimulatedAnnealer()
 
     #sundial_resources.init_test_values(24)  # initializes with some hard-coded known values
 
@@ -474,11 +570,11 @@ if __name__ == '__main__':
     #                0.0, 0.0, -136.28581942, -96.68917457,
     #                49.07769182, 97.72753814, 111.3388077, 0.0]
 
-    ess_resources.load_scenario(init_SOE=4000.0,
-                                max_soe=10000.0,
+    ess_resources.load_scenario(init_SOE=1000.0,
+                                max_soe=2000.0,
                                 min_soe=0.0,
-                                max_chg=1000.0,
-                                max_discharge=1000.0,
+                                max_chg=500.0,
+                                max_discharge=500.0,
                                 chg_eff=0.95,
                                 dischg_eff=0.95,
                                 demand_forecast=ess_forecast,
@@ -513,25 +609,44 @@ if __name__ == '__main__':
                                  pk_capacity = 1000.0,
                                  t=forecast_timestamps)
 
-    try:
-        loadshift_resources.load_scenario()
-    except:
-        pass
+    #try:
+    ls = pandas.read_excel("loadshift_example.xlsx", header=None)
+    print(ls)
+    load_shift_options = [ls[ii].tolist() for ii in range(0,13)]
+    loadshift_resources.load_scenario(load_options=load_shift_options,
+                                      t=forecast_timestamps)
+    #except:
+    #    pass
     system_resources.load_scenario()
 
 
-    tariffs = {"demand_charge_threshold": DEMAND_CHARGE_THRESHOLD}
+    tariffs = {"threshold": 100} #DEMAND_CHARGE_THRESHOLD}
 
     #########
 
 
     ##### This section replicates the periodic call of the optimizer ######
     # calls the actual optimizer.
-    toffset = 20
+    toffset = 0
     schedule_timestamps = [gs_start_time.replace(tzinfo=pytz.UTC) +
                            timedelta(minutes=t+toffset) for t in range(0,
                                                                SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
                                                                SSA_SCHEDULE_RESOLUTION)]
+    optimizer = SimulatedAnnealer()
+
+    #for ii in range(0,13):
+    #    loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii]
+    #    ess_resources.state_vars["DemandForecast_t"] = forecast_timestamps
+    #    pv_resources.state_vars["DemandForecast_t"] = forecast_timestamps
+    #    system_resources.state_vars["DemandForecast_t"] = forecast_timestamps
+    #    load_resources.state_vars["DemandForecast_t"] = forecast_timestamps
+    #    loadshift_resources.state_vars["DemandForecast_t"] = forecast_timestamps
+
+    #    sundial_resources.interpolate_forecast(schedule_timestamps)
+    #    optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps, tariffs)
     sundial_resources.interpolate_forecast(schedule_timestamps)
-    optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps, tariffs)
+    sundial_resources.cfg_cost(schedule_timestamps, tariffs)
+    #optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
+    optimizer.search_single_option(sundial_resources, schedule_timestamps)
+    #optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps)
 

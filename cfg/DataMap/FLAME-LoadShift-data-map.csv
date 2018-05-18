@@ -1,0 +1,5 @@
+Forecast,FLAME-LoadShift,Forecast,LoadShiftOptions,,kW
+Time,FLAME-LoadShift,Forecast,t,,UTC
+Duration,FLAME-LoadShift,Forecast,duration,,hr
+Resolution,FLAME-LoadShift,Forecast,resolution,,min
+nOptions,FLAME-LoadShift,Forecast,nOption,0,

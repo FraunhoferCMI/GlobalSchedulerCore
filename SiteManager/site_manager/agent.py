@@ -211,9 +211,18 @@ class SiteManagerAgent(Agent):
         #for k, v in data.items():
         #    _log.info("Message is: "+k+": "+str(v))
 
+        # update the current topic's last read time to indicate data is fresh
+        for topic_obj in self.topics:
+            cur_topic_str = topic_obj["TopicPath"]+"/all"
+            if cur_topic_str == topic:
+                topic_obj["last_read_time"] = utils.get_aware_utc_now()
+                cur_topic_name = topic_obj["TopicName"]
+                _log.info("SiteManagerStatus: Topic "+topic+" read at "+datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
+                break
+
         try:
             self.updating = 1  # indicates that data is updating - do not trust until populate end pts is complete
-            self.site.populate_endpts(data, meta_data)
+            self.site.populate_endpts(data, meta_data, cur_topic_name)
             self.dirtyFlag = 0 # clear dirtyFlag on new read
             self.updating = 0
         except:
@@ -221,15 +230,6 @@ class SiteManagerAgent(Agent):
             # a catch-all for any errors in parsing incoming msg
             _log.info("Exception: in populate end_pts!!!")
         pass
-
-        # update the current topic's last read time to indicate data is fresh
-        for topic_obj in self.topics:
-            cur_topic_str = topic_obj["TopicPath"]+"/all"
-            if cur_topic_str == topic:
-                topic_obj["last_read_time"] = utils.get_aware_utc_now()
-                _log.info("SiteManagerStatus: Topic "+topic+" read at "+datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
-                break
-
 
     ##############################################################################
     def publish_data(self):

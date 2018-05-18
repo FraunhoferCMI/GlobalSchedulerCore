@@ -11,7 +11,7 @@
         "DeviceList": [
           {
             "AgentID": "FLAME",
-            "DeviceID": "FLAME-loadshift",
+            "DeviceID": "FLAME-LoadShift",
             "Use": "N"
           }
         ]

@@ -416,7 +416,7 @@ class ExecutiveAgent(Agent):
         #fname_fullpath = volttron_root+fname
         #self.energy_price_data = pandas.read_excel(fname_fullpath, header=0, index_col=0)
 
-        self.tariffs = {"demand_charge_threshold": DEMAND_CHARGE_THRESHOLD}
+        self.tariffs = {"threshold": DEMAND_CHARGE_THRESHOLD}
         #self.tariffs = {"energy_price": }
 
         #indices = [numpy.argmin(
@@ -429,14 +429,14 @@ class ExecutiveAgent(Agent):
 
     ##############################################################################
     def update_tariffs(self):
-        if self.system_resources.state_vars["AvgPwr_kW"] > 1.2*self.tariffs["demand_charge_threshold"]:
-            self.tariffs["demand_charge_threshold"] = self.system_resources.state_vars["AvgPwr_kW"]/1.2
+        if self.system_resources.state_vars["AvgPwr_kW"] > 1.2*self.tariffs["threshold"]:
+            self.tariffs["threshold"] = self.system_resources.state_vars["AvgPwr_kW"]/1.2
 
             HistorianTools.publish_data(self,
                                         "Tariffs",
                                         default_units["DemandChargeThreshold"],
                                         "DemandChargeThreshold",
-                                        self.tariffs["demand_charge_threshold"])
+                                        self.tariffs["threshold"])
 
         #self.tariffs["demand_charge_threshold"] = max(self.tariffs["demand_charge_threshold"],self.system_resources.state_vars["Pwr_kW"])
         pass
@@ -466,7 +466,7 @@ class ExecutiveAgent(Agent):
 
                 for k in entries.sundial_resource.update_list_end_pts:
                     # now map data end points from devices to SundialResources
-                    _log.debug("UpdateSDR: "+entries.sundial_resource.resource_id+": SM Device ="+devices["DeviceID"]+"; k="+str(k))
+                    _log.debug("UpdateSDR: "+entries.sundial_resource.resource_id+": SM Device ="+devices["DeviceID"]+"; k="+str(k)+"; agent="+str(devices["AgentID"]))
                     if devices["isAvailable"] == 1:
                         try:
                             dev_state_var = self.vip.rpc.call(str(devices["AgentID"]),
@@ -662,7 +662,9 @@ class ExecutiveAgent(Agent):
                     schedule_timestamps = self.generate_schedule_timestamps()
 
                 self.sundial_resources.interpolate_forecast(schedule_timestamps)
-                self.optimizer.run_ssa_optimization(self.sundial_resources, schedule_timestamps, self.tariffs) # SSA optimization
+                self.sundial_resources.cfg_cost(schedule_timestamps, self.tariffs) # queue up time-differentiated cost data
+                #self.optimizer.run_ssa_optimization(self.sundial_resources, schedule_timestamps) # SSA optimization
+                self.optimizer.search_single_option(self.sundial_resources, schedule_timestamps)  # SSA optimization
 
                 HistorianTools.publish_data(self,
                                             "SystemResource/Schedule",

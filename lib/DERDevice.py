@@ -79,6 +79,8 @@ default_units = {"CommStatus": "",
                  "AvgPwr_kW": "kW",
                  "DemandForecast_kW": "kW",
                  "DemandForecast_t": "utc",
+                 "LoadShiftOptions_kW": "kW",
+                 "LoadShiftOptions_t": "utc",
                  "Nameplate_kW": "kW",
                  "MaxSOE_kWh": "kWh",
                  "SOE_kWh": "kWh",
@@ -167,9 +169,9 @@ class DERDevice():
             elif (device["ResourceType"] == "PVCtrlNode"):
                 self.devices.append(
                     PVCtrlNode(device, parent_device=self))
-            elif (device["ResourceType"] in self.DGPlant):
+            elif (device["ResourceType"] == "LoadShiftCtrlNode"):
                 self.devices.append(
-                    DERCtrlNode(device, parent_device=self))
+                    LoadShiftCtrlNode(device, parent_device=self))
             else:
                 self.devices.append(
                     DERDevice(device, parent_device=self))
@@ -458,7 +460,12 @@ class DERDevice():
         try:
             self.state_vars.update({"DemandForecast_kW": self.forecast.data_dict["Pwr"]})
             self.state_vars.update({"DemandForecast_t": self.forecast.data_dict["t"]})
-            # todo - add in time variable
+        except KeyError:
+            pass
+
+        try:
+            self.state_vars.update({"LoadShiftOptions_kW": self.forecast.data_dict["LoadShiftOptions"]})
+            self.state_vars.update({"LoadShiftOptions_t": self.forecast.data_dict["t"]})
         except KeyError:
             pass
 
@@ -577,7 +584,7 @@ class DERDevice():
         #_log.info("UpdateStatus: "+self.device_id+": data valid = "+str(self.isDataValid)+"; ControlAvailable = "+str(self.isControlAvailable))
 
     ##############################################################################
-    def convert_units_from_endpt(self, k, endpt_units):
+    def convert_units_from_endpt(self, k, endpt_units, cur_topic_name):
         """
         Method for converting units between external end points and internal values.
         Only a few conversions are implemented -
@@ -588,8 +595,8 @@ class DERDevice():
         :return:
         """
 
-        cur_device = self.extpt_to_device_dict[k]
-        cur_attribute = self.extpt_to_device_dict[k].datagroup_dict[k]
+        cur_device = self.extpt_to_device_dict[cur_topic_name+"_"+k]
+        cur_attribute = self.extpt_to_device_dict[cur_topic_name+"_"+k].datagroup_dict[k]
         keyval = cur_attribute.data_mapping_dict[k]
 
         if ((endpt_units == "W") and
@@ -694,15 +701,15 @@ class DERDevice():
 
 
     ##############################################################################
-    def populate_endpts(self, incoming_msg, meta_data = None):
+    def populate_endpts(self, incoming_msg, meta_data = None, cur_topic_name=None):
         """
         This populates DERDevice variables based on the topic list
         """
         _log.info("PopEndpts: New scrape found")
         for k in incoming_msg:
             try:
-                cur_device = self.extpt_to_device_dict[k].device_id
-                cur_attribute = self.extpt_to_device_dict[k].datagroup_dict[k]
+                cur_device = self.extpt_to_device_dict[cur_topic_name+"_"+k].device_id
+                cur_attribute = self.extpt_to_device_dict[cur_topic_name+"_"+k].datagroup_dict[k]
                 cur_attribute_name = cur_attribute.name
                 keyval = cur_attribute.data_mapping_dict[k]
                 cur_attribute.data_dict[keyval] = incoming_msg[k]
@@ -725,7 +732,7 @@ class DERDevice():
 
         for k in incoming_msg:
             try:
-                self.convert_units_from_endpt(k, meta_data[k]["units"])
+                self.convert_units_from_endpt(k, meta_data[k]["units"], cur_topic_name)
             except KeyError as e:
                 _log.info("Skipping: Key "+k+" not found")
         self.update_status()
@@ -918,7 +925,7 @@ class DERSite(DERDevice):
                             _log.info("cur_device id is "+cur_device.device_id)
                         else:
                             _log.info("no device?")
-                        self.extpt_to_device_dict.update({row[0]: cur_device})
+                        self.extpt_to_device_dict.update({topics["TopicName"]+"_"+row[0]: cur_device})
             except IOError as e:
                 _log.info("data map file "+csv_name+" not found")
                 pass
@@ -1283,6 +1290,27 @@ class DERCtrlNode(DERDevice):
 
 ##############################################################################
 class LoadShiftCtrlNode(DERDevice):
+
+    ##############################################################################
+    def __init__(self, device_info, parent_device=None):
+        DERDevice.__init__(self, device_info, parent_device)  # device_id, device_type, parent_device)
+        self.state_vars.update({"LoadShiftOptions_kW": [[0.0] * SSA_PTS_PER_SCHEDULE],
+                                "LoadShiftOptions_t": None,
+                                "SetPt": 0,
+                                "SetPtCmd": 0})
+        self.state_vars_update_list = device_update_list
+
+        self.chkReg = ["SetPoint"]
+        self.chkRegAttributes = {"SetPoint": self.pwr_ctrl}
+        self.writeReg = {"SetPoint": "SetPoint"}
+        self.writeRegAttributes = {"SetPoint": self.pwr_ctrl}
+        self.writePending = {"SetPoint": 0}
+        self.expectedValue = {"SetPoint": 0}
+        self.nTries = {"SetPoint": 0}
+        self.writeError = {"SetPoint": 0}
+
+
+
 
     ##############################################################################
     def set_power_real(self, val, sitemgr):
