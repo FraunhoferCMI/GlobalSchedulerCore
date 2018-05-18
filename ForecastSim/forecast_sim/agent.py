@@ -75,7 +75,7 @@ MINUTES_PER_HR = 60
 MINUTES_PER_DAY = 24 * MINUTES_PER_HR
 MINUTES_PER_YR = 365 * MINUTES_PER_DAY
 
-READ_BACK_MSGS = True
+READ_BACK_MSGS = False
 
 
 class CPRAgent(Agent):
@@ -131,10 +131,6 @@ class CPRAgent(Agent):
         self.sim_time_corr = timedelta(seconds=0)
         self.gs_start_time = None
 
-        if READ_BACK_MSGS == True: # subscribe to any topics of interest for read back / testing
-            self.vip.pubsub.subscribe(peer='pubsub', prefix=self._config["loadshift_report_topic"], callback=self.read_msgs)  # +'/all'
-            self.vip.pubsub.subscribe(peer='pubsub', prefix=self._config["solar_forecast_topic"], callback=self.read_msgs)  # +'/all'
-
     ##############################################################################
     def configure(self,config_name, action, contents):
         self._config.update(contents)
@@ -152,6 +148,9 @@ class CPRAgent(Agent):
             self.vip.heartbeat.start_with_period(self._heartbeat_period)
             self.vip.health.set_status(STATUS_GOOD, self._message)
 
+        if READ_BACK_MSGS == True: # subscribe to any topics of interest for read back / testing
+            self.vip.pubsub.subscribe(peer='pubsub', prefix=self._config["loadshift_report_topic"], callback=self.read_msgs)  # +'/all'
+            self.vip.pubsub.subscribe(peer='pubsub', prefix=self._config["solar_forecast_topic"], callback=self.read_msgs)  # +'/all'
 
 
         ### Get gs_start_time
