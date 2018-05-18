@@ -2,8 +2,7 @@ import logging
 import sys
 import requests
 from requests.auth import HTTPBasicAuth
-import datetime
-from datetime import timedelta
+from datetime import timedelta, datetime
 import pytz
 from xml.dom import minidom
 
@@ -17,7 +16,8 @@ from volttron.platform.agent.utils import jsonapi
 from volttron.platform.messaging import topics
 from volttron.platform.messaging import headers as headers_mod
 
-from gs_utilities import Forecast
+from gs_identities import *
+from gs_utilities import Forecast, get_schedule
 
 from .CPRinteraction import create_xml_query, parse_query
 
@@ -32,8 +32,8 @@ receive_interval = 5
 
 
 def get_date():
-    dt_strt = datetime.datetime.isoformat(datetime.datetime.now(tz=pytz.timezone('America/New_York')).replace(microsecond=0,second=0,minute=0)+ timedelta(hours=1))
-    dt_end  = datetime.datetime.isoformat(datetime.datetime.now(tz=pytz.timezone('America/New_York')).replace(microsecond=0,second=0,minute=0)+timedelta(hours=6))
+    dt_strt = datetime.isoformat(datetime.now(tz=pytz.timezone('America/New_York')).replace(microsecond=0,second=0,minute=0) + timedelta(hours=0))
+    dt_end  = datetime.isoformat(datetime.now(tz=pytz.timezone('America/New_York')).replace(microsecond=0,second=0,minute=0)+timedelta(hours=SSA_SCHEDULE_DURATION))  #SSA_SCHEDULE_DURATION-1
     return dt_strt, dt_end
 
 class CPRPub(Agent):
@@ -79,9 +79,10 @@ class CPRPub(Agent):
 
        self.initialization_complete = True
        self.status_pending = False
+       self.request_cpr_model()
 
 
-    @Core.periodic(period = query_interval)
+    @Core.periodic(period = LIVE_CPR_QUERY_INTERVAL) 
     def request_cpr_model(self):
 
         if self.initialization_complete == True:     # queries server only after config steps are completed
@@ -107,6 +108,9 @@ class CPRPub(Agent):
                     self.status_pending = True
                     self.simulationId = ET.fromstring(response.content).attrib.get("SimulationId")
                     self.start_time = time.time()
+                else:
+                    _log.info(str(response.content))
+
             else:
                 _log.info("Another model has been requested and is pending")
 
@@ -123,6 +127,7 @@ class CPRPub(Agent):
             status = ET.fromstring(data.content).attrib.get('Status')
 
             if status == 'Done':
+                #_log.info(data.content)
                 parsed_response = parse_query(data.content)
                 _log.info("Model received, Parsed Response Sending: {}".format(parsed_response))
                 cprModel = Forecast(**parsed_response)

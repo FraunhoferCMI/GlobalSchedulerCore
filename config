@@ -8,7 +8,7 @@
 		"url2": "https://service.solaranywhere.com/api/v2/SimulationResult/",
                 "payload":"",
             	"headers":"",
-                "topic": "devices/cpr",
+                "topic": "devices/cpr/forecast/all",
                 "horizon":24,
 
     "agentid": "cpr",

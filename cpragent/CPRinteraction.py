@@ -5,6 +5,7 @@ from xml.dom import minidom
 import datetime
 from  datetime import timedelta
 import pytz
+import isodate
 import requests
 from requests.auth import HTTPBasicAuth
 
@@ -79,8 +80,14 @@ def parse_query(query):
     time = []
     forecast = []
     for sim in SimPd:
-        time.append(sim.attributes['StartTime'].value)
-        forecast.append(float(sim.attributes['PowerAC_kW'].value))
+        iso_datetime = isodate.parse_datetime(sim.attributes['StartTime'].value)
+        time.append(iso_datetime.astimezone(pytz.UTC).strftime("%Y-%m-%dT%H:%M:%S"))
+        try:
+            print(sim.attributes['StartTime'].value + ": " + sim.attributes['PowerAC_kW'].value)
+            forecast.append(float(sim.attributes['PowerAC_kW'].value))
+        except KeyError:
+            print(sim.attributes['StartTime'].value + ": " + "synthesized 0.0")
+            forecast.append(0.0)
 
     parsed_forecast = dict(
         forecast = forecast,
