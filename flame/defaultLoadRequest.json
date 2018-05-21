@@ -1,0 +1,507 @@
+{
+    "nLoadOptions": "12",
+    "marginalCostCurve": [
+        {
+            "dstart": "2018-03-01T00:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 200,
+                    "price": 0.1
+                },
+                {
+                    "LB": 200,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T01:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 210,
+                    "price": 0.1
+                },
+                {
+                    "LB": 210,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T02:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 220,
+                    "price": 0.1
+                },
+                {
+                    "LB": 220,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T03:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 210,
+                    "price": 0.1
+                },
+                {
+                    "LB": 210,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T04:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 350,
+                    "price": 0.1
+                },
+                {
+                    "LB": 200,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T05:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 300,
+                    "price": 0.1
+                },
+                {
+                    "LB": 190,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T06:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 250,
+                    "price": 0.1
+                },
+                {
+                    "LB": 180,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T07:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 200,
+                    "price": 0.1
+                },
+                {
+                    "LB": 180,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T08:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 350,
+                    "price": 0.1
+                },
+                {
+                    "LB": 200,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T09:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 300,
+                    "price": 0.1
+                },
+                {
+                    "LB": 200,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T10:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 250,
+                    "price": 0.1
+                },
+                {
+                    "LB": 190,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T11:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 200,
+                    "price": 0.1
+                },
+                {
+                    "LB": 200,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T12:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 350,
+                    "price": 0.1
+                },
+                {
+                    "LB": 190,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T13:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 300,
+                    "price": 0.1
+                },
+                {
+                    "LB": 180,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T14:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 250,
+                    "price": 0.1
+                },
+                {
+                    "LB": 190,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T15:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 200,
+                    "price": 0.1
+                },
+                {
+                    "LB": 200,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T16:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 350,
+                    "price": 0.1
+                },
+                {
+                    "LB": 200,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T17:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 300,
+                    "price": 0.1
+                },
+                {
+                    "LB": 210,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T18:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 250,
+                    "price": 0.1
+                },
+                {
+                    "LB": 220,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T19:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 200,
+                    "price": 0.1
+                },
+                {
+                    "LB": 210,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T20:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 350,
+                    "price": 0.1
+                },
+                {
+                    "LB": 200,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T21:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 300,
+                    "price": 0.1
+                },
+                {
+                    "LB": 190,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T22:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 250,
+                    "price": 0.1
+                },
+                {
+                    "LB": 180,
+                    "UB": "Infinity",
+                    "price": 4.94
+                }
+            ]
+        },
+        {
+            "dstart": "2018-03-01T23:00:00",
+            "duration": "PT1H",
+            "priceMap": [
+                {
+                    "LB": "-Infinity",
+                    "UB": 0,
+                    "price": 0.05
+                },
+                {
+                    "LB": 0,
+                    "UB": 200,
+                    "price": 0.1
+                },
+                {
+                    "LB": 200,
+                    "UB": "Infinity",
+                    "price": 4.94 }]
+        }
+    ]
+}

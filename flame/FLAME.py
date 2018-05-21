@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from websocket import create_connection
 import json
 import pandas as pd
+# import ipdb
 
 import logging
 
@@ -208,22 +209,22 @@ def get_gs_time(gs_start_time, sim_time_corr):
 ## it lives in gs_utilities.py
 ## BaselineResponses and LoadShiftOptions should both be mapped to a ForecastObject
 ##############################################################################
-class ForecastObject():
-    """
-    Data class for storing forecast data in a serializable format that is consumable by the VOLTTRON Historian
-    """
-    ##############################################################################
-    def __init__(self, forecast, time, units, datatype):
-        self.forecast_values = {"Forecast": forecast,
-                                "Time": time,
-                                "Duration": SSA_SCHEDULE_DURATION,
-                                "Resolution": SSA_SCHEDULE_RESOLUTION}
-        self.forecast_meta_data = {"Forecast": {"units": units, "type": datatype},
-                                   "Time": {"units": "UTC", "type": "str"},
-                                   "Duration": {"units": "hr", "type": "int"},
-                                   "Resolution": {"units": "min", "type": "int"}}
+#class ForecastObject():
+#    """
+#    Data class for storing forecast data in a serializable format that is consumable by the VOLTTRON Historian
+#    """
+#    ##############################################################################
+#    def __init__(self, forecast, time, units, datatype):
+#        self.forecast_values = {"Forecast": forecast,
+#                                "Time": time,
+#                                "Duration": SSA_SCHEDULE_DURATION,
+#                                "Resolution": SSA_SCHEDULE_RESOLUTION}
+#        self.forecast_meta_data = {"Forecast": {"units": units, "type": datatype},
+#                                   "Time": {"units": "UTC", "type": "str"},
+#                                   "Duration": {"units": "hr", "type": "int"},
+#                                   "Resolution": {"units": "min", "type": "int"}}
 
-        self.forecast_obj = [self.forecast_values, self.forecast_meta_data]
+#        self.forecast_obj = [self.forecast_values, self.forecast_meta_data]
 ##############################################################################
 class IPKeys(object):
     """Parent class for request & response interactions with IPKeys"""
@@ -236,9 +237,10 @@ class IPKeys(object):
 
     def _send_receive(self):
         """
-        Sends, receives and error checks response. Ensures request can only be
-        processed once.
+        Sends, receives and error checks response.
+        Ensures request can only be processed once.
         """
+        # ipdb.set_trace()
         # check if request has already been processed
         if self.fo:
             _log.info('request already processed')
@@ -247,17 +249,20 @@ class IPKeys(object):
         # (2) send request
         _log.info("Sending Request")
         self.ws.send(self.request)
+        _log.info("Request sent")
 
         # (3) check for response
         _log.info("Receiving")
         result_json = self.ws.recv()
         self.response = json.loads(result_json)
+        _log.info("Received")
 
         # (4) check for errors
         assert self.response['type'] == self.type, 'msg received is wrong type'
 
         return None
 
+## subclasses
 class Baseline(IPKeys):
 
     def __init__(self, start, granularity, duration, websocket):
@@ -287,15 +292,19 @@ class Baseline(IPKeys):
 
         self._send_receive()
 
-        forecast = parse_Baseline_response(self.response)
-        self.forecast = forecast
+        full_forecast = parse_Baseline_response(self.response)
+        self.forecast = full_forecast
 
-        length = len(forecast)
-        units = forecast.units[0]
-        datatype = forecast.value.dtype
-        forecast = forecast['value'].tolist()
-        time = forecast.index.tolist()
-        self.fo = ForecastObject(forecast, time, units, datatype)
+        forecast = full_forecast['value'].tolist()
+        time = full_forecast.index.tolist()
+        units = "units"
+        # ipdb.set_trace()
+        datatype = str(full_forecast.value.dtype)
+        self.fo = dict(forecast=forecast,
+                       time=time,
+                       units=units,
+                       datatype=datatype)
+        # self.fo = ForecastObject(forecast, time, units, datatype)
 
         return None
 
@@ -318,7 +327,13 @@ class LoadShift(IPKeys):
     def process(self):
 
         self._send_receive()
-        forecast, costs = parse_LoadShift_response(self.response)
+        try:
+            forecast, costs = parse_LoadShift_response(self.response)
+        except ValueError:
+            print(self.response['msg']['error'])
+            costs = {}
+            forecast = pd.DataFrame()
+            return None
         self.costs = costs
         self.forecast = forecast
 
@@ -329,14 +344,21 @@ class LoadShift(IPKeys):
         # print(self.response['msg']['options'][0]['loadSchedule'].keys())
         self.fos = {}
         for optionNum, profile in forecast.items():
-            datatype = profile.dtype
-            self.fos[optionNum] = ForecastObject(profile.tolist(),
-                                                 profile.index.tolist(),
-                                                 optionNum,
-                                                 datatype)
+            datatype = str(profile.dtype)
+            fo = dict(
+                forecast=profile.tolist(),
+                time=profile.index.tolist(),
+                units=optionNum,
+                datatype=datatype)
+            self.fos[optionNum] = fo
+            # self.fos[optionNum] = ForecastObject(profile.tolist(),
+            #                                      profile.index.tolist(),
+            #                                      optionNum,
+            #                                      datatype)
 
         return None
 
+# helper functions
 def create_baseline_request(start, granularity, duration):
     baseline_request = json.dumps({'type': 'BaselineRequest',
                                    'msg': {'dstart': start,
@@ -351,32 +373,18 @@ def parse_Baseline_response(result):
     forecast_values.set_index('dstart', inplace=True)
     return forecast_values
 
+
 def create_load_request():
-    payload_request = json.dumps({"type": "LoadRequest",
-                                  "msg": {"nLoadOptions": "12",
-                                          "marginalCostCurve": [{"dstart": "2018-01-01T01:00:00",
-                                                                 "duration": "PT1H",
-                                                                 "priceMap": [{"LB": "-Infinity",
-                                                                               "UB": 0,
-                                                                               "price": 0.05},
-                                                                              {"LB": 0,
-                                                                               "UB": 200,
-                                                                               "price": 0.1},
-                                                                              {"LB": 200,
-                                                                               "UB": "Infinity",
-                                                                               "price": 2.94}]},
-                                                                {"dstart": "2018-01-01T23:00:00",
-                                                                 "duration": "PT1H",
-                                                                 "priceMap": [{"LB": "-Infinity",
-                                                                               "UB": 0,
-                                                                               "price": 0},
-                                                                              {"LB": 0,
-                                                                               "UB": 200,
-                                                                               "price": 0},
-                                                                              {"LB": 200,
-                                                                               "UB": "Infinity",
-                                                                               "price": 0}]}]}})
+    filepath = '/home/cstark/bin/volttron/services/contrib/GlobalSchedulerCore/FLAME/flame/defaultLoadRequest.json'
+    with open(filepath) as f:
+        msg = json.load(f)
+    payload_request = json.dumps(
+        {"type": "LoadRequest",
+         "msg": msg
+         }
+    )
     return payload_request
+
 
 def parse_LoadShift_response(response):
     # forecast = response
@@ -404,12 +412,17 @@ if __name__ == '__main__':
     ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
 
     # Baseline
-    start =  '2018-01-01T00:00:00'
+    print("running Baseline")
+    start =  '2018-03-01T00:00:00'
     granularity =  'PT1H'
     duration = 'PT24H'
     bl = Baseline(start, granularity, duration, ws)
+    print("processing Baseline")
     bl.process()
-
+    print("done processing Baseline")
+##
+    print("running LoadShift")
     # LoadShift
     ls = LoadShift(ws)
     ls.process()
+    ##

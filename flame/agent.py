@@ -58,7 +58,7 @@ from volttron.platform.messaging import topics
 from volttron.platform.messaging import headers as headers_mod
 import xml.etree.ElementTree as ET
 from gs_identities import *
-from gs_utilities import get_schedule, ForecastObject
+from gs_utilities import get_schedule, ForecastObject, Forecast
 import csv
 import pandas
 
@@ -113,8 +113,6 @@ class FLAMECommsAgent(Agent):
         # loadshift_msg = new_loadshift_constructor
 
 
-
-
     ##############################################################################
     def configure(self, config_name, action, contents):
         self._config.update(contents)
@@ -156,16 +154,14 @@ class FLAMECommsAgent(Agent):
 
 
     ##############################################################################
-    # @Core.periodic(period=DEMAND_FORECAST_QUERY_INTERVAL)   #### code for calling something periodically
+    @Core.periodic(period=DEMAND_FORECAST_QUERY_INTERVAL)   #### code for calling something periodically
     def query_baseline(self):
-        """
-        queries the FLAME server for baseline message
-        """
+        "Queries the FLAME server for baseline message"
         if self.initialization_complete == 1:
-            _log.info("querying for demand forecast from database")
+            _log.info("querying baseline")
             # Baseline
-            start =  '2018-01-01T00:00:00'
-            granularity =  'PT1H'
+            start =  '2018-03-01T00:00:00'
+            granularity = 'PT1H'
             duration = 'PT24H'
             ws = create_connection(WEBSOCKET_URL, timeout=None)
             bl = Baseline(start, granularity, duration, ws)
@@ -173,7 +169,10 @@ class FLAMECommsAgent(Agent):
             ws.close()
 
             #### code for publishing to the volttron bus
-            message = bl.fo.forecast_values    # call to demand forecast object class thingie
+            message_parts = bl.fo
+            forecast = Forecast(**message_parts)
+            message = forecast.forecast_obj
+            _log.info(message)
             # message = bl.forecast    # call to demand forecast object class thingie
             # message = self.baseline_msg.process()    # call to demand forecast object class thingie
             comm_status = 1 # were there errors?
@@ -194,8 +193,6 @@ class FLAMECommsAgent(Agent):
             _log.info("initialization incomplete!!")
 
 
-
-
     ##############################################################################
     @Core.periodic(period=LOADSHIFT_QUERY_INTERVAL)
     def query_loadshift(self):
@@ -203,7 +200,7 @@ class FLAMECommsAgent(Agent):
         queries the FLAME server for baseline message
         """
         if self.initialization_complete == 1:
-            _log.info("querying for demand forecast from database")
+            _log.info("querying loadshift")
 
 
             ws = create_connection(WEBSOCKET_URL, timeout=None)
@@ -213,12 +210,15 @@ class FLAMECommsAgent(Agent):
             ws.close()
             # message = self.load_shift_msg.process()    # call to demand forecast object class thingie
             comm_status = 1 # were there errors?
-            for option, message in ls.fos.items():
+            for option, message_parts in ls.fos.items():
+                forecast = Forecast(**message_parts)
+                message = forecast.forecast_obj
+                _log.info(message)
                 self.vip.pubsub.publish(
                     peer="pubsub",
                     topic=self._config['loadshift_forecast_topic'],
                     headers={},
-                    message=message.forecast_values)
+                    message=message)
 
 
             # self.vip.pubsub.publish(
@@ -229,10 +229,6 @@ class FLAMECommsAgent(Agent):
 
         else:
             _log.info("initialization incomplete!!")
-
-
-
-
 
 
 def main(argv=sys.argv):
