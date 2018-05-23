@@ -6,9 +6,11 @@ from datetime import datetime, timedelta
 from websocket import create_connection
 import json
 import pandas as pd
+import os
 # import ipdb
 
 import logging
+#from gs_identities import *
 
 ## Stubbed out version of a standalone FLAME application
 # This is a tool to exchange messagers with the IPKeys webserver FLAME
@@ -375,7 +377,12 @@ def parse_Baseline_response(result):
 
 
 def create_load_request():
-    filepath = '/home/cstark/bin/volttron/services/contrib/GlobalSchedulerCore/FLAME/flame/defaultLoadRequest.json'
+    gs_root_dir = os.environ['GS_ROOT_DIR']
+    flame_path  = "FLAME-v2/flame/"
+    fname       = 'defaultLoadRequest.json'
+    filepath    = gs_root_dir+flame_path+fname
+    #filepath = '/home/cstark/bin/volttron/services/contrib/GlobalSchedulerCore/FLAME/flame/defaultLoadRequest.json'
+
     with open(filepath) as f:
         msg = json.load(f)
     payload_request = json.dumps(
@@ -419,10 +426,12 @@ if __name__ == '__main__':
     bl = Baseline(start, granularity, duration, ws)
     print("processing Baseline")
     bl.process()
+    print(bl.forecast)
     print("done processing Baseline")
 ##
     print("running LoadShift")
     # LoadShift
     ls = LoadShift(ws)
     ls.process()
+    print(ls.forecast)
     ##

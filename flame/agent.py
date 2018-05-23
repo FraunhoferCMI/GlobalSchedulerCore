@@ -91,7 +91,7 @@ class FLAMECommsAgent(Agent):
 
         self.default_config = {
             "demand_forecast_topic": "devices/flame/forecast/all",
-            "loadshift_forecast_topic": "devices/flame/loadshift/all",     #FIXME - doublecheck naming
+            "loadshift_forecast_topic": "devices/flame/loadshift_forecast/all",     #FIXME - doublecheck naming
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "DEFAULT_MESSAGE": 'FLAME_COMMS_MSG',
             "DEFAULT_AGENTID": "FLAME_COMMS_AGENT",
