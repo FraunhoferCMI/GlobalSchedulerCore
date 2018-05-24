@@ -140,12 +140,31 @@ class EnergyCostObjectiveFunction(ObjectiveFunction):
 
     ##############################################################################
     def obj_fcn_cost(self, profile):
-        cost = sum(self.init_params["cur_cost"][0] * profile)
+        cost = sum(self.init_params["cur_cost"][0] * profile["DemandForecast_kW"])
         return cost
 
     ##############################################################################
     def get_obj_fcn_data(self):
         return self.init_params["cur_cost"][0].tolist()
+
+##############################################################################
+class StoredEnergyValueObjectiveFunction(ObjectiveFunction):
+    """
+    assigns a cost to change in power (dPwr/dt)
+    """
+    def __init__(self, desc="", init_params=None, **kwargs):
+        ObjectiveFunction.__init__(self, desc=desc, init_params={}, **kwargs)
+        self.init_params["value_per_kWh"] = -0.15
+
+    def obj_fcn_cost(self, profile):
+        end_ind = len(profile["EnergyAvailableForecast_kWh"])-1
+        cost = self.init_params["value_per_kWh"] * profile["EnergyAvailableForecast_kWh"][end_ind]
+        return cost
+
+    def get_obj_fcn_data(self):
+        return self.init_params["value_per_kWh"]
+
+
 
 ##############################################################################
 class dkWObjectiveFunction(ObjectiveFunction):
@@ -157,7 +176,7 @@ class dkWObjectiveFunction(ObjectiveFunction):
         self.init_params["cost_per_dkW"] = 0.005
 
     def obj_fcn_cost(self, profile):
-        return sum(abs(numpy.ediff1d(profile)))*self.init_params["cost_per_dkW"]
+        return sum(abs(numpy.ediff1d(profile["DemandForecast_kW"])))*self.init_params["cost_per_dkW"]
 
     def get_obj_fcn_data(self):
         return self.init_params["cost_per_dkW"]
@@ -208,7 +227,7 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
         """
         #demand = numpy.array(profile)
 
-        max_demand = max(profile)
+        max_demand = max(profile["DemandForecast_kW"])
         if max_demand > self.init_params["threshold"]: #self.threshold:
             cost = self.init_params["cost_per_kW"] * (max_demand - self.init_params["threshold"])
         else:
@@ -235,11 +254,11 @@ class TieredEnergyObjectiveFunction():
     ##############################################################################
     def obj_fcn_cost(self, profile):
 
-        max_bf = max(profile)
+        max_bf = max(profile["DemandForecast_kW"])
 
         # tier at 200, 100, 10
         cost = 0.0
-        for p in profile:
+        for p in profile["DemandForecast_kW"]:
             cost += max(p - 400.0, 0) * 100.0
             cost += max(p - 250.0, 0) * 50.0
             cost += max(p - 200.0, 0) * 25.0
@@ -289,7 +308,7 @@ class LoadShapeObjectiveFunction(ObjectiveFunction):
         price = 10.0  # sort of arbitrary, just needs to be a number big enough to drive behavior in the desired direction.
         #demand = numpy.array(profile)
 
-        self.err = (profile - self.init_params["cur_cost"][0]) ** 2
+        self.err = (profile["DemandForecast_kW"] - self.init_params["cur_cost"][0]) ** 2
         self.cost = sum(self.err) * price
         return self.cost
 

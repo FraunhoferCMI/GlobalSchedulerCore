@@ -181,7 +181,7 @@ class SundialResourceProfile():
         for virtual_plant in self.virtual_plants:
             total_cost += virtual_plant.calc_cost()
 
-        self.cost = self.sundial_resources.calc_cost(self.state_vars["DemandForecast_kW"])
+        self.cost = self.sundial_resources.calc_cost(self.state_vars)
 
         total_cost += self.cost
         self.total_cost = total_cost
@@ -569,18 +569,16 @@ class SundialResource():
 
 
     ############################
-    def calc_cost(self, profile):
+    def calc_cost(self, profile_state_vars):
         """
         Loops through each of the SundialResource's objective functions, calculates cost for the given profile
         :param profile: profile is a time-series list of values
         :return:
         """
-        self.profile = profile
-        # print ("Profile for "+self.resource_id+" is: "+str(self.profile))
 
         cost = 0 #[]
         for obj_fcn in self.obj_fcns:
-            cost += obj_fcn.obj_fcn_cost(profile) # cost.append(obj_fcn.obj_fcn_cost(profile))
+            cost += obj_fcn.obj_fcn_cost(profile_state_vars) # cost.append(obj_fcn.obj_fcn_cost(profile))
 
         #cost = 0
         #for fcn in self.obj_fcns:
@@ -616,6 +614,9 @@ class ESSResource(SundialResource):
                                          "MaxChargePwr_kW",
                                          "MaxDischargePwr_kW",
                                          "Nameplate"])
+
+        # set up the specific set of objective functions to apply for the system
+        self.obj_fcns = [StoredEnergyValueObjectiveFunction(desc="StorageValue")]
 
     ##############################################################################
     def init_state_vars(self):
