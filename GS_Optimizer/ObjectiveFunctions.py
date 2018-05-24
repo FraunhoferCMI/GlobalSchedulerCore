@@ -7,8 +7,7 @@ import isodate
 import copy
 import csv
 from gs_identities import *
-
-STANDALONE = False
+from gs_utilities import get_gs_path
 
 ##############################################################################
 class ObjectiveFunction():
@@ -50,12 +49,7 @@ class ObjectiveFunction():
         :param fname: filename
         :return: self.obj_fcn_data --> dataframe of time series cost data
         """
-        if STANDALONE == False:
-            volttron_root = os.getcwd()
-            volttron_root = volttron_root + "/../../../../gs_cfg/"
-        else:
-            volttron_root = ""
-        fname_fullpath = volttron_root+fname
+        fname_fullpath = get_gs_path("GS_Optimizer/", fname)
 
         df = pandas.read_excel(fname_fullpath, header=0, index_col=0)
         #tst = numpy.array([pandas.Timestamp(t).replace(tzinfo=pytz.UTC).to_pydatetime() for t in df.index])

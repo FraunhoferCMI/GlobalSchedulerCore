@@ -132,6 +132,19 @@ def get_gs_time(gs_start_time, sim_time_corr):
     return gs_start_time+sim_run_time-sim_time_corr  # current time, in the GS frame of reference
 
 ##############################################################################
+def get_gs_path(local_path, fname):
+    """
+    method for returning a system-independent file path.  Requires user to define environment variable GS_ROOT_DIR,
+    which should provide a full path to the GlobalSchedulerCore directory (i.e., "xxx/GlobalSchedulerCore/"
+    :param local_path: relative path from the top node in the GS directory tree (i.e., GlobalSchedulerCore/)
+    :param fname: file name
+    :return: full path name within the GS_ROOT_DIR directory tree for a data file
+    """
+    gs_root_dir = os.environ['GS_ROOT_DIR']
+    return gs_root_dir + local_path + fname
+
+
+##############################################################################
 class ForecastObject():
     """
     Data class for storing forecast data in a serializable format that is consumable by the VOLTTRON Historian
