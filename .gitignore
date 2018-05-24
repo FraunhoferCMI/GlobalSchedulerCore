@@ -1,1 +1,12 @@
+.gitignore
 *.pyc
+.idea
+ForecastSim/SAM_PVPwr_nyc_2column.csv
+/ForecastSim/SAM_PVPwr_nyc_neg.csv
+/ForecastSim/forecast_sim/agent_old.py
+ForecastSim/irr_data_1sec.csv
+build/build_modbus_new.sh
+cfg/Modbus/CtrlCore40K.csv
+cfg/Modbus/DemoRegistry40K.csv
+cfg/Modbus/DemoRegistry_test.csv
+cfg/SiteCfg/SiteConfiguration-1site.json.old
