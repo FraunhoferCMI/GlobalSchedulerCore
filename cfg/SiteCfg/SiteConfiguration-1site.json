@@ -6,11 +6,13 @@
          {
             "TopicName":"Modbus",
             "TopicPath":"devices/Site1",
+            "TopicAgent":"platform.driver",
             "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3"
          },
          {
             "TopicName":"Forecast",
             "TopicPath":"devices/cpr/forecast",
+            "TopicAgent":"cpr",
             "TopicScrapeTimeout":"CPR_QUERY_INTERVAL*2"
          }
       ],
