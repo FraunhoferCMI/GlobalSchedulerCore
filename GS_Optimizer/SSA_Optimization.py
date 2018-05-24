@@ -530,18 +530,9 @@ if __name__ == '__main__':
     SundialCfgFile = "../cfg/SystemCfg/SundialSystemConfiguration.json"#"SundialSystemConfiguration2.json"
     sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
 
-    #gs_start_time_exact = datetime.utcnow()
-    #gs_start_time = datetime.datetime.strptime(get_schedule(gs_start_time_exact),
-    #                                           "%Y-%m-%dT%H:%M:%S.%f")
     gs_start_time = datetime.utcnow().replace(microsecond=0)
     gs_start_time_str = gs_start_time.strftime("%Y-%m-%dT%H:%M:%S")
     sundial_resources = SundialSystemResource(sundial_resource_cfg_list, gs_start_time_str)
-
-    #for resource in sundial_resources:
-    #    print("Device ID: "+resource.resource_id, "; Device Type = "+resource.resource_type)
-
-
-    #sundial_resources.init_test_values(24)  # initializes with some hard-coded known values
 
     ess_resources = sundial_resources.find_resource_type("ESSCtrlNode")[0]
     pv_resources = sundial_resources.find_resource_type("PVCtrlNode")[0]
@@ -611,14 +602,15 @@ if __name__ == '__main__':
                                  pk_capacity = 1000.0,
                                  t=forecast_timestamps)
 
-    #try:
-    ls = pandas.read_excel("loadshift_example.xlsx", header=None)
-    print(ls)
-    load_shift_options = [ls[ii].tolist() for ii in range(0,13)]
-    loadshift_resources.load_scenario(load_options=load_shift_options,
-                                      t=forecast_timestamps)
-    #except:
-    #    pass
+    try:
+        ls = pandas.read_excel("loadshift_example.xlsx", header=None)
+        print(ls)
+        load_shift_options = [ls[ii].tolist() for ii in range(0,13)]
+        loadshift_resources.load_scenario(load_options=load_shift_options,
+                                          t=forecast_timestamps)
+    except:
+        pass
+
     system_resources.load_scenario()
 
 
