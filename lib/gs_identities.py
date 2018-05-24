@@ -87,6 +87,7 @@ MODBUS_SCRAPE_INTERVAL = 1 # period in seconds for modbus device to post on the 
 MODBUS_AVERAGING_WINDOW = 180 # period in seconds over which to average instantaneous readings
 MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
 CPR_QUERY_INTERVAL = 5 # period in seconds for forecasts to arrive
+LIVE_CPR_QUERY_INTERVAL = 300
 MODBUS_WRITE_ATTEMPTS  = 5  # number of modbus reads before a write error is thrown
 
 SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedules
@@ -112,11 +113,18 @@ else:
     SIM_START_DAY = 200  # day 106 #2  # day 202, Hr = 5 # 200, Hr = 7
     SIM_START_HR  = 7
 
-DEMAND_FORECAST_FILE = "NYC_demand.csv"
+DEMAND_FORECAST_FILE = "NYC_demand.csv" #"NYC_forecast_interpolated.csv"
+DEMAND_FILE          = DEMAND_FORECAST_FILE #"NYC_demand_interpolated.csv"
 DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN = 60
+DEMAND_FILE_TIME_RESOLUTION_MIN          = DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN #1
+
 DEMAND_FORECAST_QUERY_INTERVAL = 10 # seconds
-LOADSHIFT_QUERY_INTERVAL = 30 # seconds
+DEMAND_FORECAST_RESOLUTION     = SSA_SCHEDULE_RESOLUTION
+LOADSHIFT_QUERY_INTERVAL = 10 # seconds
 DEMAND_REPORT_SCHEDULE = 10 # SECONDS
+DEMAND_REPORT_RESOLUTION = 15 # minutes
+DEMAND_REPORT_DURATION   = 15 # minutes
+N_LOADSHIFT_PROFILES   = 5
 
 SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0) + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
 
