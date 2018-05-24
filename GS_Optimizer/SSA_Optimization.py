@@ -383,12 +383,14 @@ class SimulatedAnnealer():
             deltaT     = tconstraint2-tconstraint1
             sysupdate_time += deltaT.total_seconds()  # running tally of how long we spend on copy operations
 
-            # Sanity check to make sure that constraint check is working.  probably unnecessary at this pont.
-            if max(self.ess.state_vars["EnergyAvailableForecast_kWh"])>float(self.ess.sundial_resources.state_vars["MaxSOE_kWh"])+0.001:
-                _log.info("ii= "+str(ii)+": Max Constraint Error!!  "+str(max(self.ess.state_vars["EnergyAvailableForecast_kWh"])))
+            if (0):
+                # removed for speed up
+                # Sanity check to make sure that constraint check is working.  probably unnecessary at this pont.
+                if max(self.ess.state_vars["EnergyAvailableForecast_kWh"])>(self.ess.sundial_resources.state_vars["MaxSOE_kWh"])+0.001:
+                    _log.info("ii= "+str(ii)+": Max Constraint Error!!  "+str(max(self.ess.state_vars["EnergyAvailableForecast_kWh"])))
 
-            if min(self.ess.state_vars["EnergyAvailableForecast_kWh"])<float(self.ess.sundial_resources.state_vars["MinSOE_kWh"])-0.001:
-                _log.info("ii= "+str(ii)+": Min Constraint Error!! - "+str(min(self.ess.state_vars["EnergyAvailableForecast_kWh"])))
+                if min(self.ess.state_vars["EnergyAvailableForecast_kWh"])<(self.ess.sundial_resources.state_vars["MinSOE_kWh"])-0.001:
+                    _log.info("ii= "+str(ii)+": Min Constraint Error!! - "+str(min(self.ess.state_vars["EnergyAvailableForecast_kWh"])))
 
             # timestamps for how cumulative time it takes to check constraints / update resources.
             t5         = datetime.now()
