@@ -514,13 +514,13 @@ class ExecutiveAgent(Agent):
             ii = 0
             _log.info(str(cur_gs_time))
             for t in self.system_resources.schedule_vars["timestamp"]:
-                _log.info(str(t))
+                _log.debug(str(t))
                 if cur_gs_time < t:
                     break
                 ii += 1
             ii -= 1
 
-            _log.info("Generating dispatch: ii = "+str(ii))
+            _log.debug("Generating dispatch: ii = "+str(ii))
             if (ii < 0): # shouldn't ever happen
                 ii = 0
 
@@ -579,7 +579,7 @@ class ExecutiveAgent(Agent):
                                                                   "get_device_state_vars",
                                                                   devices["DeviceID"]).get(timeout=5)
 
-                            _log.info("state vars = "+str(device_state_vars))
+                            _log.debug("state vars = "+str(device_state_vars))
 
                             # Divides the set point command across the available ESS sites.
                             # currently divided pro rata based on kWh available.
