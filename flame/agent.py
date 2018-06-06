@@ -48,6 +48,7 @@ import sys
 import requests
 import pprint, pickle
 from datetime import timedelta, datetime
+# import datetime
 import pytz
 import os
 from volttron.platform.messaging.health import STATUS_GOOD
@@ -62,7 +63,7 @@ from gs_utilities import get_schedule, ForecastObject, Forecast
 import csv
 import pandas
 
-from .FLAME import Baseline, LoadShift
+from .FLAME import Baseline, LoadShift, LoadSelect, LoadReport, Status
 from websocket import create_connection
 WEBSOCKET_URL = "ws://flame.ipkeys.com:8888/socket/msg"
 
@@ -76,6 +77,23 @@ MINUTES_PER_HR = 60
 MINUTES_PER_DAY = 24 * MINUTES_PER_HR
 MINUTES_PER_YR = 365 * MINUTES_PER_DAY
 
+# constants to migrate that gs_identities
+
+# Time interval at which real-time load data should be retrieved from FLAME server and published to IEB
+# DEMAND_REPORT_SCHEDULE = 10 # already in gs_identities
+
+# Time interval at which load forecast data should be retrieved from FLAME server and published to IEB
+# DEMAND_FORECAST_QUERY_INTERVAL = 5 # already in gs_identities
+
+# Time interval at which real-time load data should be retrieved from FLAME server and published to IEB
+# LOADSHIFT_QUERY_INTERVAL = 5 # seconds # already in gs_identities
+
+# Desired resolution of forecast data points.  (ISO 8601 duration)
+# DEMAND_FORECAST_RESOLUTION = "PT1H"
+# DEMAND_REPORT_DURATION =  24 # Duration of load request reports in hours
+# Time resolution of load request report
+# DEMAND_REPORT_RESOLUTION = "PT1H"
+# STATUS_REPORT_SCHEDULE = 1 # in hours # Time interval at which the GS should poll the FLAME to check for status
 
 class FLAMECommsAgent(Agent):
     """
@@ -91,7 +109,9 @@ class FLAMECommsAgent(Agent):
 
         self.default_config = {
             "demand_forecast_topic": "devices/flame/forecast/all",
+            "comm_status_topic": "devices/flame/all",
             "loadshift_forecast_topic": "devices/flame/loadshift_forecast/all",     #FIXME - doublecheck naming
+            "load_option_select_topic": "devices/flame/load_shift_select/all",
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "DEFAULT_MESSAGE": 'FLAME_COMMS_MSG',
             "DEFAULT_AGENTID": "FLAME_COMMS_AGENT",
@@ -103,6 +123,8 @@ class FLAMECommsAgent(Agent):
 
         self.vip.config.set_default("config", self.default_config)
         self.vip.config.subscribe(self.configure, actions=["NEW", "UPDATE"], pattern="config")
+
+        self.comm_status = 1 # indicates if communications are ok
 
 
         # initialize class variables here:
@@ -144,14 +166,35 @@ class FLAMECommsAgent(Agent):
 
     ##############################################################################
     @RPC.export
-    def load_option_select(self):
+    def load_option_select(self, optionID):
         """
-        maybe -
-        :return:
+        Communicate load option choice to IPKeys and publish this to VOLTTRON
+        topic.
         """
 
-        pass
+        _log.info("selecting load option")
+        ws = create_connection(WEBSOCKET_URL, timeout=None)
+        lsel = LoadSelect(websocket=ws, optionID=optionID)
+        lsel.process()
 
+        print(lsel.status) # TODO setup self.comm_status check based on status
+        self.vip.pubsub.publish(
+            peer="pubsub",
+            topic=self._config['load_option_select_topic'],
+            headers={},
+            message=optionID) # CHECK if this is what's wanted
+            # message=lsel.status) # CHECK if this is what's wanted
+        return None
+
+    @Core.periodic(period=STATUS_REPORT_SCHEDULE)
+    def request_status(self):
+        ws = create_connection(WEBSOCKET_URL, timeout=None)
+        status = Status(ws)
+        status.process()
+        print(status.alertStatus)
+        print(status.currentProfile)
+
+        return None
 
     ##############################################################################
     @Core.periodic(period=DEMAND_FORECAST_QUERY_INTERVAL)   #### code for calling something periodically
@@ -160,13 +203,19 @@ class FLAMECommsAgent(Agent):
         if self.initialization_complete == 1:
             _log.info("querying baseline")
             # Baseline
-            start =  '2018-03-01T00:00:00'
-            granularity = 'PT1H'
-            duration = 'PT24H'
-            ws = create_connection(WEBSOCKET_URL, timeout=None)
-            bl = Baseline(start, granularity, duration, ws)
+
+            websocket = create_connection(
+                    WEBSOCKET_URL,
+                    timeout=None)
+            baseline_kwargs = dict(
+                start =  '2018-03-01T00:00:00',
+                granularity = DEMAND_FORECAST_RESOLUTION,
+                duration = 'PT24H',
+                websocket = websocket
+            )
+            bl = Baseline(**baseline_kwargs)
             bl.process()
-            ws.close()
+            websocket.close()
 
             #### code for publishing to the volttron bus
             message_parts = bl.fo
@@ -230,6 +279,33 @@ class FLAMECommsAgent(Agent):
         else:
             _log.info("initialization incomplete!!")
 
+    ##############################################################################
+    @Core.periodic(period=DEMAND_REPORT_SCHEDULE)
+    def get_load_report(self):
+        '''
+        Request standardized Load Report from FLAME server.
+        '''
+        # determine report start time
+        current_time = datetime.now()
+        time_delta = timedelta(hours=DEMAND_REPORT_DURATION)
+        start_time = current_time - time_delta
+        dstart = start_time.isoformat()[:-7]
+
+        loadReport_kwargs = {
+            "dstart": dstart, # start time for report
+            "sampleInterval": DEMAND_REPORT_RESOLUTION, # sample interval
+            "duration": "PT" + str(DEMAND_REPORT_DURATION) + "H"            # duration of request
+        }
+        ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
+        lr = LoadReport(ws, **loadReport_kwargs)
+        lr.process()
+        self.vip.pubsub.publish(
+            peer="pubsub",
+            topic=self._config['loadshift_forecast_topic'],
+            headers={},
+            message=lr.loadSchedule.to_json())
+
+        return None
 
 def main(argv=sys.argv):
     '''Main method called by the platform.'''
