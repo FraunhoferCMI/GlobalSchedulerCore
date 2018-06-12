@@ -402,9 +402,11 @@ class SundialResource():
         """
         for virtual_plant in self.virtual_plants:
             virtual_plant.cfg_cost(schedule_timestamps, tariffs)
-
         for obj_fcn in self.obj_fcns:
-            obj_fcn.obj_fcn_cfg(schedule_timestamps=schedule_timestamps, tariffs=tariffs, sim_offset=self.sim_offset)
+            obj_fcn.obj_fcn_cfg(schedule_timestamps=schedule_timestamps,
+                                tariffs=tariffs,
+                                sim_offset=self.sim_offset,
+                                forecast = self.state_vars)
 
 
 
@@ -563,7 +565,7 @@ class SundialResource():
 
 
     ############################
-    def calc_cost(self, profile_state_vars):
+    def calc_cost(self, profile_state_vars, linear_approx = False):
         """
         Loops through each of the SundialResource's objective functions, calculates cost for the given profile
         :param profile: profile is a time-series list of values
@@ -572,13 +574,15 @@ class SundialResource():
 
         cost = 0 #[]
         for obj_fcn in self.obj_fcns:
-            cost += obj_fcn.obj_fcn_cost(profile_state_vars) # cost.append(obj_fcn.obj_fcn_cost(profile))
+            if linear_approx == False:
+                cost += obj_fcn.obj_fcn_cost(profile_state_vars) # cost.append(obj_fcn.obj_fcn_cost(profile))
+            else:
+                cost += obj_fcn.get_linear_approximation(profile_state_vars)  # cost.append(obj_fcn.obj_fcn_cost(profile))
 
         #cost = 0
         #for fcn in self.obj_fcns:
         #    cost += fcn()
         return cost
-
 
 ##############################################################################
 class ESSResource(SundialResource):
