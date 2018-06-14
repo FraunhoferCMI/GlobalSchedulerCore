@@ -262,14 +262,14 @@ class SiteManagerAgent(Agent):
         for topic_obj in self.topics:
             TimeStamp = utils.get_aware_utc_now() # datetime.now() 
 
-            _log.info("Topic "+topic_obj["TopicPath"]+": Current Time = " + datetime.strftime(TimeStamp, "%Y-%m-%dT%H:%M:%S") +
+            _log.debug("Topic "+topic_obj["TopicPath"]+": Current Time = " + datetime.strftime(TimeStamp, "%Y-%m-%dT%H:%M:%S") +
             "; Last Scrape = " + datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
 
             deltaT = TimeStamp - topic_obj["last_read_time"]
-            _log.info("delta T "+str(deltaT))
+            _log.debug("delta T "+str(deltaT))
             tot_sec = deltaT.total_seconds()
 
-            _log.info("Delta T = "+str(deltaT)+"; SCRAPE_TIMEOUT = "+ str(topic_obj["SCRAPE_TIMEOUT"])+"; tot sec = "+str(tot_sec))
+            _log.debug("Delta T = "+str(deltaT)+"; SCRAPE_TIMEOUT = "+ str(topic_obj["SCRAPE_TIMEOUT"])+"; tot sec = "+str(tot_sec))
 
 
             if tot_sec > topic_obj["SCRAPE_TIMEOUT"]:
@@ -277,6 +277,7 @@ class SiteManagerAgent(Agent):
                 # in theory, this should be done by topic, but for right now, I can just do it for the whole topic 
                 # topic tree.
                 #self.site.set_read_error(cnt)
+                _log.info(topic_obj["TopicPath"]+": Error - Communications Timeout - time since last read is "+ str(tot_sec) + " sec")
                 read_status = 0
 
             cnt += 1
@@ -293,6 +294,7 @@ class SiteManagerAgent(Agent):
         self.SiteStatus.update({"CtrlMode": self.site.control_mode})
         self.SiteStatus.update({"DataAvailable": self.site.isDataValid})
         self.SiteStatus.update({"CtrlAvailable": self.site.isControlAvailable})
+
         return self.SiteStatus
 
     ##############################################################################

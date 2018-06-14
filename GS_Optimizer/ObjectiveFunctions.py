@@ -101,6 +101,13 @@ class ObjectiveFunction():
         #numpy.array(self.obj_fcn_data.iloc[indices].transpose())  #obj_fcn_data.loc[offset_ts].interpolate(method='linear')
 
 
+    ##############################################################################
+    def obj_fcn_cost(self, profile):
+        return 0.0
+
+    ##############################################################################
+    def get_linear_approximation(self, profile):
+        return self.obj_fcn_cost(profile)
 
     ##############################################################################
     def get_obj_fcn_data(self):
@@ -209,6 +216,12 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
             except:
                 pass
 
+        # Generate a linear approximation of demand charge
+        v = kwargs["forecast"]["DemandForecast_kW"]-self.init_params["threshold"]
+        energy_above_threshold = v[numpy.where(v > 0)].sum()
+        cost = self.obj_fcn_cost(kwargs["forecast"])
+        self.imputed_cost_per_kWh = energy_above_threshold / cost
+        print(self.imputed_cost_per_kWh)
         print(self.init_params)
         #self.init_params["threshold"] = kwargs["threshold"]
         #self.init_params["cost_per_kW"] = kwargs["cost_per_kW"]
@@ -227,6 +240,22 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
         else:
             cost = 0.0
         return cost
+
+    ##############################################################################
+    def get_linear_approximation(self, profile):
+        """
+        (1) calculate how much energy is expected to be consumed in excess of the threshold = sum(max(forecast-threshold,0))
+        (2) calculate total cost = max(forecast) x cost
+        (3) calculate imputed cost per kWh = energy / cost
+        :param profile:
+        :return:
+        """
+        v = profile["DemandForecast_kW"]-self.init_params["threshold"]
+        energy_above_threshold = v[numpy.where(v > 0)].sum()
+        cost = self.imputed_cost_per_kWh * energy_above_threshold
+
+        return cost
+
 
     ##############################################################################
     def get_obj_fcn_data(self):

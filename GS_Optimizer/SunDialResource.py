@@ -56,6 +56,7 @@ from ObjectiveFunctions import *
 from gs_identities import * #(SSA_SCHEDULE_RESOLUTION, SSA_PTS_PER_SCHEDULE, USE_SIM, SIM_START_TIME)
 from gs_utilities import get_gs_time
 _log = logging.getLogger("SDR")
+_log.setLevel(logging.INFO)
 
 MINUTES_PER_HR = 60
 
@@ -401,9 +402,11 @@ class SundialResource():
         """
         for virtual_plant in self.virtual_plants:
             virtual_plant.cfg_cost(schedule_timestamps, tariffs)
-
         for obj_fcn in self.obj_fcns:
-            obj_fcn.obj_fcn_cfg(schedule_timestamps=schedule_timestamps, tariffs=tariffs, sim_offset=self.sim_offset)
+            obj_fcn.obj_fcn_cfg(schedule_timestamps=schedule_timestamps,
+                                tariffs=tariffs,
+                                sim_offset=self.sim_offset,
+                                forecast = self.state_vars)
 
 
 
@@ -418,7 +421,7 @@ class SundialResource():
 
         if self.virtual_plants == []: # terminal node
             ## do interpolation
-            _log.info(str(self.state_vars["DemandForecast_kW"]))
+            _log.debug(str(self.state_vars["DemandForecast_kW"]))
             self.state_vars["DemandForecast_kW"]           = self.interpolate_values(schedule_timestamps,
                                                                                      self.state_vars["DemandForecast_kW"])
             self.state_vars["EnergyAvailableForecast_kWh"] = self.interpolate_values(schedule_timestamps,
@@ -442,9 +445,9 @@ class SundialResource():
             for virtual_plant in self.virtual_plants:
                 # retrieve data from child nodes and sum
                 virtual_plant.interpolate_forecast(schedule_timestamps)
-                _log.info(self.resource_id)
-                _log.info(virtual_plant.resource_id)
-                _log.info(virtual_plant.resource_id)
+                _log.debug(self.resource_id)
+                _log.debug(virtual_plant.resource_id)
+                _log.debug(virtual_plant.resource_id)
                 self.state_vars["DemandForecast_kW"]           += virtual_plant.state_vars["DemandForecast_kW"]
                 self.state_vars["EnergyAvailableForecast_kWh"] += virtual_plant.state_vars["EnergyAvailableForecast_kWh"]
 
@@ -458,9 +461,9 @@ class SundialResource():
                 self.state_vars["LoadShiftOptions_kW"] += [virtual_plant.state_vars["DemandForecast_kW"] for ii in range(0,20)]
 
             self.state_vars["LoadShiftOptions_kW"] = self.state_vars["LoadShiftOptions_kW"][0:len_load_options]
-            _log.info(str(self.state_vars["DemandForecast_kW"]))
-            _log.info(str(self.state_vars["EnergyAvailableForecast_kWh"]))
-            _log.info(str(self.state_vars["LoadShiftOptions_kW"]))
+            _log.debug(str(self.state_vars["DemandForecast_kW"]))
+            _log.debug(str(self.state_vars["EnergyAvailableForecast_kWh"]))
+            _log.debug(str(self.state_vars["LoadShiftOptions_kW"]))
 
     ##############################################################################
     def interpolate_loadshift_options(self, schedule_timestamps, init_demand):
@@ -472,9 +475,9 @@ class SundialResource():
         ind = 1  # index into timestamp list -- 1 = forecast at t+1, 0 = forecast at t-1
         SEC_PER_MIN = 60.0
 
-        _log.info(self.resource_id)
-        _log.info(str(self.state_vars["LoadShiftOptions_t"]))
-        _log.info("Timestamps are: "+str(schedule_timestamps))
+        _log.debug(self.resource_id)
+        _log.debug(str(self.state_vars["LoadShiftOptions_t"]))
+        _log.debug("Timestamps are: "+str(schedule_timestamps))
 
         demand_list = [[0.0] * SSA_PTS_PER_SCHEDULE] * len(init_demand)
 
@@ -482,29 +485,22 @@ class SundialResource():
             time_elapsed = float((schedule_timestamps[0] -
                                   datetime.strptime(self.state_vars["LoadShiftOptions_t"][0],
                                                     "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)).total_seconds())   # seconds since the first forecast ts
-            _log.info("time elapsed = "+str(time_elapsed))
+            _log.debug("time elapsed = "+str(time_elapsed))
             scale_factor = time_elapsed / float(SSA_SCHEDULE_RESOLUTION*SEC_PER_MIN)
-            _log.info("scale factor= "+str(scale_factor))
-            _log.info("demand forecast orig = "+str(init_demand))
+            _log.debug("scale factor= "+str(scale_factor))
+            _log.debug("demand forecast orig = "+str(init_demand))
 
             for jj in range(0,len(init_demand)):
                 demand_list[jj] = [init_demand[jj][ii-1] +
                                    (init_demand[jj][ii] -
                                     init_demand[jj][ii-1]) * scale_factor
                                    for ii in range(1,SSA_PTS_PER_SCHEDULE)]
-            #               for jj in range(0,len(init_demand))]
-
-            #demand_list = [init_demand[jj][ii-1] +
-            #               (init_demand[jj][ii] -
-            #                init_demand[jj][ii-1]) * scale_factor
-            #               for ii in range(1,SSA_PTS_PER_SCHEDULE)
-            #               for jj in range(0,len(init_demand))]
 
                 demand_list[jj].append(init_demand[jj][SSA_PTS_PER_SCHEDULE-1]) # FIXME - tmp fix to pad last element
 
         #else:
         #    demand_list = [0.0]*SSA_PTS_PER_SCHEDULE
-        _log.info(self.resource_id+": demand forecast is "+str(demand_list))
+        _log.debug(self.resource_id+": demand forecast is "+str(demand_list))
 
         return numpy.array(demand_list)
 
@@ -519,19 +515,19 @@ class SundialResource():
         ind = 1  # index into timestamp list -- 1 = forecast at t+1, 0 = forecast at t-1
         SEC_PER_MIN = 60.0
 
-        _log.info(self.resource_id)
-        _log.info(str(self.state_vars["DemandForecast_t"]))
-        _log.info("Timestamps are: "+str(schedule_timestamps))
+        _log.debug(self.resource_id)
+        _log.debug(str(self.state_vars["DemandForecast_t"]))
+        _log.debug("Timestamps are: "+str(schedule_timestamps))
 
 
         if self.state_vars["DemandForecast_t"] != None:
             time_elapsed = float((schedule_timestamps[0] -
                                   datetime.strptime(self.state_vars["DemandForecast_t"][0],
                                                     "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)).total_seconds())   # seconds since the first forecast ts
-            _log.info("time elapsed = "+str(time_elapsed))
+            _log.debug("time elapsed = "+str(time_elapsed))
             scale_factor = time_elapsed / float(SSA_SCHEDULE_RESOLUTION*SEC_PER_MIN)
-            _log.info("scale factor= "+str(scale_factor))
-            _log.info("demand forecast orig = "+str(init_demand))
+            _log.debug("scale factor= "+str(scale_factor))
+            _log.debug("demand forecast orig = "+str(init_demand))
             demand_list = [init_demand[ii-1] +
                            (init_demand[ii] -
                             init_demand[ii-1]) * scale_factor
@@ -541,7 +537,7 @@ class SundialResource():
 
         else:
             demand_list = [0.0]*SSA_PTS_PER_SCHEDULE
-        _log.info(self.resource_id+": demand forecast is "+str(demand_list))
+        _log.debug(self.resource_id+": demand forecast is "+str(demand_list))
 
         return numpy.array(demand_list)
 
@@ -569,7 +565,7 @@ class SundialResource():
 
 
     ############################
-    def calc_cost(self, profile_state_vars):
+    def calc_cost(self, profile_state_vars, linear_approx = False):
         """
         Loops through each of the SundialResource's objective functions, calculates cost for the given profile
         :param profile: profile is a time-series list of values
@@ -578,13 +574,15 @@ class SundialResource():
 
         cost = 0 #[]
         for obj_fcn in self.obj_fcns:
-            cost += obj_fcn.obj_fcn_cost(profile_state_vars) # cost.append(obj_fcn.obj_fcn_cost(profile))
+            if linear_approx == False:
+                cost += obj_fcn.obj_fcn_cost(profile_state_vars) # cost.append(obj_fcn.obj_fcn_cost(profile))
+            else:
+                cost += obj_fcn.get_linear_approximation(profile_state_vars)  # cost.append(obj_fcn.obj_fcn_cost(profile))
 
         #cost = 0
         #for fcn in self.obj_fcns:
         #    cost += fcn()
         return cost
-
 
 ##############################################################################
 class ESSResource(SundialResource):

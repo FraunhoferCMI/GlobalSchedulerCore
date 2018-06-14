@@ -482,6 +482,68 @@ class ExecutiveAgent(Agent):
         self.update_tariffs()
 
 
+    ##############################################################################
+    def calc_cost(self, sundial_resource):
+        """
+        calculates the cost of the current schedule
+        :param sundial_resource: top node in sundial resource tree
+        :return: total cost of scheduled output
+        """
+        total_cost = 0
+
+        for virtual_plant in sundial_resource.virtual_plants:
+            total_cost += self.calc_cost(virtual_plant)
+
+        cost = sundial_resource.calc_cost(sundial_resource.schedule_vars)
+        total_cost += cost
+        return cost
+
+    ##############################################################################
+    @RPC.export
+    def generate_cost_map(self):
+        """
+        generates marginal cost of electricity per kWh as a function of time and demand.
+        :return: tiers - list of lists of dictionary - each entry is defines price as a function of demand LB/UB and time
+        """
+        total_cost = 0
+
+        #TODO - remove hardcoded limits
+        #TODO - remove hardcoded array sizes and step
+        #TODO - only deals with system level costs
+
+        cost_map = pandas.DataFrame([[0.0] * 41] * 24)
+        test_profile = numpy.array([[0.0] * 24] * 24)
+        for ii in range(0, 24):
+            for jj in range(0, 41):
+                test_profile[ii][ii] = -2000 + jj * 100
+                # print(test_profile)
+                sv = {}
+                sv.update({"DemandForecast_kW": test_profile[ii]})
+                cost_map.iloc[ii][jj] = self.sundial_resources.calc_cost(sv, linear_approx = True)
+
+        v = cost_map.diff(axis=1)
+        v.columns = range(-2000, 2100, 100)
+
+        tiers = []
+        for ii in range(0, 24):
+            jj = -1800
+            cnt = 0
+            tiers.append([{"LB": -2000}])
+            tiers[ii][cnt].update({"price": v.iloc[ii][jj - 100] / 100})
+            while jj <= 2000:
+                same_tier = True
+                while same_tier == True:
+                    if jj == 2000:
+                        same_tier = False
+                        tiers[ii][cnt].update({"UB": jj})
+                    elif (v.iloc[ii][jj] > v.iloc[ii][jj - 100] + 0.1) or (v.iloc[ii][jj] < v.iloc[ii][jj - 100] - 0.1):
+                        tiers[ii][cnt].update({"UB": jj - 100})
+                        cnt += 1
+                        tiers[ii].append({"LB": jj - 100})
+                        tiers[ii][cnt].update({"price": v.iloc[ii][jj] / 100})
+                        same_tier = False
+                    jj += 100
+        return tiers
 
     ##############################################################################
     @Core.periodic(ESS_SCHEDULE)
@@ -514,13 +576,13 @@ class ExecutiveAgent(Agent):
             ii = 0
             _log.info(str(cur_gs_time))
             for t in self.system_resources.schedule_vars["timestamp"]:
-                _log.info(str(t))
+                _log.debug(str(t))
                 if cur_gs_time < t:
                     break
                 ii += 1
             ii -= 1
 
-            _log.info("Generating dispatch: ii = "+str(ii))
+            _log.debug("Generating dispatch: ii = "+str(ii))
             if (ii < 0): # shouldn't ever happen
                 ii = 0
 
@@ -579,7 +641,7 @@ class ExecutiveAgent(Agent):
                                                                   "get_device_state_vars",
                                                                   devices["DeviceID"]).get(timeout=5)
 
-                            _log.info("state vars = "+str(device_state_vars))
+                            _log.debug("state vars = "+str(device_state_vars))
 
                             # Divides the set point command across the available ESS sites.
                             # currently divided pro rata based on kWh available.

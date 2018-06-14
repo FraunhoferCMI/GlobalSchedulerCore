@@ -51,8 +51,10 @@ import sys
 import os
 import csv
 import HistorianTools
-from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
+from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC, Unreachable
 from volttron.platform.agent import utils
+from volttron.platform.jsonrpc import RemoteError
+
 from volttron.platform.messaging import headers as headers_mod
 
 from gs_identities import (INTERACTIVE, AUTO, SITE_IDLE, SITE_RUNNING, PMC_WATCHDOG_RESET, IGNORE_HEARTBEAT_ERRORS,
@@ -972,19 +974,13 @@ class DERModbusDevice(DERDevice):
         converts units from internal context to external context, and then issues an RPC call
         to actuator/set_point.
         Immediately reads the end point to ensure that the read was successfully completed.
-        FIXME: Currently this method is explicitly for modbus devices.  There should be a generic version.
-        This should get moved to a DERModbus Class.
         FIXME: Possibly need to include some latency / retry / or timeout period for the "check read" portion
         of this routine.  (i.e., in case there is some command latency...)
         """
-        # FIXME - this should either be a standalone method or it should be part of a "ModbusDevice Class"
-        # FIXME - ID in the RPC call should be the VIP agent identity...
 
         device_prefix = "devices/"  # was /devices/
         task_id = sitemgr.site.device_id  # "ShirleySouth" #FIXME need to automatically query from sitemgr #"set_point"
 
-        # TODO - make this generic - not tied to mode_ctrl
-        # TODO - error trap to make sure that this value is writeable....
         _log.debug("SetPt: Cmd - " + str(cmd) + "; attribute - " + str(attribute) + "; topic # = " + str(
             self.datagroup_dict_list[attribute].topic_map[cmd]))
         _log.debug("SetPt: topic = " + sitemgr.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"])
@@ -1009,25 +1005,29 @@ class DERModbusDevice(DERDevice):
         # FIXME check for exceptions
         # convert units if necessary:
         self.convert_units_to_endpt(attribute, cmd)
-        ret = sitemgr.vip.rpc.call(
-            "platform.actuator",
-            "set_point",
-            "SiteManager",
-            cmd_path,
-            self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"])
+        try:
+            ret = sitemgr.vip.rpc.call(
+                "platform.actuator",
+                "set_point",
+                "SiteManager",
+                cmd_path,
+                self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"])
 
-        # res = release_modbus(self, task_id, sitemgr)
+            # res = release_modbus(self, task_id, sitemgr)
 
-        val = sitemgr.vip.rpc.call(
-            "platform.actuator",
-            "get_point",
-            cmd_path).get()
+            val = sitemgr.vip.rpc.call(
+                "platform.actuator",
+                "get_point",
+                cmd_path).get()
 
-        if val != self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]:
-            # command wasn't written - raise an error
-            _log.info("SetPt: SiteManager.set_point: Command " + str(cmd_path) + " not written. for " + self.device_id)
-            _log.info("SetPt: Expected " + str(
-                self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]) + "; Read: " + str(val))
+            if val != self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]:
+                # command wasn't written - raise an error
+                _log.info("SetPt: SiteManager.set_point: Command " + str(cmd_path) + " not written. for " + self.device_id)
+                _log.info("SetPt: Expected " + str(
+                    self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]) + "; Read: " + str(val))
+        except Unreachable: #Exception as exception:
+            #_log.info(type(exception).__name__)
+            _log.info("ERROR: Agent 'platform.actuator' not found.  Command not written.")
 
 
 ##############################################################################
@@ -1099,10 +1099,10 @@ class ShirleySite(DERSite, DERModbusDevice):
             self.set_point("ModeControl", "OpModeCtrl", sitemgr) # deprecated
 
         self.mode_ctrl_cmd.data_dict.update({"SysModeCtrl_cmd": INTERACTIVE})
-        self.set_point("ModeControl", "SysModeCtrl", sitemgr)
-
         self.writePending["SysModeStatus"] = 1
         self.expectedValue["SysModeStatus"] = INTERACTIVE
+        self.set_point("ModeControl", "SysModeCtrl", sitemgr)
+
 
 
     ##############################################################################
@@ -1116,10 +1116,10 @@ class ShirleySite(DERSite, DERModbusDevice):
 
         # set internal commands to new operating state:
         self.mode_ctrl_cmd.data_dict.update({"SysModeCtrl_cmd": AUTO})
-        self.set_point("ModeControl", "SysModeCtrl", sitemgr)
-
         self.writePending["SysModeStatus"] = 1
         self.expectedValue["SysModeStatus"] = AUTO
+        self.set_point("ModeControl", "SysModeCtrl", sitemgr)
+
 
 
 
