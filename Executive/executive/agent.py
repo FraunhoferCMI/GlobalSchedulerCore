@@ -51,6 +51,7 @@ import sys
 import os
 import csv
 import json
+from pprint import pprint
 import gevent
 from volttron.platform.messaging.health import STATUS_GOOD
 from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
@@ -182,12 +183,15 @@ class ExecutiveAgent(Agent):
         self.UICtrlEnable      = DISABLED
 
         # Initialize Configuration Files
-        #TODO - move to a config store?
         # Set up paths for config files.
+        gs_root_dir = os.environ['GS_ROOT_DIR']
+        cfg_path = "cfg/"
         self.volttron_root = os.getcwd()
         self.volttron_root = self.volttron_root+"/../../../../"
-        SiteCfgFile        = self.volttron_root+"gs_cfg/SiteConfiguration.json"
-        SundialCfgFile     = self.volttron_root+"gs_cfg/SundialSystemConfiguration.json"
+        SiteCfgFile = self.volttron_root + "gs_cfg/SiteConfiguration.json"
+        SundialCfgFile = self.volttron_root + "gs_cfg/SundialSystemConfiguration.json"
+        #SiteCfgFile        = gs_root_dir+cfg_path+"SiteCfg/SiteConfiguration.json"
+        #SundialCfgFile     = gs_root_dir+cfg_path+"SystemCfg/SundialSystemConfiguration.json"
         self.packaged_site_manager_fname = self.volttron_root + "packaged/site_manageragent-1.0-py2-none-any.whl"
         self.SiteCfgList   = json.load(open(SiteCfgFile, 'r'))
         self.sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
@@ -202,7 +206,6 @@ class ExecutiveAgent(Agent):
         self.optimizer_info.update({"netDemand_kW": 0.0})
         self.optimizer_info.update({"netDemandAvg_kW": 0.0})
 
-        self.opt_cnt = 0
         self.init_tariffs()
 
 
@@ -257,11 +260,6 @@ class ExecutiveAgent(Agent):
         for site in self.SiteCfgList:
             _log.info("SiteMgr Config: "+str(site["ID"]))
             _log.info("SiteMgr Config: "+str(site))
-            
-            # start a new SiteManager agent 
-            # FIXME - needs error trapping: (1) is agent already installed? (2) does site mgr agent exist?
-            # FIXME - (3) did it start successfully?
-
 
             # check to see if an agent associated with the site already exists:
             uuid = None
@@ -330,7 +328,7 @@ class ExecutiveAgent(Agent):
         ### This section retrieves direct references to specific resource types (avoids the need to traverse tree)
         # There is an implicit assumption that there is only one SundialResource node per resource type.  (i.e. we are
         # grabbing the 0th element in each list returned by find_resource_type
-        # FIXME - to handle multiple resources groupings of the same type, code will need to be modified
+        # Note - to handle multiple resources groupings of the same type, code will need to be modified
         _log.info("Finding Nodes")
         self.ess_resources = self.sundial_resources.find_resource_type("ESSCtrlNode")[0]
         self.pv_resources  = self.sundial_resources.find_resource_type("PVCtrlNode")[0]
@@ -447,9 +445,6 @@ class ExecutiveAgent(Agent):
         """
         This method updates the sundial resource data structure with the most recvent data from SiteManager
         agents.
-        todo - consider modifying the update routine to retrieve data published on the message bus instead of retrieving
-        todo - from RPC calls.  Plan on revisiting.
-
         :param sdr_to_sm_lookup_table: maps DERDevice instances to SundialResource instances.  This is an object of
         type SundialResource_to_SiteManager_lookup_table
         :return: None
@@ -500,49 +495,85 @@ class ExecutiveAgent(Agent):
 
     ##############################################################################
     @RPC.export
-    def generate_cost_map(self):
+    def generate_cost_map(self, n_time_steps = 24, search_resolution = 25):
         """
         generates marginal cost of electricity per kWh as a function of time and demand.
+        It generates a matrix of cost as a function of time (on one axis) and demand on the other axis
+        First, it calculates an upper and lower bound for demand and generates demand tiers based on
+        the search resolution
+        Then, for each time step and demand step within the search space, it calculates marignal cost of electricity
+        within that bin
+        Once the matrix is generated, demand tiers are culled to identify tiers where change in demand occurs.
+        :param n_time_steps: number of time steps in the search space
+        :param search_resolution: size of the demand tiers for initial search, in kW
         :return: tiers - list of lists of dictionary - each entry is defines price as a function of demand LB/UB and time
         """
         total_cost = 0
+        epsilon    = 0.1 # minimum price difference required to differentiate a new price tier
 
-        #TODO - remove hardcoded limits
-        #TODO - remove hardcoded array sizes and step
         #TODO - only deals with system level costs
+        #TODO - adjust for solar forecast
 
-        cost_map = pandas.DataFrame([[0.0] * 41] * 24)
-        test_profile = numpy.array([[0.0] * 24] * 24)
-        for ii in range(0, 24):
-            for jj in range(0, 41):
-                test_profile[ii][ii] = -2000 + jj * 100
+        #pprint(self.sundial_resources.state_vars["DemandForecast_kW"])
+
+        lb = min(self.sundial_resources.state_vars["DemandForecast_kW"])
+        ub = max(self.sundial_resources.state_vars["DemandForecast_kW"])
+
+        # adjust upper and lower bound limits to extend past forecast
+        if lb<0:
+            lb *= 1.2
+        else:
+            lb *= 0.8
+        if ub<0:
+            ub *= 0.8
+        else:
+            ub *= 1.2
+
+        #_log.info("UB = "+str(ub)+"; LB = "+str(lb))
+
+        if (lb + 4*search_resolution > ub): # indicates that no forecast is available, or demand lies over a narrow range
+            # use a default value
+            lb = -2000
+            ub = 4000
+        else: # set ub and lb to the nearest search resolution
+            lb = int(lb - (lb % search_resolution))
+            ub = int(ub - (ub % search_resolution) + search_resolution)
+
+        n_demand_steps = int((ub-lb)/search_resolution + 1)
+
+        cost_map = pandas.DataFrame([[0.0] * n_demand_steps] * n_time_steps)
+        test_profile = numpy.array([[0.0] * n_time_steps] * n_time_steps)
+        for ii in range(0, n_time_steps):
+            for jj in range(0, n_demand_steps):
+                test_profile[ii][ii] = lb + jj * search_resolution
                 # print(test_profile)
                 sv = {}
                 sv.update({"DemandForecast_kW": test_profile[ii]})
                 cost_map.iloc[ii][jj] = self.sundial_resources.calc_cost(sv, linear_approx = True)
 
         v = cost_map.diff(axis=1)
-        v.columns = range(-2000, 2100, 100)
+        v.columns = range(lb, ub+search_resolution, search_resolution)
 
         tiers = []
-        for ii in range(0, 24):
-            jj = -1800
+        for ii in range(0, n_time_steps):
+            jj = lb + 2*search_resolution
             cnt = 0
-            tiers.append([{"LB": -2000}])
-            tiers[ii][cnt].update({"price": v.iloc[ii][jj - 100] / 100})
-            while jj <= 2000:
+            tiers.append([{"LB": lb}])
+            tiers[ii][cnt].update({"price": v.iloc[ii][jj - search_resolution] / search_resolution})
+            while jj <= ub:
                 same_tier = True
                 while same_tier == True:
-                    if jj == 2000:
+                    if jj == ub:
                         same_tier = False
                         tiers[ii][cnt].update({"UB": jj})
-                    elif (v.iloc[ii][jj] > v.iloc[ii][jj - 100] + 0.1) or (v.iloc[ii][jj] < v.iloc[ii][jj - 100] - 0.1):
-                        tiers[ii][cnt].update({"UB": jj - 100})
+                    elif ((v.iloc[ii][jj] > v.iloc[ii][jj - search_resolution] + epsilon) or
+                          (v.iloc[ii][jj] < v.iloc[ii][jj - search_resolution] - epsilon)):
+                        tiers[ii][cnt].update({"UB": jj - search_resolution})
                         cnt += 1
-                        tiers[ii].append({"LB": jj - 100})
-                        tiers[ii][cnt].update({"price": v.iloc[ii][jj] / 100})
+                        tiers[ii].append({"LB": jj - search_resolution})
+                        tiers[ii][cnt].update({"price": v.iloc[ii][jj] / search_resolution})
                         same_tier = False
-                    jj += 100
+                    jj += search_resolution
         return tiers
 
     ##############################################################################
@@ -563,9 +594,8 @@ class ExecutiveAgent(Agent):
             # Now we need to determine the target battery set point.  To do so, look at the total current system
             # power output, subtracting the contribution from the battery.  The delta between total current system
             # output and the schedule output determines the target ESS set point.
-            # Note: As currently implemented, this is totally reactive to whatever the last power reading was, so high
-            # likelihood that this will chase noise (at the very least, probably should look at a rolling average).
-            # 
+            # Note: As currently implemented, this is reactive, so high likelihood that this will chase noise
+            #
             # retrieve the current power output of the system, not including energy storage.
             # taking a shortcut here - implicit assumption that there is a single pool of ESS
             curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
@@ -702,87 +732,91 @@ class ExecutiveAgent(Agent):
         devices.
         :return: None
         """
-        self.last_optimization_start = utils.get_aware_utc_now()  # not currently used
         if self.OptimizerEnable == ENABLED:
-            #self.opt_cnt += 1
-            if self.opt_cnt <= 1:  # fixme: use for debug, remove eventually
-                try:
-                    sim_time_corr = timedelta(seconds = self.vip.rpc.call("forecast_simagent-0.1_1",
-                                                                          "get_sim_time_corr").get())
-                    schedule_timestamps = self.generate_schedule_timestamps(sim_time_corr=sim_time_corr)  # associated timestamps
-                    if schedule_timestamps[0] == self.system_resources.schedule_vars["timestamp"][0]:
-                        # temporary work around to indicate to optimizer to use previous solution if cost was lower
-                        # fixme - this work around does not account for contingency if forecast or system state changes unexpectedly
-                        # same time window as previously
-                        self.optimizer.persist_lowest_cost = 1
-                    else:
-                        self.optimizer.persist_lowest_cost = 0
-                    _log.info("persist lower cost = "+str(self.optimizer.persist_lowest_cost)+"; new time = "+str(schedule_timestamps[0])+"; old time = "+str(self.system_resources.schedule_vars["timestamp"][0]))
+            # check to make sure that resources have been updated
+            # if they have not - ... - request an update and go into a waiting state.
 
-                except:
-                    _log.info("Forecast Sim RPC failed!")
-                    schedule_timestamps = self.generate_schedule_timestamps()
 
-                self.sundial_resources.interpolate_forecast(schedule_timestamps)
-                self.sundial_resources.cfg_cost(schedule_timestamps, self.tariffs) # queue up time-differentiated cost data
-                #self.optimizer.run_ssa_optimization(self.sundial_resources, schedule_timestamps) # SSA optimization
-                self.optimizer.search_single_option(self.sundial_resources, schedule_timestamps)  # SSA optimization
 
+            try:
+                sim_time_corr = timedelta(seconds = self.vip.rpc.call("forecast_simagent-0.1_1",
+                                                                      "get_sim_time_corr").get())
+                schedule_timestamps = self.generate_schedule_timestamps(sim_time_corr=sim_time_corr)  # associated timestamps
+                if schedule_timestamps[0] == self.system_resources.schedule_vars["timestamp"][0]:
+                    # temporary work around to indicate to optimizer to use previous solution if cost was lower
+                    # fixme - this work around does not account for contingency if forecast or system state changes unexpectedly
+                    # same time window as previously
+                    self.optimizer.persist_lowest_cost = 1
+                else:
+                    self.optimizer.persist_lowest_cost = 0
+                _log.info("persist lower cost = "+str(self.optimizer.persist_lowest_cost)+"; new time = "+str(schedule_timestamps[0])+"; old time = "+str(self.system_resources.schedule_vars["timestamp"][0]))
+
+            except:
+                _log.info("Forecast Sim RPC failed!")
+                schedule_timestamps = self.generate_schedule_timestamps()
+
+            self.sundial_resources.interpolate_forecast(schedule_timestamps)
+            self.sundial_resources.cfg_cost(schedule_timestamps, self.tariffs) # queue up time-differentiated cost data
+            #tiers = self.generate_cost_map()
+            #_log.info(json.dumps(tiers))
+            #self.optimizer.run_ssa_optimization(self.sundial_resources, schedule_timestamps) # SSA optimization
+            self.optimizer.search_single_option(self.sundial_resources, schedule_timestamps)  # SSA optimization
+
+            HistorianTools.publish_data(self,
+                                        "SystemResource/Schedule",
+                                        default_units["DemandForecast_kW"],
+                                        "DemandForecast_kW",
+                                        self.system_resources.schedule_vars["DemandForecast_kW"].tolist())
+            HistorianTools.publish_data(self,
+                                        "SystemResource/Schedule",
+                                        default_units["timestamp"],
+                                        "timestamp",
+                                        [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.system_resources.schedule_vars["timestamp"]])
+            HistorianTools.publish_data(self,
+                                        "SystemResource/Schedule",
+                                        default_units["total_cost"],
+                                        "total_cost",
+                                        self.system_resources.schedule_vars["total_cost"])
+            HistorianTools.publish_data(self,
+                                        "ESSResource/Schedule",
+                                        default_units["DemandForecast_kW"],
+                                        "DemandForecast_kW",
+                                        self.ess_resources.schedule_vars["DemandForecast_kW"].tolist())
+            HistorianTools.publish_data(self,
+                                        "ESSResource/Schedule",
+                                        default_units["EnergyAvailableForecast_kWh"],
+                                        "EnergyAvailableForecast_kWh",
+                                        self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"].tolist())
+            HistorianTools.publish_data(self,
+                                        "ESSResource/Schedule",
+                                        default_units["timestamp"],
+                                        "timestamp",
+                                        [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.ess_resources.schedule_vars["timestamp"]])
+            HistorianTools.publish_data(self,
+                                        "PVResource/Schedule",
+                                        default_units["DemandForecast_kW"],
+                                        "DemandForecast_kW",
+                                        self.pv_resources.schedule_vars["DemandForecast_kW"].tolist())
+            HistorianTools.publish_data(self,
+                                        "PVResource/Schedule",
+                                        default_units["timestamp"],
+                                        "timestamp",
+                                        [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.pv_resources.schedule_vars["timestamp"]])
+            try:
                 HistorianTools.publish_data(self,
-                                            "SystemResource/Schedule",
+                                            "LoadResource/Schedule",
                                             default_units["DemandForecast_kW"],
                                             "DemandForecast_kW",
-                                            self.system_resources.schedule_vars["DemandForecast_kW"].tolist())
+                                            self.load_resources.schedule_vars["DemandForecast_kW"].tolist())
                 HistorianTools.publish_data(self,
-                                            "SystemResource/Schedule",
+                                            "LoadResource/Schedule",
                                             default_units["timestamp"],
                                             "timestamp",
-                                            [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.system_resources.schedule_vars["timestamp"]])
-                HistorianTools.publish_data(self,
-                                            "SystemResource/Schedule",
-                                            default_units["total_cost"],
-                                            "total_cost",
-                                            self.system_resources.schedule_vars["total_cost"])
-                HistorianTools.publish_data(self,
-                                            "ESSResource/Schedule",
-                                            default_units["DemandForecast_kW"],
-                                            "DemandForecast_kW",
-                                            self.ess_resources.schedule_vars["DemandForecast_kW"].tolist())
-                HistorianTools.publish_data(self,
-                                            "ESSResource/Schedule",
-                                            default_units["EnergyAvailableForecast_kWh"],
-                                            "EnergyAvailableForecast_kWh",
-                                            self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"].tolist())
-                HistorianTools.publish_data(self,
-                                            "ESSResource/Schedule",
-                                            default_units["timestamp"],
-                                            "timestamp",
-                                            [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.ess_resources.schedule_vars["timestamp"]])
-                HistorianTools.publish_data(self,
-                                            "PVResource/Schedule",
-                                            default_units["DemandForecast_kW"],
-                                            "DemandForecast_kW",
-                                            self.pv_resources.schedule_vars["DemandForecast_kW"].tolist())
-                HistorianTools.publish_data(self,
-                                            "PVResource/Schedule",
-                                            default_units["timestamp"],
-                                            "timestamp",
-                                            [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.pv_resources.schedule_vars["timestamp"]])
-                try:
-                    HistorianTools.publish_data(self,
-                                                "LoadResource/Schedule",
-                                                default_units["DemandForecast_kW"],
-                                                "DemandForecast_kW",
-                                                self.load_resources.schedule_vars["DemandForecast_kW"].tolist())
-                    HistorianTools.publish_data(self,
-                                                "LoadResource/Schedule",
-                                                default_units["timestamp"],
-                                                "timestamp",
-                                                [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.load_resources.schedule_vars["timestamp"]])
-                except:    # assume demand module is not implemented
-                    pass
+                                            [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.load_resources.schedule_vars["timestamp"]])
+            except:    # assume demand module is not implemented
+                pass
 
-                self.send_ess_commands()
+            self.send_ess_commands()
 
     ##############################################################################
     #@Core.periodic(STATUS_MSG_PD)
