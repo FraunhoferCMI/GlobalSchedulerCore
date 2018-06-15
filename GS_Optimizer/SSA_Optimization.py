@@ -192,7 +192,7 @@ class SimulatedAnnealer():
         The primary output of run_ssa_optimization is schedule information for each resource in the Sundial system that
         reflects a global least-cost solution for the given combination of forecasts, objective functions, and starting
         conditions.  On completion, run_ssa_optimization
-        (1) dumps the orgiinal adn new schedule profiles to a csv file - each row is a different profile,
+        (1) dumps the orgiinal and new schedule profiles to a csv file - each row is a different profile,
             columns represent time
         (2) copies least_cost_soln to the schedule_vars data structure to each resource in the sundial_resources tree.
             schedule_vars is used to determine set points in the Global Scheduler

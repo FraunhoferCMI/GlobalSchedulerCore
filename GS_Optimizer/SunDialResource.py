@@ -71,9 +71,9 @@ class SundialResourceProfile():
     parent
     SundialResourceProfile has the following instance variables:
     (1) virtual_plant - list of children associated with the DER
-    (2) state_vars - data dictionary that stores time-series data for the load shape.  The time step and duration of
-        the time-series is implicitly defined by SSA_SCHEDULE_RESOLUTION and SSA_SCHEDULE_DURATION.  The following keys
-        are defined:
+    (2) state_vars - data dictionary that stores time-series data for the load shape.  Each dictionary element is a
+        numpy array.  The time step and duration of the time-series is implicitly defined by SSA_SCHEDULE_RESOLUTION
+        and SSA_SCHEDULE_DURATION.  The following keys are defined:
         (a) ["DemandForecast_kW"] - list of floats.  Represents a proposed time-series demand forecast, in kW for the
             associated DER.  By convention, generation is negative, consumption is positive.
         (b) ["EnergyAvailableForecast_kWh"] - list of floats.  Estimates stored energy available for the resource in
@@ -81,8 +81,6 @@ class SundialResourceProfile():
         (c) ["DeltaEnergy_kWh"] - list of floats.  Estimates the change in stored energy of the DER at each time
             step.  For non-storage devices, this is unused.  For storage devices, it is the alculated based on the
             power in DemandForecast_kW, adjusted by the efficiency of the ESS.
-        (d) ["Weight"] - list of floats.  DemandForecast_kW expressed relative to the DER's nameplate.  configured as a
-            numpy array to support easier matrix manipulation
     (3) sundial_resources - cross-references to the associated SundialResource data model associated with this DER.
         This enables SundialResourceProfile instances to readily access details about its associated DERs
     (4) cost - the cost of implementing the load profile in question at this SundialResourceProfile Node ONLY
@@ -121,23 +119,16 @@ class SundialResourceProfile():
         for virtual_plant in sundial_resources.virtual_plants:
             self.virtual_plants.append(SundialResourceProfile(virtual_plant, schedule_timestamps))
 
-        # initialize self.state_vars - length = SSA_PTS_PER_SCHEDULE
+        # initialize self.state_vars
         # DemandForecast_kW is set to the baseline forecast for the resource in question.
         # other state_vars are set to zero.
-        #_log.info("demand forecast to copy: "+str(sundial_resources.state_vars["DemandForecast_kW"]))
         self.state_vars = {"DemandForecast_kW": numpy.array(copy.deepcopy(sundial_resources.state_vars["DemandForecast_kW"])),
                            "EnergyAvailableForecast_kWh": numpy.array([0.0]*len(sundial_resources.state_vars["DemandForecast_kW"])),
-                           "DeltaEnergy_kWh": numpy.array([0.0]*len(sundial_resources.state_vars["DemandForecast_kW"]))}#,
-                           #"Weight": numpy.array([1.0]*SSA_PTS_PER_SCHEDULE) if sundial_resources.state_vars["Nameplate"] == 0.0
-                           #                      else numpy.array(sundial_resources.state_vars["DemandForecast_kW"]) / float(sundial_resources.state_vars["Nameplate"])}
-        #_log.info("Weight is: "+str(self.state_vars["Weight"]))
-        # FIXME - Weights is currently scaled based on device nameplate.  This should be rethought.  e.g., for a
-        # FIXME - battery, it should be based on expected charge and discharge power available.
-
+                           "DeltaEnergy_kWh": numpy.array([0.0]*len(sundial_resources.state_vars["DemandForecast_kW"]))}
         try:
             # if exists - initialize to same value as the associated sundial_resource instance
             # fixme - energyavailableforecast not getting initialized correctly in sdr
-            self.state_vars["EnergyAvailableForecast_kWh"] = copy.deepcopy(sundial_resources.state_vars["EnergyAvailableForecast_kWh"])#.copy()
+            self.state_vars["EnergyAvailableForecast_kWh"] = copy.deepcopy(sundial_resources.state_vars["EnergyAvailableForecast_kWh"])
         except: # otherwise - resource does not have storage capability, so ignore
             pass
 
@@ -145,19 +136,6 @@ class SundialResourceProfile():
 
         self.cost = 0.0
         self.total_cost = self.calc_cost()
-
-
-    ##############################################################################
-    def update_profile(self, profile):
-
-        #for virtual_plant in self.virtual_plants:
-        #    self.update_profile(profile)
-
-        #try:
-        #    state_vars["LoadShiftOptions_kW"][ii]
-        pass
-
-
 
     ##############################################################################
     def copy_profile(self, source):
@@ -168,9 +146,10 @@ class SundialResourceProfile():
     ##############################################################################
     def calc_cost(self):
         """
-        Recursively calculates cost of implementing the associated demand profile.  The cost of implementing a demand
-        profile is calculated by passing the load profile in question to the SundialResource.calc_cost routine
-        associated with the given DER.
+        Calculates cost of implementing the associated demand profile.  The cost of implementing a demand
+        profile is calculated by recursively traversing the sundial resource tree, and for each resource, passing the
+        load profile associated with that resource to the SundialResource.calc_cost routine associated with the given
+        resource.
         self.cost = cost of this node only
         self.total_cost = cost of this node + children
         FIXME: this returns total cost and also sets self.total_cost.  One or the other may be
@@ -193,7 +172,7 @@ class SundialResourceProfile():
 class SundialResource():
     """
     SundialResource defines an object model for defining the underlying physical parameters, current state, and cost
-    function(s) associated with aggregated DERs.
+    function(s) associated with one or more associated DERs.
     A SundialResource instance is implemented as a tree.  Each node inherits state characteristics and physical
     characteristics from its children (e.g., the power output and nameplate capacity of a parent is defined as the sum
     of the power output / nameplate of its children), but cost functions specifically apply to the current node.
@@ -207,6 +186,8 @@ class SundialResource():
           functions would apply to "system" loads
         - The "ess+solar" node has power, storage, etc reflecting the sum of the individual ESS & solar resources.  It's
           cost functions would apply to the combination of these resources.
+        - The bottom nodes (essPlant, solarPlant, load, and flexLoad) reflect the state and the cost functions
+          associated with the specific resources
 
     Instance variables:
     (1) self.resource_type - identifier for the SundialResource type.  Currently recognized types are "ESSCtrlNode",
@@ -215,7 +196,7 @@ class SundialResource():
     (3) self.obj_fcns - list of references to methods that represent the objective functions associated with this resource
     (5) self.virtual_plants - list of children SundialResources associated with this resource.
     (6) self.update_required - this is a flag that tells the optimizer whether the profile of this resource has changed
-        and needs to be updated.  Sort of a temporary fix to speed execution, but there are more elegant ways to do this.
+        and needs to be updated.  Sort of a temporary fix to speed execution, but there may be better ways to do this.
     (7) ...
     (8) self.state_vars - stores information about the state of the resource.  Has the following keys:
     FIXME - data types have not been checked are and are likely inconsistent
@@ -238,10 +219,15 @@ class SundialResource():
             step.  For non-storage devices, this is unused.  For storage devices, it is the alculated based on the
             power in DemandForecast_kW, adjusted by the efficiency of the ESS.
         (d) ["timestamp"] - list of timestamps.
+    (10) update_list_end_pts - a list of keys to map from device end points (DERDevice instances) to SundialResource
+         keys in state_vars
+    (11) self.gs_start_time -
+    (12) self.sim_offset - for simulated scenarios, stores the time delta between the SIM_START_TIME (i.e., the starting
+         time of the stored data set), and the gs_start_time.  Used to synchronize retrieval of objective function data
+         to gs time.
+    (13) self.pt_per_schedule - # of data points stored in a schedule
 
-    Subsequent iteration will use a more flexilbe / universal approach to implementing objective functions,
-    drawing calculations from a library of objective functions, passing in parameters, and enabling more
-    straightforward configuration
+
     """
     ##############################################################################
     def __init__(self, resource_cfg, gs_start_time):
@@ -257,10 +243,8 @@ class SundialResource():
         self.update_required      = 0 # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         self.obj_fcns     = []
-        #self.schedule_timestamps = []
 
         # initialize dictionaries for mapping from DERDevice keys to SundialResource keys.
-        # This should go away in future rev.
         self.update_list_end_pts    = ["DemandForecast_kW",
                                        "DemandForecast_t",
                                        "Pwr_kW",
@@ -366,6 +350,13 @@ class SundialResource():
 
     ##############################################################################
     def load_scenario(self, demand_forecast=[0.0]*SSA_PTS_PER_SCHEDULE, pk_capacity=0.0, t= None):
+        """
+        loads scenario data into the state vars.  Used for intializing the SundialResource instance with specific data
+        :param demand_forecast: time series list of demand forecast
+        :param pk_capacity: nameplate capacity of the resource
+        :param t: timestamps associated with the demand_forecast, stored as a datetime string
+        :return: None
+        """
         self.state_vars["DemandForecast_kW"] = numpy.array(demand_forecast)
         self.state_vars["DemandForecast_t"]  = t
         self.state_vars["Nameplate"] = pk_capacity
@@ -397,8 +388,9 @@ class SundialResource():
     def cfg_cost(self, schedule_timestamps, tariffs):
         """
         configures cost information for all applicable cost functions in preparation for an optimization pass
-        :param schedule_timestamps:
-        :return:
+        :param schedule_timestamps: list of timestamps (lengh = SSA_PTS_PER_SCHEDULE) for which to retrieve objective
+               function configuration information
+        :return: None
         """
         for virtual_plant in self.virtual_plants:
             virtual_plant.cfg_cost(schedule_timestamps, tariffs)
@@ -413,9 +405,11 @@ class SundialResource():
     ##############################################################################
     def interpolate_forecast(self, schedule_timestamps):
         """
-        interpolates forecasts
-        traverse tree.  if it's a terminal node - interpolate.  If it's a non-terminal node, sum up the children
-        :param schedule_timestamps:
+        interpolates a forecast to generate forecast data starting from time = now
+        It traverses the sundial resource tree.
+         - If it's a terminal node - interpolate.
+         - If it's a non-terminal node, sum up the children
+        :param schedule_timestamps: list of timestamps (length = SSA_PTS_PER_SCHEDULE)
         :return:
         """
 
@@ -589,7 +583,6 @@ class ESSResource(SundialResource):
     """
     Inherits from SundialResource.  Defines objective functions, state_vars, etc specific to ESSCtrlNodes
     Incorporates additional self.state_vars instances:
-    FIXME - Note that data types may be inconsistent - have not checked carefully
         (h) ["ChgEff"] - efficiency for charging.
         (i) ["DischgEff"] - efficiency for discharge.
         (j) ["MaxChargePwr_kW"] - Maximum
