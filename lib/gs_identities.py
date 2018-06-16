@@ -43,6 +43,7 @@
 # or reflect those of the United States Government or any agency thereof.
 
 from datetime import datetime, timedelta
+import os
 
 # execution flags
 USE_VOLTTRON = 1
@@ -61,6 +62,12 @@ READY       = 3
 DISABLED = 0
 ENABLED  = 1
 
+# Configuration Files
+GS_ROOT_DIR     = os.environ['GS_ROOT_DIR']
+CFG_PATH        = "cfg/"
+SITE_CFG_FILE   = "SiteConfiguration-1siteAndDemand.json"
+SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
+
 # Site Timeout
 PMC_HEARTBEAT_TIMEOUT = 100 # timeout, in seconds
 PMC_HEARTBEAT_PD      = 10 # expected period, in seconds
@@ -76,14 +83,14 @@ APPLICATION_CONTROL = 2
 EXEC_STARTING = 3
 
 EXECUTIVE_CLKTIME = 2 # period, in seconds, at which the executive polls system state
-GS_SCHEDULE       = 600  # period, in seconds, at which the GS optimizer runs
-ESS_SCHEDULE      = 5
-STATUS_MSG_PD     = 20 # update rate for various status messages
+ENDPT_UPDATE_SCHEDULE  = 1 #
+GS_SCHEDULE       = 60  # GS optimizer period, in executive clock cycles
+ESS_SCHEDULE      = 2 # ess regulation period, in executive clock cycles
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
 START_LATENCY = 0 # time in seconds, to delay execution
 
 #FIXME - Placeholder!
-MODBUS_SCRAPE_INTERVAL = 1 # period in seconds for modbus device to post on the IEB bus
+MODBUS_SCRAPE_INTERVAL  = 3 # period in seconds for modbus device to post on the IEB bus
 MODBUS_AVERAGING_WINDOW = 180 # period in seconds over which to average instantaneous readings
 MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
 CPR_QUERY_INTERVAL = 5 # period in seconds for forecasts to arrive

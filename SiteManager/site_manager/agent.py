@@ -98,9 +98,7 @@ class SiteManagerAgent(Agent):
 
         # set location for data map files.
         # FIXME - shouldn't be hard-coded!!!
-        self.volttron_root = os.getcwd()
-        self.volttron_root = self.volttron_root+"/../../../../"
-        self.data_map_dir = self.volttron_root+"gs_cfg/"
+        self.data_map_dir = GS_ROOT_DIR+CFG_PATH+"DataMap/"
         _log.info("SiteManagerConfig: **********INITIALIIZING SITE MANAGER*******************")
         _log.info("SiteManagerConfig: Agent ID is "+self._agent_id)
         _log.info("SiteManagerConfig: data dir is "+self.data_map_dir)

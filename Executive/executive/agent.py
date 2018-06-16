@@ -47,10 +47,6 @@ from __future__ import absolute_import
 from datetime import datetime, timedelta
 import pytz
 import logging
-import sys
-import os
-import csv
-import json
 from pprint import pprint
 import gevent
 from volttron.platform.messaging.health import STATUS_GOOD
@@ -61,22 +57,22 @@ from volttron.platform.agent.known_identities import (
     VOLTTRON_CENTRAL, VOLTTRON_CENTRAL_PLATFORM, CONTROL, CONFIGURATION_STORE)
 
 from . import settings
+import sys
 import HistorianTools
-
-import DERDevice
 from gs_identities import *
-from gs_utilities import get_schedule, get_gs_time
-
-#utils.setup_logging()
-_log = logging.getLogger("Executive")#__name__)
-__version__ = '1.0'
-
-import DERDevice
+from gs_utilities import *
 import json
 import numpy
 import pandas
 from SunDialResource import SundialSystemResource, SundialResource, SundialResourceProfile, build_SundialResource_to_SiteManager_lookup_table
 from SSA_Optimization import SimulatedAnnealer
+
+
+#utils.setup_logging()
+_log = logging.getLogger("Executive")#__name__)
+__version__ = '1.0'
+
+
 
 default_units = {"setpoint":"kW",
                  "targetPwr_kW": "kW",
@@ -177,26 +173,24 @@ class ExecutiveAgent(Agent):
         # OptimizerEnable - toggles optimizer process on / off
         # UICtrlEnables   - toggles control from the User Interface on / off
         # refer to Executive state machine documentation
-        self.OperatingMode_set = EXEC_STARTING #IDLE
+        self.OperatingMode_set = EXEC_STARTING
         self.OperatingMode     = self.OperatingMode_set
         self.OptimizerEnable   = DISABLED
         self.UICtrlEnable      = DISABLED
 
         # Initialize Configuration Files
         # Set up paths for config files.
-        gs_root_dir = os.environ['GS_ROOT_DIR']
-        cfg_path = "cfg/"
         self.volttron_root = os.getcwd()
         self.volttron_root = self.volttron_root+"/../../../../"
-        SiteCfgFile = self.volttron_root + "gs_cfg/SiteConfiguration.json"
-        SundialCfgFile = self.volttron_root + "gs_cfg/SundialSystemConfiguration.json"
-        #SiteCfgFile        = gs_root_dir+cfg_path+"SiteCfg/SiteConfiguration.json"
-        #SundialCfgFile     = gs_root_dir+cfg_path+"SystemCfg/SundialSystemConfiguration.json"
+
+        SiteCfgFile        = GS_ROOT_DIR+CFG_PATH+"SiteCfg/"+SITE_CFG_FILE
+        SundialCfgFile     = GS_ROOT_DIR+CFG_PATH+"SystemCfg/"+SYSTEM_CFG_FILE
         self.packaged_site_manager_fname = self.volttron_root + "packaged/site_manageragent-1.0-py2-none-any.whl"
         self.SiteCfgList   = json.load(open(SiteCfgFile, 'r'))
         self.sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
         _log.info("SiteConfig is "+SiteCfgFile)
         _log.info("SundialConfig is"+SundialCfgFile)
+
 
         self.optimizer_info = {}
         self.optimizer_info.update({"setpoint": 0.0})
@@ -205,6 +199,10 @@ class ExecutiveAgent(Agent):
         self.optimizer_info.update({"expectedPwr_kW": 0.0})
         self.optimizer_info.update({"netDemand_kW": 0.0})
         self.optimizer_info.update({"netDemandAvg_kW": 0.0})
+
+        self.run_optimizer_cnt     = 0
+        self.send_ess_commands_cnt = 0
+        self.update_endpt_cnt      = 0
 
         self.init_tariffs()
 
@@ -265,10 +263,8 @@ class ExecutiveAgent(Agent):
             uuid = None
             agents = self.vip.rpc.call(CONTROL, "list_agents").get(timeout=5)
             for cur_agent in agents:
-                _log.info("Cur agent is "+cur_agent["identity"]+"; site id is"+site["ID"])
                 if cur_agent["identity"] == site["ID"]:
                     uuid = cur_agent["uuid"]
-                    _log.info("Match found!!")
                     break
             if uuid != None:  # remove existing agent
                 _log.info("removing agent "+site["ID"])
@@ -281,7 +277,7 @@ class ExecutiveAgent(Agent):
                                      "install_agent_local",
                                      self.packaged_site_manager_fname,
                                      vip_identity=site["ID"],secretkey=None,publickey=None).get(timeout=30)
-            _log.info("Agent uuid is:" + uuid) 
+            _log.info("Setup: Installing Agent - uuid is:" + uuid)
             self.vip.rpc.call(CONTROL,
                               "start_agent",
                               uuid).get(timeout=5)
@@ -301,9 +297,9 @@ class ExecutiveAgent(Agent):
             for cur_agent in agents:
                 if cur_agent["uuid"] == uuid:
                     self.sitemgr_list.append(cur_agent)
-                    _log.info("Agent name is: "+cur_agent["name"])
-                    _log.info("Agent dir is: "+str(dir(cur_agent)))
-                    _log.info("Agent id is: "+cur_agent["identity"])
+                    _log.info("Setup: Agent name is: "+cur_agent["name"])
+                    #_log.info("Agent dir is: "+str(dir(cur_agent)))
+                    _log.info("Setup: Agent id is: "+cur_agent["identity"])
                     break
             # TODO - return something from init_site indicating success??
             self.vip.rpc.call(cur_agent["identity"], "init_site", site)
@@ -314,14 +310,14 @@ class ExecutiveAgent(Agent):
         #self.gs_start_time_exact = utils.get_aware_utc_now()
         #self.gs_start_time       = get_schedule(self.gs_start_time_exact)
         self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
-        _log.info("GS Start time is "+str(self.gs_start_time))
+        _log.info("Setup: GS Start time is "+str(self.gs_start_time))
         self.sundial_resources = SundialSystemResource(self.sundial_resource_cfg_list, self.get_gs_start_time())
         self.sdr_to_sm_lookup_table = build_SundialResource_to_SiteManager_lookup_table(self.sundial_resource_cfg_list,
                                                                                         self.sundial_resources,
                                                                                         sitemgr_list=self.sitemgr_list,
                                                                                         use_volttron=1)
         for entries in self.sdr_to_sm_lookup_table:
-            _log.info("SundialResource Init: "+entries.sundial_resource.resource_id + ":" + str(entries.device_list))
+            _log.info("Setup: SundialResource Init: "+entries.sundial_resource.resource_id + ":" + str(entries.device_list))
         self.optimizer = SimulatedAnnealer()
         self.sundial_resources.init_test_values(SSA_PTS_PER_SCHEDULE)
 
@@ -329,7 +325,6 @@ class ExecutiveAgent(Agent):
         # There is an implicit assumption that there is only one SundialResource node per resource type.  (i.e. we are
         # grabbing the 0th element in each list returned by find_resource_type
         # Note - to handle multiple resources groupings of the same type, code will need to be modified
-        _log.info("Finding Nodes")
         self.ess_resources = self.sundial_resources.find_resource_type("ESSCtrlNode")[0]
         self.pv_resources  = self.sundial_resources.find_resource_type("PVCtrlNode")[0]
         self.system_resources = self.sundial_resources.find_resource_type("System")[0]
@@ -362,7 +357,7 @@ class ExecutiveAgent(Agent):
         :return:
         """
         for site in self.sitemgr_list:
-            _log.info("SetPt: sending interactive mode command for "+site["identity"])
+            _log.info("SetPt: Sending interactive mode command for "+site["identity"])
             self.vip.rpc.call(site["identity"], "set_interactive_mode").get(timeout=5)
             # check for success ...
 
@@ -374,7 +369,7 @@ class ExecutiveAgent(Agent):
         :return:
         """
         for site in self.sitemgr_list:
-            _log.info("SetPt: sending auto mode command for "+site["identity"])
+            _log.info("SetPt: Sending auto mode command for "+site["identity"])
             self.vip.rpc.call(site["identity"], "set_auto_mode").get(timeout=5)
 
     ##############################################################################
@@ -384,14 +379,26 @@ class ExecutiveAgent(Agent):
         :return:
         """
         for site in self.sitemgr_list:
-            _log.info("Checking status for site "+site["identity"])
+            _log.info("Updating status for site "+site["identity"])
             site_status = self.vip.rpc.call(site["identity"], "update_site_status").get() #timeout=10)
-            #for k,v in site_errors.items():
+            #for k,v in site_status: #site_errors.items():
+            #    _log.info("SiteStatus: ")
             #    if k=="Mode":
             #        pass
             #    elif site_errors[k] != 1:
             #        #self.OperatingMode_set = IDLE
             #        _log.info("ExecutiveStatus: Warning: Error detected - " +k+".  Transition to IDLE Mode")
+
+
+        #self.SiteStatus.update({"ReadStatus": self.site.read_status})
+        #self.SiteStatus.update({"WriteError": WriteError})
+        #self.SiteStatus.update({"DeviceStatus": self.site.device_status})
+        #self.SiteStatus.update({"CmdError": CmdError})
+        #self.SiteStatus.update({"CommStatus": self.site.comms_status})
+        #self.SiteStatus.update({"CtrlMode": self.site.control_mode})
+        #self.SiteStatus.update({"DataAvailable": self.site.isDataValid})
+        #self.SiteStatus.update({"CtrlAvailable": self.site.isControlAvailable})
+
 
 
     ##############################################################################
@@ -441,6 +448,26 @@ class ExecutiveAgent(Agent):
 
 
     ##############################################################################
+    def chk_site_errors(self, dev_state_var, devices):
+        """
+        place holder routine for managing errors in data collection
+        :return:
+        """
+        err_msg = ""
+        err_keys = ["ReadStatus",
+                    "DeviceStatus",
+                    "CommStatus",
+                    "WriteStatus"]
+
+        for err_type in err_keys:
+            if dev_state_var[err_type] == 0:
+                err_msg += err_type + " Error; "
+        if err_msg != "":
+            _log.info(devices["AgentID"] + "-" + devices["DeviceID"] + ": " + err_msg)
+        else:
+            _log.info(devices["AgentID"] + "-" + devices["DeviceID"] + ": No Errors Found")
+
+    ##############################################################################
     def update_sundial_resources(self, sdr_to_sm_lookup_table):
         """
         This method updates the sundial resource data structure with the most recvent data from SiteManager
@@ -455,10 +482,6 @@ class ExecutiveAgent(Agent):
             # the resource tree)
 
             for devices in entries.device_list: # for each device associated with that SundialResource
-
-                # TODO: Right here is where we would check the health status, availability, etc of end point devices
-                # TODO: to see if we should include within the next optimization pass
-
                 for k in entries.sundial_resource.update_list_end_pts:
                     # now map data end points from devices to SundialResources
                     _log.debug("UpdateSDR: "+entries.sundial_resource.resource_id+": SM Device ="+devices["DeviceID"]+"; k="+str(k)+"; agent="+str(devices["AgentID"]))
@@ -467,8 +490,7 @@ class ExecutiveAgent(Agent):
                             dev_state_var = self.vip.rpc.call(str(devices["AgentID"]),
                                                               "get_device_state_vars",
                                                               devices["DeviceID"]).get(timeout=5)
-                            _log.info(str(k)+": "+str(dev_state_var[k]))
-
+                            _log.info(devices["AgentID"]+"-"+devices["DeviceID"]+" - "+str(k) + ": " + str(dev_state_var[k]))
                             entries.sundial_resource.state_vars[k] = dev_state_var[k]
 
                         except KeyError:
@@ -577,7 +599,7 @@ class ExecutiveAgent(Agent):
         return tiers
 
     ##############################################################################
-    @Core.periodic(ESS_SCHEDULE)
+    #@Core.periodic(ESS_SCHEDULE)
     def send_ess_commands(self):
         """
         Called periodically by executive.  This (1) updates sundial_resources data with latest data from end point
@@ -587,10 +609,6 @@ class ExecutiveAgent(Agent):
         """
 
         if self.OptimizerEnable == ENABLED:
-
-            # update sundial_resources instance with the most recent data from end-point devices
-            self.update_sundial_resources(self.sdr_to_sm_lookup_table)
-
             # Now we need to determine the target battery set point.  To do so, look at the total current system
             # power output, subtracting the contribution from the battery.  The delta between total current system
             # output and the schedule output determines the target ESS set point.
@@ -598,6 +616,8 @@ class ExecutiveAgent(Agent):
             #
             # retrieve the current power output of the system, not including energy storage.
             # taking a shortcut here - implicit assumption that there is a single pool of ESS
+            #self.update_sundial_resources(self.sdr_to_sm_lookup_table)
+
             curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
             netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
             netDemandAvg_kW = self.system_resources.state_vars["AvgPwr_kW"]
@@ -618,20 +638,6 @@ class ExecutiveAgent(Agent):
 
             targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ii]
             expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][ii]
-
-            for obj_fcn in self.system_resources.obj_fcns:
-                try:
-                    HistorianTools.publish_data(self,
-                                                "System/Cost",
-                                                "",
-                                                obj_fcn.desc,
-                                                self.system_resources.schedule_vars[obj_fcn.desc][ii])
-                except:
-                    HistorianTools.publish_data(self,
-                                                "System/Cost",
-                                                "",
-                                                obj_fcn.desc,
-                                                self.system_resources.schedule_vars[obj_fcn.desc])
 
             _log.info("Expected power is " + str(expectedPwr_kW))
             _log.info("Target power is " + str(targetPwr_kW))
@@ -678,7 +684,6 @@ class ExecutiveAgent(Agent):
                             # Right now configured with only one ESS - has not been tested this iteration with more
                             # than one ESS end point in this iteration
                             if (setpoint > 0):  # charging
-                                # todo - check for div by zero
                                 pro_rata_share = float(device_state_vars["SOE_kWh"]+0.001) / (float(SOE_kWh)+0.001) * float(setpoint)
                                 #todo - need to check for min SOE - implication of the above is that min = 0
                             else: # discharging
@@ -698,7 +703,7 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["expectedPwr_kW"] = expectedPwr_kW
             self.optimizer_info["netDemand_kW"]   = netDemand_kW
             self.optimizer_info["netDemandAvg_kW"] = netDemandAvg_kW
-            self.print_status_msg()
+            self.publish_ess_cmds(ii)
 
     ##############################################################################
     def generate_schedule_timestamps(self, sim_time_corr = timedelta(seconds=0)):
@@ -712,10 +717,6 @@ class ExecutiveAgent(Agent):
         schedule_start_time = get_gs_time(self.gs_start_time,
                                           sim_time_corr).replace(second = 0, microsecond=0)
 
-        #schedule_start_time = datetime.strptime(get_schedule(self.gs_start_time,
-        #                                                     sim_time_corr=sim_time_corr),
-        #                                        "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=pytz.UTC)
-
         # generate the list of timestamps that will comprise the next forecast:
         schedule_timestamps = [schedule_start_time +
                                timedelta(minutes=t) for t in range(0,
@@ -724,7 +725,7 @@ class ExecutiveAgent(Agent):
         return schedule_timestamps
 
     ##############################################################################
-    @Core.periodic(GS_SCHEDULE)
+    #@Core.periodic(GS_SCHEDULE)
     def run_optimizer(self):
         """
         runs optimizer on specified schedule
@@ -735,8 +736,6 @@ class ExecutiveAgent(Agent):
         if self.OptimizerEnable == ENABLED:
             # check to make sure that resources have been updated
             # if they have not - ... - request an update and go into a waiting state.
-
-
 
             try:
                 sim_time_corr = timedelta(seconds = self.vip.rpc.call("forecast_simagent-0.1_1",
@@ -761,66 +760,74 @@ class ExecutiveAgent(Agent):
             #_log.info(json.dumps(tiers))
             #self.optimizer.run_ssa_optimization(self.sundial_resources, schedule_timestamps) # SSA optimization
             self.optimizer.search_single_option(self.sundial_resources, schedule_timestamps)  # SSA optimization
-
-            HistorianTools.publish_data(self,
-                                        "SystemResource/Schedule",
-                                        default_units["DemandForecast_kW"],
-                                        "DemandForecast_kW",
-                                        self.system_resources.schedule_vars["DemandForecast_kW"].tolist())
-            HistorianTools.publish_data(self,
-                                        "SystemResource/Schedule",
-                                        default_units["timestamp"],
-                                        "timestamp",
-                                        [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.system_resources.schedule_vars["timestamp"]])
-            HistorianTools.publish_data(self,
-                                        "SystemResource/Schedule",
-                                        default_units["total_cost"],
-                                        "total_cost",
-                                        self.system_resources.schedule_vars["total_cost"])
-            HistorianTools.publish_data(self,
-                                        "ESSResource/Schedule",
-                                        default_units["DemandForecast_kW"],
-                                        "DemandForecast_kW",
-                                        self.ess_resources.schedule_vars["DemandForecast_kW"].tolist())
-            HistorianTools.publish_data(self,
-                                        "ESSResource/Schedule",
-                                        default_units["EnergyAvailableForecast_kWh"],
-                                        "EnergyAvailableForecast_kWh",
-                                        self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"].tolist())
-            HistorianTools.publish_data(self,
-                                        "ESSResource/Schedule",
-                                        default_units["timestamp"],
-                                        "timestamp",
-                                        [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.ess_resources.schedule_vars["timestamp"]])
-            HistorianTools.publish_data(self,
-                                        "PVResource/Schedule",
-                                        default_units["DemandForecast_kW"],
-                                        "DemandForecast_kW",
-                                        self.pv_resources.schedule_vars["DemandForecast_kW"].tolist())
-            HistorianTools.publish_data(self,
-                                        "PVResource/Schedule",
-                                        default_units["timestamp"],
-                                        "timestamp",
-                                        [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.pv_resources.schedule_vars["timestamp"]])
-            try:
-                HistorianTools.publish_data(self,
-                                            "LoadResource/Schedule",
-                                            default_units["DemandForecast_kW"],
-                                            "DemandForecast_kW",
-                                            self.load_resources.schedule_vars["DemandForecast_kW"].tolist())
-                HistorianTools.publish_data(self,
-                                            "LoadResource/Schedule",
-                                            default_units["timestamp"],
-                                            "timestamp",
-                                            [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.load_resources.schedule_vars["timestamp"]])
-            except:    # assume demand module is not implemented
-                pass
+            self.publish_schedules()
 
             self.send_ess_commands()
 
     ##############################################################################
-    #@Core.periodic(STATUS_MSG_PD)
-    def print_status_msg(self):
+    def publish_schedules(self):
+        """
+        publishes schedule data to the database
+        :return: None
+        """
+        HistorianTools.publish_data(self,
+                                    "SystemResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_kW",
+                                    self.system_resources.schedule_vars["DemandForecast_kW"].tolist())
+        HistorianTools.publish_data(self,
+                                    "SystemResource/Schedule",
+                                    default_units["timestamp"],
+                                    "timestamp",
+                                    [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.system_resources.schedule_vars["timestamp"]])
+        HistorianTools.publish_data(self,
+                                    "SystemResource/Schedule",
+                                    default_units["total_cost"],
+                                    "total_cost",
+                                    self.system_resources.schedule_vars["total_cost"])
+        HistorianTools.publish_data(self,
+                                    "ESSResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_kW",
+                                    self.ess_resources.schedule_vars["DemandForecast_kW"].tolist())
+        HistorianTools.publish_data(self,
+                                    "ESSResource/Schedule",
+                                    default_units["EnergyAvailableForecast_kWh"],
+                                    "EnergyAvailableForecast_kWh",
+                                    self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"].tolist())
+        HistorianTools.publish_data(self,
+                                    "ESSResource/Schedule",
+                                    default_units["timestamp"],
+                                    "timestamp",
+                                    [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.ess_resources.schedule_vars["timestamp"]])
+        HistorianTools.publish_data(self,
+                                    "PVResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_kW",
+                                    self.pv_resources.schedule_vars["DemandForecast_kW"].tolist())
+        HistorianTools.publish_data(self,
+                                    "PVResource/Schedule",
+                                    default_units["timestamp"],
+                                    "timestamp",
+                                    [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.pv_resources.schedule_vars["timestamp"]])
+        try:
+            HistorianTools.publish_data(self,
+                                        "LoadResource/Schedule",
+                                        default_units["DemandForecast_kW"],
+                                        "DemandForecast_kW",
+                                        self.load_resources.schedule_vars["DemandForecast_kW"].tolist())
+            HistorianTools.publish_data(self,
+                                        "LoadResource/Schedule",
+                                        default_units["timestamp"],
+                                        "timestamp",
+                                        [t.strftime("%Y-%m-%dT%H:%M:%S") for t in
+                                         self.load_resources.schedule_vars["timestamp"]])
+        except:  # assume demand module is not implemented
+            pass
+
+
+    ##############################################################################
+    def publish_ess_cmds(self, ii):
         """
         prints status to log file and to database
         :return:
@@ -837,7 +844,22 @@ class ExecutiveAgent(Agent):
                                         k, 
                                         v)
 
-    ##############################################################################
+        for obj_fcn in self.system_resources.obj_fcns:
+            try:
+                HistorianTools.publish_data(self,
+                                            "System/Cost",
+                                            "",
+                                            obj_fcn.desc,
+                                            self.system_resources.schedule_vars[obj_fcn.desc][ii])
+            except:
+                HistorianTools.publish_data(self,
+                                            "System/Cost",
+                                            "",
+                                            obj_fcn.desc,
+                                            self.system_resources.schedule_vars[obj_fcn.desc])
+
+
+##############################################################################
     @Core.periodic(EXECUTIVE_CLKTIME)
     def run_executive(self):
         """
@@ -850,6 +872,28 @@ class ExecutiveAgent(Agent):
         # Wait until initialization has completed before checking on sites
         if self.OperatingMode != EXEC_STARTING:
             self.check_site_statuses()
+
+            if ((self.update_endpt_cnt == ENDPT_UPDATE_SCHEDULE) or
+                    (self.run_optimizer_cnt == GS_SCHEDULE) or
+                    (self.send_ess_commands_cnt == ESS_SCHEDULE)):
+                self.update_endpt_cnt = 0
+                # update sundial_resources instance with the most recent data from end-point devices
+                self.update_sundial_resources(self.sdr_to_sm_lookup_table)
+            else:
+                self.update_endpt_cnt += 1
+
+            if self.send_ess_commands_cnt == ESS_SCHEDULE:
+                self.send_ess_commands_cnt = 0
+                self.send_ess_commands()
+            else:
+                self.send_ess_commands_cnt += 1
+
+            if self.run_optimizer_cnt == GS_SCHEDULE:
+                self.run_optimizer_cnt = 0
+                self.run_optimizer()
+            else:
+                self.run_optimizer_cnt += 1
+
 
         if self.OperatingMode_set != self.OperatingMode:
             # indicates that a mode change has been requested
@@ -875,11 +919,6 @@ class ExecutiveAgent(Agent):
                 self.UICtrlEnable = DISABLED
                 self.update_sundial_resources(self.sdr_to_sm_lookup_table)
                 self.run_optimizer()
-                # instantiate and build a new sundial resource manager when we switch to app ctrl mode
-
-                # (re)start optimizer - would call "build_sundial"
-                # instead, this can just be implied by checking op mode in the scheduled 'optimizer'
-                # routine
             elif self.OperatingMode == USER_CONTROL:
                 # change sites to interactive mode
                 self.enable_site_interactive_mode()
@@ -895,13 +934,10 @@ class ExecutiveAgent(Agent):
         """
         This method writes an end point to a specified DER Device path
         """
-        #fname = "/home/matt/sundial/Executive/cmdfile.txt"
         mode_val = args[0]
-        self.OperatingMode_set = int(mode_val) #self.OperatingModes[self.OperatingModeInd]
+        self.OperatingMode_set = int(mode_val)
 
-        #with open(fname, 'a') as datafile:
-        #    datafile.write(str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
-        _log.info("SetPt: wrote: "+str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
+        _log.info("SetPt: "+str(mode_val)+ " "+self.OperatingModes[self.OperatingMode_set]+"\n")
 
     ##############################################################################
     @Core.receiver('onstop')
@@ -914,7 +950,6 @@ class ExecutiveAgent(Agent):
         """
         for site in self.sitemgr_list:
             self.vip.rpc.call(CONTROL, "remove_agent", site["uuid"]).get(timeout=5)
-        pass
 
 
 
