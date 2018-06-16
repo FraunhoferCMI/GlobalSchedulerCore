@@ -515,9 +515,16 @@ class SundialResource():
 
 
         if self.state_vars["DemandForecast_t"] != None:
-            time_elapsed = float((schedule_timestamps[0] -
-                                  datetime.strptime(self.state_vars["DemandForecast_t"][0],
-                                                    "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)).total_seconds())   # seconds since the first forecast ts
+
+            #FIXME - temporary!!! need to fix types of demand forecast
+            try:
+                time_elapsed = float((schedule_timestamps[0] -
+                                      datetime.strptime(self.state_vars["DemandForecast_t"][0],
+                                                        "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)).total_seconds())   # seconds since the first forecast ts
+            except TypeError:
+                time_elapsed = float((schedule_timestamps[0] -
+                                      self.state_vars["DemandForecast_t"][0]).total_seconds())   # seconds since the first forecast ts
+
             _log.debug("time elapsed = "+str(time_elapsed))
             scale_factor = time_elapsed / float(SSA_SCHEDULE_RESOLUTION*SEC_PER_MIN)
             _log.debug("scale factor= "+str(scale_factor))
