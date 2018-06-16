@@ -96,7 +96,9 @@ class ObjectiveFunction():
         #    numpy.abs(
         #        numpy.array([pandas.Timestamp(t).replace(tzinfo=pytz.UTC).to_pydatetime() for t in self.obj_fcn_data.index]) -
         #        (ts.replace(minute=0, second=0, microsecond=0) + sim_offset))) for ts in schedule_timestamps]
+        pandas.options.display.float_format = '{:,.2f}'.format
         print(cur_data)
+
         return numpy.array(cur_data.transpose())
         #numpy.array(self.obj_fcn_data.iloc[indices].transpose())  #obj_fcn_data.loc[offset_ts].interpolate(method='linear')
 
