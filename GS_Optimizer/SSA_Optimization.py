@@ -609,14 +609,14 @@ if __name__ == '__main__':
                                  pk_capacity = 1000.0,
                                  t=forecast_timestamps)
 
-    #try:
-    ls = pandas.read_excel("loadshift_example.xlsx", header=None)
-    print(ls)
-    load_shift_options = [ls[ii].tolist() for ii in range(0,13)]
-    loadshift_resources.load_scenario(load_options=load_shift_options,
-                                      t=forecast_timestamps)
-    #except:
-    #    pass
+    try:
+        ls = pandas.read_excel("loadshift_example.xlsx", header=None)
+        print(ls)
+        load_shift_options = [ls[ii].tolist() for ii in range(0,13)]
+        loadshift_resources.load_scenario(load_options=load_shift_options,
+                                          t=forecast_timestamps)
+    except:
+        pass
     system_resources.load_scenario()
 
 
@@ -628,25 +628,27 @@ if __name__ == '__main__':
     ##### This section replicates the periodic call of the optimizer ######
     # calls the actual optimizer.
     toffset = 0
-    schedule_timestamps = [gs_start_time.replace(tzinfo=pytz.UTC) +
-                           timedelta(minutes=t+toffset) for t in range(0,
-                                                               SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
-                                                               SSA_SCHEDULE_RESOLUTION)]
-    optimizer = SimulatedAnnealer()
+    nIterations = 2
+    for ii in range(0,nIterations):
+        schedule_timestamps = [gs_start_time.replace(tzinfo=pytz.UTC) +
+                               timedelta(minutes=t+toffset) for t in range(0,
+                                                                   SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                                   SSA_SCHEDULE_RESOLUTION)]
+        optimizer = SimulatedAnnealer()
 
-    #for ii in range(0,13):
-    #    loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii]
-    #    ess_resources.state_vars["DemandForecast_t"] = forecast_timestamps
-    #    pv_resources.state_vars["DemandForecast_t"] = forecast_timestamps
-    #    system_resources.state_vars["DemandForecast_t"] = forecast_timestamps
-    #    load_resources.state_vars["DemandForecast_t"] = forecast_timestamps
-    #    loadshift_resources.state_vars["DemandForecast_t"] = forecast_timestamps
+        #for ii in range(0,13):
+        #    loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii]
+        #    ess_resources.state_vars["DemandForecast_t"] = forecast_timestamps
+        #    pv_resources.state_vars["DemandForecast_t"] = forecast_timestamps
+        #    system_resources.state_vars["DemandForecast_t"] = forecast_timestamps
+        #    load_resources.state_vars["DemandForecast_t"] = forecast_timestamps
+        #    loadshift_resources.state_vars["DemandForecast_t"] = forecast_timestamps
 
-    #    sundial_resources.interpolate_forecast(schedule_timestamps)
-    #    optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps, tariffs)
-    sundial_resources.interpolate_forecast(schedule_timestamps)
-    sundial_resources.cfg_cost(schedule_timestamps, tariffs)
-    #optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
-    optimizer.search_single_option(sundial_resources, schedule_timestamps)
-    #optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps)
-
+        #    sundial_resources.interpolate_forecast(schedule_timestamps)
+        #    optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps, tariffs)
+        sundial_resources.interpolate_forecast(schedule_timestamps)
+        sundial_resources.cfg_cost(schedule_timestamps, tariffs)
+        #optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
+        optimizer.search_single_option(sundial_resources, schedule_timestamps)
+        #optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps)
+        toffset += 10
