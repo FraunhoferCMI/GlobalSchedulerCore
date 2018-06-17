@@ -256,8 +256,8 @@ class SundialResource():
             self.sim_offset = SIM_START_TIME - datetime.strptime(gs_start_time,"%Y-%m-%dT%H:%M:%S")
 
         self.pts_per_schedule = SSA_PTS_PER_SCHEDULE
-        self.init_state_vars()
-        self.init_schedule_vars()
+        self.state_vars    = self.init_state_vars()
+        self.schedule_vars = self.init_schedule_vars()
 
         # instantiate children based on resource_cfg instructions
         self.virtual_plants   = []
@@ -319,18 +319,19 @@ class SundialResource():
         intializes the state_vars data structure
         :return: None
         """
-        self.state_vars = {"MaxSOE_kWh": 0.0,
-                           "MinSOE_kWh": 0.0,
-                           "SOE_kWh": 0.0,
-                           "Pwr_kW": 0.0,
-                           "AvgPwr_kW": 0.0,
-                           "Nameplate": 0.0,  # placeholder to avoid div by zero
-                           "DemandForecast_kW": numpy.array([0.0] * self.pts_per_schedule),
-                           "DemandForecast_t": [str_t.strftime("%Y-%m-%dT%H:%M:%S") for str_t in [datetime.strptime(self.gs_start_time,"%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC) +
-                                                timedelta(minutes=t) for t in range(0,
-                                                                                    SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
-                                                                                    SSA_SCHEDULE_RESOLUTION)]],
-                           "EnergyAvailableForecast_kWh": numpy.array([0.0] * self.pts_per_schedule)}
+        state_vars = {"MaxSOE_kWh": 0.0,
+                      "MinSOE_kWh": 0.0,
+                      "SOE_kWh": 0.0,
+                      "Pwr_kW": 0.0,
+                      "AvgPwr_kW": 0.0,
+                      "Nameplate": 0.0,  # placeholder to avoid div by zero
+                      "DemandForecast_kW": numpy.array([0.0] * self.pts_per_schedule),
+                      "DemandForecast_t": [str_t.strftime("%Y-%m-%dT%H:%M:%S") for str_t in [datetime.strptime(self.gs_start_time,"%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC) +
+                                                                                             timedelta(minutes=t) for t in range(0,
+                                                                                                                                 SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                                                                                                 SSA_SCHEDULE_RESOLUTION)]],
+                      "EnergyAvailableForecast_kWh": numpy.array([0.0] * self.pts_per_schedule)}
+        return state_vars
 
     ##############################################################################
     def init_schedule_vars(self):
@@ -338,14 +339,15 @@ class SundialResource():
         initializes the schedule_vars data structure
         :return:
         """
-        self.schedule_vars = {"DemandForecast_kW": numpy.array([0.0] * self.pts_per_schedule),
-                              "EnergyAvailableForecast_kWh": numpy.array([0.0] * self.pts_per_schedule),
-                              "DeltaEnergy_kWh": numpy.array([0.0] * self.pts_per_schedule),
-                              "timestamp": [datetime.strptime(self.gs_start_time,"%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC) +
-                                            timedelta(minutes=t) for t in range(0,
-                                                                                SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
-                                                                                SSA_SCHEDULE_RESOLUTION)],
-                              "total_cost": 0.0}
+        schedule_vars = {"DemandForecast_kW": numpy.array([0.0] * self.pts_per_schedule),
+                         "EnergyAvailableForecast_kWh": numpy.array([0.0] * self.pts_per_schedule),
+                         "DeltaEnergy_kWh": numpy.array([0.0] * self.pts_per_schedule),
+                         "timestamp": [datetime.strptime(self.gs_start_time,"%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC) +
+                                       timedelta(minutes=t) for t in range(0,
+                                                                           SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                                           SSA_SCHEDULE_RESOLUTION)],
+                         "total_cost": 0.0}
+        return schedule_vars
 
 
     ##############################################################################
@@ -370,7 +372,7 @@ class SundialResource():
 
         if self.virtual_plants != []: # not a terminal node
             # initialize all state_vars
-            self.init_state_vars()
+            self.state_vars = self.init_state_vars()
 
             for virtual_plant in self.virtual_plants:
                 # retrieve data from child nodes and sum
@@ -544,28 +546,6 @@ class SundialResource():
 
 
     ############################
-    def init_test_values(self, length):
-        """
-        Used to populate with some known values for testing.
-        This (1) intializes data structures, setting to zero; (2) recursively calls the init_test_values routine in
-        children nodes; and then (3) sums data initialized from children into the parent node
-        :param length: length of a schedule
-        :return: None
-        """
-        self.init_state_vars()
-        self.init_schedule_vars()
-        for virtual_plant in self.virtual_plants:
-            # propagate values from child nodes upwards
-            virtual_plant.init_test_values(length)
-            for k,v in self.state_vars.items():
-                try:
-                    if virtual_plant.state_vars[k] != None:
-                        self.state_vars[k] += virtual_plant.state_vars[k]
-                except:
-                    pass
-
-
-    ############################
     def calc_cost(self, profile_state_vars, linear_approx = False):
         """
         Loops through each of the SundialResource's objective functions, calculates cost for the given profile
@@ -625,11 +605,12 @@ class ESSResource(SundialResource):
         """
         # FIXME - Note placeholder / hard-coded efficiency values
 
-        SundialResource.init_state_vars(self)
-        self.state_vars.update({"ChgEff": 0.95,
-                                "DischgEff": 0.95,
-                                "MaxChargePwr_kW": 0.0,
-                                "MaxDischargePwr_kW": 0.0})
+        state_vars = SundialResource.init_state_vars(self)
+        state_vars.update({"ChgEff": 0.95,
+                           "DischgEff": 0.95,
+                           "MaxChargePwr_kW": 0.0,
+                           "MaxDischargePwr_kW": 0.0})
+        return state_vars
 
 
     ##############################################################################
@@ -650,31 +631,6 @@ class ESSResource(SundialResource):
         #print("Resource "+self.resource_id)
         #for k, v in self.state_vars.items():
         #    print(k+": "+str(v))
-
-    ##############################################################################
-    def init_test_values(self, length):
-        """
-        Used to populate with ESSResource with ESS-specific values for testing.
-        :param length: length of a schedule
-        """
-
-        SundialResource.init_test_values(self,length)
-
-        self.state_vars["MaxSOE_kWh"] = 1000.0
-        self.state_vars["MinSOE_kWh"] = 0.0
-        self.state_vars["SOE_kWh"]    = 500.0
-        self.state_vars["EnergyAvailableForecast_kWh"] = numpy.array([self.state_vars["SOE_kWh"]]*length)
-        self.state_vars["ChgEff"]    = 0.95
-        self.state_vars["DischgEff"] = 0.95
-        self.state_vars["MaxChargePwr_kW"]    = 500.0
-        self.state_vars["MaxDischargePwr_kW"] = 500.0
-
-        self.state_vars["Nameplate"]          = 500.0
-
-        _log.info("Resource "+self.resource_id)
-        for k, v in self.state_vars.items():
-            _log.info(k+": "+str(v))
-
 
     ##############################################################################
     def update_soe(self, pwr_request, current_soe):
@@ -830,28 +786,6 @@ class PVResource(SundialResource):
     Inherits from SundialResource.  Defines objective functions, state_vars, etc specific to PVCtrlNodes
     """
 
-    ##############################################################################
-    def init_test_values(self, length):
-        """
-        Populates with a known solar forecast for testing, and initializes solar nameplate rating.
-        :param length: length of forecast object
-        :return: None
-        """
-        SundialResource.init_test_values(self, length)
-        self.state_vars["DemandForecast_kW"] += [0.0, 0.0, 0.0, 0.0,
-                                                 0.0, -5.769, -93.4666, -316.934,
-                                                 -544.388, -716.663, -822.318, -888.916,
-                                                 -898.478, -839.905, -706.972, -512.013,
-                                                 -265.994, -74.6933, -2.0346, 0.0,
-                                                 0.0, 0.0, 0.0, 0.0]
-        self.state_vars["Nameplate"] += 1000.0
-        #self.state_vars["DemandForecast_t"] = None
-
-        _log.info("Resource "+self.resource_id)
-        for k, v in self.state_vars.items():
-            _log.info(k+": "+str(v))
-
-
 ##############################################################################
 class LoadShiftResource(SundialResource):
     """
@@ -867,18 +801,6 @@ class LoadShiftResource(SundialResource):
                                          "LoadShiftOptions_t"])
 
     ##############################################################################
-    def init_test_values(self, length):
-        """
-        Populates with a known load shift forecast for testing, and initializes nameplate - which does not have much
-        physical meaning in this context.
-        :param length: length of forecast
-        :return: None
-        """
-        SundialResource.init_test_values(self, length)
-        self.state_vars["Nameplate"] += 0.0
-
-
-    ##############################################################################
     def init_state_vars(self):
         """
         intializes the state_vars data structure
@@ -886,12 +808,13 @@ class LoadShiftResource(SundialResource):
         :return: None
         """
         # FIXME - Note placeholder / hard-coded efficiency values
-        SundialResource.init_state_vars(self)
-        self.state_vars.update({"LoadShiftOptions_kW": numpy.array([[0.0] * self.pts_per_schedule]*10),
-                                "LoadShiftOptions_t": [datetime.strptime(self.gs_start_time,"%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC) +
-                                                       timedelta(minutes=t) for t in range(0,
-                                                                                           SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
-                                                                                           SSA_SCHEDULE_RESOLUTION)]})
+        state_vars = SundialResource.init_state_vars(self)
+        state_vars.update({"LoadShiftOptions_kW": numpy.array([[0.0] * self.pts_per_schedule]*10),
+                           "LoadShiftOptions_t": [datetime.strptime(self.gs_start_time,"%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC) +
+                                                  timedelta(minutes=t) for t in range(0,
+                                                                                      SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                                                      SSA_SCHEDULE_RESOLUTION)]})
+        return state_vars
 
     ##############################################################################
     def load_scenario(self,
@@ -907,34 +830,6 @@ class BaselineLoadResource(SundialResource):
     """
     Inherits from SundialResource.  Defines objective functions, state_vars, etc specific to Load resource_types
     """
-
-    ##############################################################################
-    def init_test_values(self, length):
-        """
-        Populates with a known demand forecast for testing, and initializes peak capacity.
-        :param length: length of forecast
-        :return: None
-        """
-        SundialResource.init_test_values(self, length)
-
-        #self.state_vars["DemandForecast_kW"] += #[142.4973, 142.4973, 142.4973, 145.9894,
-                                                #             160.094, 289.5996, 339.7752, 572.17,
-                                                #             658.6025, 647.2883, 650.1958, 639.7053,
-                                                #             658.044, 661.158, 660.3772, 673.1098,
-                                                #             640.9227, 523.3306, 542.7008, 499.3727,
-                                                #             357.9398, 160.0936, 145.9894, 142.4973]
-
-        self.state_vars["DemandForecast_kW"] += [0.0]*24 #[250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
-                                                # 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250]
-        #self.state_vars["DemandForecast_t"]   = None
-
-        self.state_vars["Nameplate"] += 1000.0
-
-        _log.info("Resource "+self.resource_id)
-        for k, v in self.state_vars.items():
-            _log.info(k+": "+str(v))
-
-
 
 ##############################################################################
 class SundialSystemResource(SundialResource):
@@ -988,13 +883,6 @@ class SundialSystemResource(SundialResource):
                         self.state_vars[k] = virtual_plant.state_vars[k]  # fixme - tmp fix, assumes all forecasts are aligned
                 else:
                     self.state_vars[k] += virtual_plant.state_vars[k]
-
-    ##############################################################################
-    def init_test_values(self, length):
-        SundialResource.init_test_values(self, length)
-        _log.info("Resource "+self.resource_id)
-        for k, v in self.state_vars.items():
-            _log.info(k+": "+str(v))
 
 ##############################################################################
 class SundialResource_to_SiteManager_lookup_table():

@@ -319,7 +319,6 @@ class ExecutiveAgent(Agent):
         for entries in self.sdr_to_sm_lookup_table:
             _log.info("Setup: SundialResource Init: "+entries.sundial_resource.resource_id + ":" + str(entries.device_list))
         self.optimizer = SimulatedAnnealer()
-        self.sundial_resources.init_test_values(SSA_PTS_PER_SCHEDULE)
 
         ### This section retrieves direct references to specific resource types (avoids the need to traverse tree)
         # There is an implicit assumption that there is only one SundialResource node per resource type.  (i.e. we are
