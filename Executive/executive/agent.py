@@ -467,7 +467,7 @@ class ExecutiveAgent(Agent):
             _log.info(devices["AgentID"] + "-" + devices["DeviceID"] + ": No Errors Found")
 
     ##############################################################################
-    def update_sundial_resources(self, sdr_to_sm_lookup_table):
+    def update_sundial_resources(self, sdr_to_sm_lookup_table, update_forecasts = False):
         """
         This method updates the sundial resource data structure with the most recvent data from SiteManager
         agents.
@@ -481,7 +481,12 @@ class ExecutiveAgent(Agent):
             # the resource tree)
 
             for devices in entries.device_list: # for each device associated with that SundialResource
-                for k in entries.sundial_resource.update_list_end_pts:
+                if update_forecasts == False:
+                    update_list = entries.sundial_resource.end_pt_update_list
+                else:
+                    update_list = entries.sundial_resource.forecast_update_list
+
+                for k in update_list:
                     # now map data end points from devices to SundialResources
                     _log.debug("UpdateSDR: "+entries.sundial_resource.resource_id+": SM Device ="+devices["DeviceID"]+"; k="+str(k)+"; agent="+str(devices["AgentID"]))
                     if devices["isAvailable"] == 1:
@@ -494,9 +499,10 @@ class ExecutiveAgent(Agent):
 
                         except KeyError:
                             _log.debug("Key not found!!")
-        self.sundial_resources.update_sundial_resource() # propagates new data to non-terminal nodes
-        self.update_tariffs()
 
+        if update_forecasts == False:
+            self.sundial_resources.update_sundial_resource()  # propagates new data to non-terminal nodes
+            self.update_tariffs()
 
     ##############################################################################
     def calc_cost(self, sundial_resource):
@@ -615,8 +621,6 @@ class ExecutiveAgent(Agent):
             #
             # retrieve the current power output of the system, not including energy storage.
             # taking a shortcut here - implicit assumption that there is a single pool of ESS
-            #self.update_sundial_resources(self.sdr_to_sm_lookup_table)
-
             curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
             netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
             netDemandAvg_kW = self.system_resources.state_vars["AvgPwr_kW"]
@@ -712,7 +716,6 @@ class ExecutiveAgent(Agent):
         :return: schedule_timestamps - a list of datetimes, starting at the next schedule start, time step
         equal to SSA_SCHEDULE_RESOLUTION, and continuing until SSA_SCHEDULE_DURATION
         """
-        MINUTES_PER_HR = 60
         schedule_start_time = get_gs_time(self.gs_start_time,
                                           sim_time_corr).replace(second = 0, microsecond=0)
 
@@ -753,14 +756,28 @@ class ExecutiveAgent(Agent):
                 _log.info("Forecast Sim RPC failed!")
                 schedule_timestamps = self.generate_schedule_timestamps()
 
+            ## update forecast information and interopolate from native forecast time to optimizer time
+            ## (so that all forecasts are defined from t = now)
+            self.update_sundial_resources(self.sdr_to_sm_lookup_table,
+                                          update_forecasts=True)
             self.sundial_resources.interpolate_forecast(schedule_timestamps)
-            self.sundial_resources.cfg_cost(schedule_timestamps, self.tariffs) # queue up time-differentiated cost data
+
+            ## queue up time-differentiated cost data
+            self.sundial_resources.cfg_cost(schedule_timestamps,
+                                            self.tariffs)
+
+            ## generate a cost map - for testing
             #tiers = self.generate_cost_map()
             #_log.info(json.dumps(tiers))
-            #self.optimizer.run_ssa_optimization(self.sundial_resources, schedule_timestamps) # SSA optimization
-            self.optimizer.search_single_option(self.sundial_resources, schedule_timestamps)  # SSA optimization
-            self.publish_schedules()
 
+            if SEARCH_LOADSHIFT_OPTIONS == True:
+                self.optimizer.search_load_shift_options(self.sundial_resources,
+                                                         self.loadshift_resources,
+                                                         schedule_timestamps) # SSA optimization - search load shift space
+            else:
+                self.optimizer.search_single_option(self.sundial_resources,
+                                                    schedule_timestamps)  # SSA optimization - single pass
+            self.publish_schedules()
             self.send_ess_commands()
 
     ##############################################################################

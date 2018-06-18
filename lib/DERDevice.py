@@ -79,10 +79,10 @@ default_units = {"CommStatus": "",
                  "ControlMode": "",
                  "Pwr_kW": "kW",
                  "AvgPwr_kW": "kW",
-                 "DemandForecast_kW": "kW",
-                 "DemandForecast_t": "utc",
-                 "LoadShiftOptions_kW": "kW",
-                 "LoadShiftOptions_t": "utc",
+                 "OrigDemandForecast_kW": "kW",
+                 "OrigDemandForecast_t_str": "utc",
+                 "OrigLoadShiftOptions_kW": "kW",
+                 "OrigLoadShiftOptions_t_str": "utc",
                  "Nameplate_kW": "kW",
                  "MaxSOE_kWh": "kWh",
                  "SOE_kWh": "kWh",
@@ -187,8 +187,8 @@ class DERDevice():
                            "ControlMode": self.control_mode,
                            "Pwr_kW": 0.0,
                            "AvgPwr_kW": 0.0,
-                           "DemandForecast_kW": [0.0] * SSA_PTS_PER_SCHEDULE,
-                           "DemandForecast_t": None,
+                           "OrigDemandForecast_kW": [0.0] * SSA_PTS_PER_SCHEDULE,
+                           "OrigDemandForecast_t_str": None,
                            "Nameplate_kW": 0.0}
 
         self.avg_pwr_buffer = []
@@ -460,14 +460,14 @@ class DERDevice():
             pass
 
         try:
-            self.state_vars.update({"DemandForecast_kW": self.forecast.data_dict["Pwr"]})
-            self.state_vars.update({"DemandForecast_t": self.forecast.data_dict["t"]})
+            self.state_vars.update({"OrigDemandForecast_kW": self.forecast.data_dict["Pwr"]})
+            self.state_vars.update({"OrigDemandForecast_t_str": self.forecast.data_dict["t"]})
         except KeyError:
             pass
 
         try:
-            self.state_vars.update({"LoadShiftOptions_kW": self.forecast.data_dict["LoadShiftOptions"]})
-            self.state_vars.update({"LoadShiftOptions_t": self.forecast.data_dict["t"]})
+            self.state_vars.update({"OrigLoadShiftOptions_kW": self.forecast.data_dict["LoadShiftOptions"]})
+            self.state_vars.update({"OrigLoadShiftOptions_t_str": self.forecast.data_dict["t"]})
         except KeyError:
             pass
 
@@ -1294,8 +1294,8 @@ class LoadShiftCtrlNode(DERDevice):
     ##############################################################################
     def __init__(self, device_info, parent_device=None):
         DERDevice.__init__(self, device_info, parent_device)  # device_id, device_type, parent_device)
-        self.state_vars.update({"LoadShiftOptions_kW": [[0.0] * SSA_PTS_PER_SCHEDULE],
-                                "LoadShiftOptions_t": None,
+        self.state_vars.update({"OrigLoadShiftOptions_kW": [[0.0] * SSA_PTS_PER_SCHEDULE],
+                                "OrigLoadShiftOptions_t_str": None,
                                 "SetPt": 0,
                                 "SetPtCmd": 0})
         self.state_vars_update_list = device_update_list

@@ -70,10 +70,7 @@ _log = logging.getLogger(__name__)
 
 __version__="0.1"
 
-# constants
-MINUTES_PER_HR = 60
-MINUTES_PER_DAY = 24 * MINUTES_PER_HR
-MINUTES_PER_YR = 365 * MINUTES_PER_DAY
+MINUTES_PER_YR = 365 * MINUTES_PER_DAY  # valid for our database files - assume no leap years
 
 READ_BACK_MSGS = False
 

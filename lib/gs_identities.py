@@ -62,6 +62,12 @@ READY       = 3
 DISABLED = 0
 ENABLED  = 1
 
+# Constants
+SEC_PER_MIN = 60.0
+MINUTES_PER_HR = 60
+MINUTES_PER_DAY = 24 * MINUTES_PER_HR
+
+
 # Configuration Files
 GS_ROOT_DIR     = os.environ['GS_ROOT_DIR']
 CFG_PATH        = "cfg/"
@@ -102,6 +108,7 @@ SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
 SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
 
 REGULATE_ESS_OUTPUT = True #False
+SEARCH_LOADSHIFT_OPTIONS = False
 
 # For configuring w/simulated data
 USE_SIM        = 1
