@@ -10,3 +10,6 @@ cfg/Modbus/CtrlCore40K.csv
 cfg/Modbus/DemoRegistry40K.csv
 cfg/Modbus/DemoRegistry_test.csv
 cfg/SiteCfg/SiteConfiguration-1site.json.old
+FLAME-v2
+Session.vim
+ForecastAgent-v2
