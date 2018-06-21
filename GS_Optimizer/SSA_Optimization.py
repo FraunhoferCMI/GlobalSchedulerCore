@@ -384,7 +384,12 @@ class SimulatedAnnealer():
         _log.info("total time: "+str(total_time))
 
         # dump some data to a csv file
-        csv_name = (GS_ROOT_DIR+"ssa_results.csv")
+        filename =  os.path.join(GS_ROOT_DIR, "ssa_results.csv")
+        if not os.path.exists(filename):
+            my_file = open(filename, 'w+')
+
+        csv_name = (filename)
+
         with open(csv_name, 'wb') as csvfile:
             results_writer = csv.writer(csvfile)
             results_writer.writerow([t.strftime("%Y-%m-%dT%H:%M:%S") for t in timestamps])
