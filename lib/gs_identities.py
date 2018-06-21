@@ -42,6 +42,13 @@
 # views and opinions of authors expressed herein do not necessarily state
 # or reflect those of the United States Government or any agency thereof.
 
+from datetime import datetime, timedelta
+import os
+
+# execution flags
+USE_VOLTTRON = 1
+USE_LABVIEW  = 1
+
 # Site Operating Modes
 SITE_IDLE    = 0
 SITE_RUNNING = 1
@@ -52,9 +59,20 @@ INTERACTIVE = 1
 STARTING    = 2
 READY       = 3
 
-
 DISABLED = 0
 ENABLED  = 1
+
+# Constants
+SEC_PER_MIN = 60.0
+MINUTES_PER_HR = 60
+MINUTES_PER_DAY = 24 * MINUTES_PER_HR
+
+
+# Configuration Files
+GS_ROOT_DIR     = os.environ['GS_ROOT_DIR']
+CFG_PATH        = "cfg/"
+SITE_CFG_FILE   = "SiteConfiguration-1siteAndDemand.json"
+SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
 
 # Site Timeout
 PMC_HEARTBEAT_TIMEOUT = 100 # timeout, in seconds
@@ -70,10 +88,64 @@ USER_CONTROL = 1
 APPLICATION_CONTROL = 2
 EXEC_STARTING = 3
 
-EXECUTIVE_CLKTIME = 5 # period, in seconds, at which the executive polls system state
-GS_SCHEDULE       = 5  # period, in seconds, at which the GS optimizer runs
-STATUS_MSG_PD     = 20 # update rate for various status messages
+EXECUTIVE_CLKTIME = 2 # period, in seconds, at which the executive polls system state
+ENDPT_UPDATE_SCHEDULE  = 1 #
+GS_SCHEDULE       = 60  # GS optimizer period, in executive clock cycles
+ESS_SCHEDULE      = 2 # ess regulation period, in executive clock cycles
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
+START_LATENCY = 0 # time in seconds, to delay execution
 
 #FIXME - Placeholder!
-SCRAPE_TIMEOUT = 30 # timeout period in seconds for modbus device to post on the IEB bus
+MODBUS_SCRAPE_INTERVAL  = 3 # period in seconds for modbus device to post on the IEB bus
+MODBUS_AVERAGING_WINDOW = 180 # period in seconds over which to average instantaneous readings
+MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
+CPR_QUERY_INTERVAL = 5 # period in seconds for forecasts to arrive
+LIVE_CPR_QUERY_INTERVAL = 300
+MODBUS_WRITE_ATTEMPTS  = 5  # number of modbus reads before a write error is thrown
+
+SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedules
+SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
+SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
+
+REGULATE_ESS_OUTPUT = True #False
+SEARCH_LOADSHIFT_OPTIONS = False
+
+# For configuring w/simulated data
+USE_SIM        = 1
+USE_SOLAR_SIM  = 1
+USE_DEMAND_SIM = 1
+SIM_SCENARIO   = 1
+SIM_HRS_PER_HR = 1 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
+if SIM_SCENARIO == 1:
+    PV_FORECAST_FILE = "SAM_PVPwr_nyc.csv"  # "irr_1min.csv"
+    PV_FORECAST_FILE_TIME_RESOLUTION_MIN = 60  # 1
+    SIM_START_DAY = 202  # day 106 #2  # day 202, Hr = 5 # 200, Hr = 7
+    SIM_START_HR  = 5
+else:
+    PV_FORECAST_FILE = "irr_1min.csv"
+    PV_FORECAST_FILE_TIME_RESOLUTION_MIN = 1
+    SIM_START_DAY = 200  # day 106 #2  # day 202, Hr = 5 # 200, Hr = 7
+    SIM_START_HR  = 7
+
+DEMAND_FORECAST_FILE = "NYC_demand.csv" #"NYC_forecast_interpolated.csv"
+DEMAND_FILE          = DEMAND_FORECAST_FILE #"NYC_demand_interpolated.csv"
+DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN = 60
+DEMAND_FILE_TIME_RESOLUTION_MIN = DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN #1
+
+DEMAND_FORECAST_QUERY_INTERVAL = 10 # seconds
+DEMAND_FORECAST_RESOLUTION = SSA_SCHEDULE_RESOLUTION # 60 minutes # MATT
+# DEMAND_FORECAST_RESOLUTION = "PT1H"
+LOADSHIFT_QUERY_INTERVAL = 10 # seconds
+DEMAND_REPORT_SCHEDULE = 10 # SECONDS
+# DEMAND_REPORT_RESOLUTION = "PT1H" # Time resolution of load request report
+DEMAND_REPORT_RESOLUTION = 15 # minutes # MATT
+# DEMAND_REPORT_DURATION =  60 # 24 hours Duration of load request reports in hours
+DEMAND_REPORT_DURATION   = 15 # minutes # MATT
+N_LOADSHIFT_PROFILES   = 5
+# Desired resolution of forecast data points.  (ISO 8601 duration)
+LOADSHIFT_FORECAST_QUERY_INTERVAL = 30 # seconds
+STATUS_REPORT_SCHEDULE = 1 # in hours # Time interval at which the GS should poll the FLAME to check for status
+
+SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0) + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
+
+DEMAND_CHARGE_THRESHOLD = 250

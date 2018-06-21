@@ -168,9 +168,9 @@ class UIAgent(Agent):
 
         except IOError as e:
             # file name not found implies that there is no new command waiting
-            print("NO Site Manager Cmd found!! Skipping!")
-            cwd = os.getcwd()
-            _log.info("Current directory: "+cwd)
+            #print("NO Site Manager Cmd found!! Skipping!")
+            #cwd = os.getcwd()
+            #_log.info("Current directory: "+cwd)
             pass
 
 def main(argv=sys.argv):

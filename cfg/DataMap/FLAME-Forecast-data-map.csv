@@ -1,0 +1,5 @@
+Forecast,FLAME-Baseline,Forecast,Pwr,,kW
+Time,FLAME-Baseline,Forecast,t,,UTC
+Duration,FLAME-Baseline,Forecast,duration,,hr
+Resolution,FLAME-Baseline,Forecast,resolution,,min
+comm_status,FLAME,HealthStatus,CommsStatus,0,

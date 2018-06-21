@@ -69,7 +69,7 @@ def publish_data(agent_object, base_topic, units, endpt_label, val):
     # publish to a root topic that is "datalogger/base_topic":
     topic = "datalogger/"+base_topic
 
-    TimeStamp = utils.get_aware_utc_now() # datetime.now() 
+    TimeStamp = utils.get_aware_utc_now() # datetime.now()
     TimeStamp_str = TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
 
     # 2. build a datalogger-compatible msg:

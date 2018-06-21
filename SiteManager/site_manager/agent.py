@@ -60,7 +60,7 @@ from volttron.platform.agent.known_identities import (
     VOLTTRON_CENTRAL, VOLTTRON_CENTRAL_PLATFORM, CONTROL, CONFIGURATION_STORE)
 
 from . import settings
-from gs_identities import (INTERACTIVE, AUTO, STARTING, SCRAPE_TIMEOUT, ENABLED, DISABLED, PMC_WATCHDOG_PD, PMC_HEARTBEAT_PD)
+from gs_identities import *
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -98,9 +98,7 @@ class SiteManagerAgent(Agent):
 
         # set location for data map files.
         # FIXME - shouldn't be hard-coded!!!
-        self.volttron_root = os.getcwd()
-        self.volttron_root = self.volttron_root+"/../../../../"
-        self.data_map_dir = self.volttron_root+"gs_cfg/"
+        self.data_map_dir = GS_ROOT_DIR+CFG_PATH+"DataMap/"
         _log.info("SiteManagerConfig: **********INITIALIIZING SITE MANAGER*******************")
         _log.info("SiteManagerConfig: Agent ID is "+self._agent_id)
         _log.info("SiteManagerConfig: data dir is "+self.data_map_dir)
@@ -145,10 +143,10 @@ class SiteManagerAgent(Agent):
             self.vip.pubsub.subscribe(peer='pubsub', prefix=topics["TopicPath"], callback=self.parse_IEB_msgs) #+'/all'
             topics.update({"isValid": "N"})
             topics.update({"last_read_time": utils.get_aware_utc_now()})
-            topics.update({"SCRAPE_TIMEOUT": SCRAPE_TIMEOUT})
+            topics.update({"SCRAPE_TIMEOUT": eval(topics["TopicScrapeTimeout"])})
             _log.info("SiteManagerConfig: Subscribing to new topic: "+topics["TopicPath"]+'/all')
 
-        self.site = DERDevice.DERModbusSite(cursite, None, self.data_map_dir)
+        self.site = DERDevice.get_site_handle(cursite, self.data_map_dir)
         self.vip.pubsub.publish('pubsub', 
                                 'data/NewSite/all', 
                                 headers={}, 
@@ -213,9 +211,18 @@ class SiteManagerAgent(Agent):
         #for k, v in data.items():
         #    _log.info("Message is: "+k+": "+str(v))
 
+        # update the current topic's last read time to indicate data is fresh
+        for topic_obj in self.topics:
+            cur_topic_str = topic_obj["TopicPath"]+"/all"
+            if cur_topic_str == topic:
+                topic_obj["last_read_time"] = utils.get_aware_utc_now()
+                cur_topic_name = topic_obj["TopicName"]
+                _log.info("SiteManagerStatus: Topic "+topic+" read at "+datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
+                break
+
         try:
             self.updating = 1  # indicates that data is updating - do not trust until populate end pts is complete
-            self.site.populate_endpts(data, meta_data)
+            self.site.populate_endpts(data, meta_data, cur_topic_name)
             self.dirtyFlag = 0 # clear dirtyFlag on new read
             self.updating = 0
         except:
@@ -223,15 +230,6 @@ class SiteManagerAgent(Agent):
             # a catch-all for any errors in parsing incoming msg
             _log.info("Exception: in populate end_pts!!!")
         pass
-
-        # update the current topic's last read time to indicate data is fresh
-        for topic_obj in self.topics:
-            cur_topic_str = topic_obj["TopicPath"]+"/all"
-            if cur_topic_str == topic:
-                topic_obj["last_read_time"] = utils.get_aware_utc_now()
-                _log.info("SiteManagerStatus: Topic "+topic+" read at "+datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
-                break
-
 
     ##############################################################################
     def publish_data(self):
@@ -242,8 +240,7 @@ class SiteManagerAgent(Agent):
 
         Input is a timestamp that has been converted to a string
         """
-
-        HistorianTools.publish_data(self, 
+        HistorianTools.publish_data(self,
                                     self.site.device_id+"Agent", 
                                     "", 
                                     "Mode", 
@@ -299,14 +296,14 @@ class SiteManagerAgent(Agent):
         for topic_obj in self.topics:
             TimeStamp = utils.get_aware_utc_now() # datetime.now() 
 
-            _log.info("Topic "+topic_obj["TopicPath"]+": Current Time = " + datetime.strftime(TimeStamp, "%Y-%m-%dT%H:%M:%S") +
+            _log.debug("Topic "+topic_obj["TopicPath"]+": Current Time = " + datetime.strftime(TimeStamp, "%Y-%m-%dT%H:%M:%S") +
             "; Last Scrape = " + datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
 
             deltaT = TimeStamp - topic_obj["last_read_time"]
-            _log.info("delta T "+str(deltaT))
+            _log.debug("delta T "+str(deltaT))
             tot_sec = deltaT.total_seconds()
 
-            _log.info("Delta T = "+str(deltaT)+"; SCRAPE_TIMEOUT = "+ str(SCRAPE_TIMEOUT)+"; tot sec = "+str(tot_sec))
+            _log.debug("Delta T = "+str(deltaT)+"; SCRAPE_TIMEOUT = "+ str(topic_obj["SCRAPE_TIMEOUT"])+"; tot sec = "+str(tot_sec))
 
 
             if tot_sec > topic_obj["SCRAPE_TIMEOUT"]:
@@ -314,6 +311,7 @@ class SiteManagerAgent(Agent):
                 # in theory, this should be done by topic, but for right now, I can just do it for the whole topic 
                 # topic tree.
                 #self.site.set_read_error(cnt)
+                _log.info(topic_obj["TopicPath"]+": Error - Communications Timeout - time since last read is "+ str(tot_sec) + " sec")
                 read_status = 0
 
             cnt += 1
@@ -326,17 +324,6 @@ class SiteManagerAgent(Agent):
             device = self.site.find_device(dev_str)
             self.log_device_status(device)
 
-        #for k,v in self.site.op_status.data_dict.items():
-        #    _log.info("Status-"+self.site.device_id+"-Ops: "+k+": "+str(v))
-        #for k,v in self.site.mode_status.data_dict.items():
-        #    _log.info("Status-"+self.site.device_id+"-Mode: "+k+": "+str(v))
-        #for k,v in self.site.health_status.data_dict.items():
-        #    _log.info("Status-"+self.site.device_id+"-Health: "+k+": "+str(v))
-        #for k,v in self.site.pwr_ctrl.data_dict.items():
-        #    _log.info("Status-"+self.site.device_id+"-PwrCtrl: "+k+": "+str(v))
-        #for k,v in self.site.mode_ctrl.data_dict.items():
-        #    _log.info("Status-"+self.site.device_id+"-ModeCtrl: "+k+": "+str(v))
-
         self.SiteStatus.update({"ReadStatus": self.site.read_status})
         #self.SiteStatus.update({"WriteError": WriteError})
         self.SiteStatus.update({"DeviceStatus": self.site.device_status})
@@ -345,12 +332,8 @@ class SiteManagerAgent(Agent):
         self.SiteStatus.update({"CtrlMode": self.site.control_mode})
         self.SiteStatus.update({"DataAvailable": self.site.isDataValid})
         self.SiteStatus.update({"CtrlAvailable": self.site.isControlAvailable})
-        return self.SiteStatus
 
-    ##############################################################################
-    @RPC.export
-    def check_site_errors(self):
-        pass
+        return self.SiteStatus
 
     ##############################################################################
     @RPC.export
@@ -383,6 +366,27 @@ class SiteManagerAgent(Agent):
         _log.info("updating watchdog timeout enable flag!!")
         self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
         val = self.site.set_watchdog_timeout_enable(int(val), self)
+
+
+    ##############################################################################
+    @RPC.export
+    def set_ramprate_real(self, device_id, val):
+        # find the device
+        device = self.site.find_device(device_id)
+
+        if device == None:
+            _log.info("SetPt: ERROR! Device "+device_id+" not found in "+self.site.device_id)
+            # FIXME: other error trapping needed?
+        elif device.device_type not in self.site.DGPlant:
+            _log.info("SetPt: ERROR! Pwr dispatch command sent to non-controllable device "+device.device_id)
+            _log.info("SetPt: Device type = "+device.device_type)
+            # FIXME: other error trapping needed?
+        else:
+            # send the command
+            self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
+            _log.info("Ramp Rate: Sending Cmd!")
+            device.set_ramprate_real(val, self)
+
 
     ##############################################################################
     @RPC.export
@@ -442,7 +446,10 @@ class SiteManagerAgent(Agent):
         #FIXME - this need to be more nuanced - not every site has the same heartbeat period
         #FIXME - or requires a heartbeat.
         #FIXME - also is it assumed that only the "site" has a heartbeat? (i.e., not the forecast device?)
-        self.site.send_watchdog(self)
+        try:
+            self.site.send_watchdog(self)
+        except:
+            pass
 
     ##############################################################################
     @Core.periodic(PMC_HEARTBEAT_PD)
@@ -462,13 +469,29 @@ class SiteManagerAgent(Agent):
         """
         
         # find the device
-        _log.info("FindDevice: device id is "+device_id)
+        _log.debug("FindDevice: device id is "+device_id)
         device = self.site.find_device(device_id)       
         #_log.info("attribute is "+attribute)
         #_log.info("site is "+self.site.device_id)
 
         # return the attribute data dict
         return device.datagroup_dict_list[attribute].data_dict #self.site.datagroup_dict_list[attribute].data_dict 
+
+    ##############################################################################
+    @RPC.export
+    def get_device_state_vars(self, device_id):
+        """
+        sends a real power command to the specified device
+        """
+
+        # find the device
+        _log.debug("FindDevice: device id is " + device_id)
+        device = self.site.find_device(device_id)
+        # _log.info("attribute is "+attribute)
+        # _log.info("site is "+self.site.device_id)
+
+        # return the attribute data dict
+        return device.state_vars  # self.site.datagroup_dict_list[attribute].data_dict
 
     ##############################################################################
     @RPC.export

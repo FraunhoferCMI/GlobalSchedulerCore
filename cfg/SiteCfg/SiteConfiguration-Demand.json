@@ -1,0 +1,42 @@
+[
+   {
+      "ID":"FLAME",
+      "SiteModel": "FLAME",
+      "Topics":[
+         {
+            "TopicName":"Forecast",
+            "TopicPath":"devices/flame/forecast",
+            "TopicAgent":"cpr",
+            "TopicScrapeTimeout":"DEMAND_FORECAST_QUERY_INTERVAL*2"
+         },
+         {
+            "TopicName":"LoadReport",
+            "TopicPath":"devices/flame/load_report",
+            "TopicAgent":"cpr",
+            "TopicScrapeTimeout":"DEMAND_REPORT_SCHEDULE*2"
+         },
+         {
+            "TopicName":"LoadShift",
+            "TopicPath":"devices/flame/loadshift_forecast",
+            "TopicAgent":"cpr",
+            "TopicScrapeTimeout":"LOADSHIFT_QUERY_INTERVAL*2"
+         }
+      ],
+      "Use" :"Y",
+      "Metered" : "Y",
+      "DeviceList":[
+         {
+            "ID": "Baseline",
+            "ResourceType": "Load",
+            "Metered": "Y",
+            "DeviceList": []
+         },
+         {
+            "ID":"LoadShift",
+            "ResourceType":"LoadShiftCtrlNode",
+            "Metered": "N",
+            "DeviceList":[]
+         }
+      ]
+   }
+]
