@@ -9,7 +9,7 @@ radio_north.CommStatus.St,ShirleySouth,HealthStatus,CommsStatusRadio,,
 inv1_meter.meter.Hz,ShirleySouth-PVPlant-Inverter1,OpStatus,Freq_raw,,Hz
 inv1_meter.meter.Hz_SF,ShirleySouth-PVPlant-Inverter1,OpStatus,Freq_SF,,
 inv1_meter.meter.W,ShirleySouth-PVPlant-Inverter1,OpStatus,Pwr_raw,,kW
-inv1_meter.meter.W_SF,ShirleySouth-PVPlant-Inverter1,OpStatus,Pwr_SF,,
+inv1_meter.meter.W_SF,ShirleySouth-PVPlant-Inverter1,OpStatus,Pwr_SF,,none
 inv1_meter.meter.Evt,ShirleySouth-PVPlant-Inverter1,HealthStatus,MeterEvt,,
 ess_meter.meter.Hz,ShirleySouth-ESSPlant-ESS1,OpStatus,Freq_raw,,Hz
 ess_meter.meter.Hz_SF,ShirleySouth-ESSPlant-ESS1,OpStatus,Freq_SF,,
@@ -19,7 +19,7 @@ ess_meter.meter.Evt,ShirleySouth-ESSPlant-ESS1,HealthStatus,MeterEvt,,
 pcc_meter.meter.Hz,ShirleySouth,OpStatus,Freq_raw,,Hz
 pcc_meter.meter.Hz_SF,ShirleySouth,OpStatus,Freq_SF,,
 pcc_meter.meter.W,ShirleySouth,OpStatus,Pwr_raw,,kW
-pcc_meter.meter.W_SF,ShirleySouth,OpStatus,Pwr_SF,,
+pcc_meter.meter.W_SF,ShirleySouth,OpStatus,Pwr_SF,,none
 pcc_meter.meter.Evt,ShirleySouth,HealthStatus,MeterEvt,,
 weatherStation.irradiance.GHI,ShirleySouth,EnvStatus,GHI,,
 gps.gps.Lat,ShirleySouth,EnvStatus,GPS_Lat,,
@@ -30,7 +30,7 @@ pmc.mode_control.SysModCtrl,ShirleySouth,ModeControl,SysModeCtrl,,
 pmc.mode_control.SysModSt,ShirleySouth,ModeStatus,SysModeStatus,,
 pmc.mode_control.GSModCtrl,ShirleySouth,ModeControl,GSModeCtrl,,
 pmc.mode_control.GSModSt,ShirleySouth,ModeStatus,GSModeStatus,,
-pmc.monitor.GSHeartBeat,ShirleySouth,ModeStatus,GSHeartbeat,,
+pmc.monitor.GSHeartBeat,ShirleySouth,ModeStatus,GSHeartBeat,,
 pmc.monitor.PMCWatchDog,ShirleySouth,ModeControl,PMCWatchDog,,
 pmc.monitor.WatchDogTimeoutEnable,ShirleySouth,ModeControl,WatchDogTimeoutEnable,,
 pmc.monitor.PMCOpModeReason,ShirleySouth,ModeStatus,OpModeReason,,
@@ -180,7 +180,7 @@ ess.tesla_cfg.Config_Energy,ShirleySouth-ESSPlant-ESS1,Config,FullChargeEnergy_k
 ess.tesla_status.Status_CommandSource,ShirleySouth-ESSPlant-ESS1,ModeStatus,CommandSource,,
 ess.tesla_status.Status_BatteryTargetP,ShirleySouth-ESSPlant-ESS1,OpStatus,SetPt,,kW
 ess.tesla_status.Status_BatteryTargetQ,ShirleySouth-ESSPlant-ESS1,OpStatus,QSetPt,,kVar
-ess.tesla_status.Status_FullChargeEnergy,ShirleySouth-ESSPlant-ESS1,OpStatus,FullChargeEnergy_kWh,,
+ess.tesla_status.Status_FullChargeEnergy,ShirleySouth-ESSPlant-ESS1,OpStatus,FullChargeEnergy_kWh,,kWh
 ess.tesla_status.Status_NominalEnergy,ShirleySouth-ESSPlant-ESS1,OpStatus,NominalEnergy_kWh,,kWh
 ess.tesla_status.Status_ExpectedEnergy,ShirleySouth-ESSPlant-ESS1,OpStatus,Energy_kWh,,kWh
 ess.tesla_status.Status_MaxChargePower,ShirleySouth-ESSPlant-ESS1,OpStatus,MaxChargePwr_kW,,kW
