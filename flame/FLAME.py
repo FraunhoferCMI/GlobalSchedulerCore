@@ -386,19 +386,25 @@ class LoadSelect(IPKeys):
         self.status = self.response['msg']['status']
 
 class LoadReport(IPKeys):
-    def __init__(self, websocket, dstart, sampleInterval, duration):
+    def __init__(self, websocket, dstart, sampleInterval, duration, facilities=None):
         IPKeys.__init__(self, websocket)
 
         self.type = u'LoadReportResponse'
 
-        self.request = json.dumps({'type': 'LoadReportRequest',
-                                   'msg': {
-                                       "dstart": dstart,        #start time for report
-                                       "sampleInterval": sampleInterval,            #sample interval
-                                       "duration": duration            # duration of request
-                                       }
-                                   }
-                                   )
+        self.facilities = facilities
+
+        self.baseline_request = {
+            'type': 'LoadReportRequest',
+            'msg': {
+                "dstart": dstart,        #start time for report
+                "sampleInterval": sampleInterval,            #sample interval
+                "duration": duration            # duration of request
+            }
+        }
+        self.request = json.dumps(
+            self.baseline_request
+        )
+
         return None
 
     def __repr__(self):
@@ -407,10 +413,25 @@ class LoadReport(IPKeys):
                            # '%s,' % self.granularity,
                            # '%s)' % self.duration,
                            ]))
+
     def process(self):
 
-        self._send_receive()
-        self.loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
+        if self.facilities:
+            loadSchedules = []
+            for facility in self.facilities:
+                self.baseline_request['msg']['facility'] = facility
+                self.request = self.baseline_request
+                self._send_receive()
+                assert self.facility is self.response['msg']['facility'],\
+                    'facility response does not match requested facility'
+                facility_loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
+                loadSchedules.append(facility_loadSchedule)
+            self.loadSchedule = pd.concat(loadSchedules)
+        else:
+            self._send_receive()
+            self.loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
+
+        return None
 
 class Status(IPKeys):
     def __init__(self, websocket):
