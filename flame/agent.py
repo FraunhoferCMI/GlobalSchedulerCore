@@ -63,9 +63,11 @@ from gs_utilities import get_schedule, ForecastObject, Forecast
 import csv
 import pandas
 
-from .FLAME import Baseline, LoadShift, LoadSelect, LoadReport, Status
+# from .FLAME import Baseline, LoadShift, LoadSelect, LoadReport, Status, format_timeperiod
+from .FLAME import *
+import websocket
 from websocket import create_connection
-WEBSOCKET_URL = "ws://flame.ipkeys.com:8888/socket/msg"
+websocket.setdefaulttimeout(60)
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -77,7 +79,7 @@ MINUTES_PER_HR = 60
 MINUTES_PER_DAY = 24 * MINUTES_PER_HR
 MINUTES_PER_YR = 365 * MINUTES_PER_DAY
 
-# constants to migrate that gs_identities
+# TODO migrate constants that gs_identities
 
 # Time interval at which real-time load data should be retrieved from FLAME server and published to IEB
 # DEMAND_REPORT_SCHEDULE = 10 # already in gs_identities
@@ -134,7 +136,7 @@ class FLAMECommsAgent(Agent):
         # baseline_msg = new_baseline_constructor
         # loadshift_msg = new_loadshift_constructor
 
-
+        self.websocket = create_connection("ws://flame.ipkeys.com:8888/socket/msg")
     ##############################################################################
     def configure(self, config_name, action, contents):
         self._config.update(contents)
@@ -173,11 +175,11 @@ class FLAMECommsAgent(Agent):
         """
 
         _log.info("selecting load option")
-        ws = create_connection(WEBSOCKET_URL, timeout=None)
-        lsel = LoadSelect(websocket=ws, optionID=optionID)
+        # ws = create_connection(WEBSOCKET_URL, timeout=None)
+        lsel = LoadSelect(websocket=self.websocket, optionID=optionID)
         lsel.process()
 
-        print(lsel.status) # TODO setup self.comm_status check based on status
+        print("LoadSelect status: " + lsel.status) # TODO setup self.comm_status check based on status
         self.vip.pubsub.publish(
             peer="pubsub",
             topic=self._config['load_option_select_topic'],
@@ -188,11 +190,11 @@ class FLAMECommsAgent(Agent):
 
     @Core.periodic(period=STATUS_REPORT_SCHEDULE)
     def request_status(self):
-        ws = create_connection(WEBSOCKET_URL, timeout=None)
-        status = Status(ws)
+        # ws = create_connection(WEBSOCKET_URL, timeout=None)
+        status = Status(websocket=self.websocket)
         status.process()
-        print(status.alertStatus)
-        print(status.currentProfile)
+        print("LoadSelect alertStatus: " + str(status.alertStatus))
+        print("LoadSelect currentProfile: " + str(status.currentProfile))
 
         return None
 
@@ -204,18 +206,18 @@ class FLAMECommsAgent(Agent):
             _log.info("querying baseline")
             # Baseline
 
-            websocket = create_connection(
-                    WEBSOCKET_URL,
-                    timeout=None)
+            # websocket = create_connection( WEBSOCKET_URL, timeout=None)
             baseline_kwargs = dict(
                 start =  '2018-03-01T00:00:00',
                 granularity = DEMAND_FORECAST_RESOLUTION,
                 duration = 'PT24H',
-                websocket = websocket
+                websocket = self.websocket
             )
+            print('setup baseline')
             bl = Baseline(**baseline_kwargs)
             bl.process()
-            websocket.close()
+            # websocket.close()
+            print('baseline setup')
 
             #### code for publishing to the volttron bus
             message_parts = bl.fo
@@ -252,11 +254,11 @@ class FLAMECommsAgent(Agent):
             _log.info("querying loadshift")
 
 
-            ws = create_connection(WEBSOCKET_URL, timeout=None)
-            ls = LoadShift(ws)
+            # ws = create_connection(WEBSOCKET_URL, timeout=None)
+            ls = LoadShift(websocket=self.websocket)
             ls.process()
             # message = ls.fo.forecast_values    # call to demand forecast object class thingie
-            ws.close()
+            # ws.close()
             # message = self.load_shift_msg.process()    # call to demand forecast object class thingie
             comm_status = 1 # were there errors?
             for option, message_parts in ls.fos.items():
@@ -290,20 +292,26 @@ class FLAMECommsAgent(Agent):
         time_delta = timedelta(hours=DEMAND_REPORT_DURATION)
         start_time = current_time - time_delta
         dstart = start_time.isoformat()[:-7]
+        duration = format_timeperiod(DEMAND_REPORT_DURATION)
 
         loadReport_kwargs = {
             "dstart": dstart, # start time for report
             "sampleInterval": DEMAND_REPORT_RESOLUTION, # sample interval
-            "duration": "PT" + str(DEMAND_REPORT_DURATION) + "H"            # duration of request
+            "duration": duration # "PT" + str(DEMAND_REPORT_DURATION) + "H"            # duration of request
         }
-        ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
-        lr = LoadReport(ws, **loadReport_kwargs)
+        # ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
+        lr = LoadReport(websocket=self.websocket, **loadReport_kwargs)
         lr.process()
-        self.vip.pubsub.publish(
-            peer="pubsub",
-            topic=self._config['loadshift_forecast_topic'],
-            headers={},
-            message=lr.loadSchedule.to_json())
+
+        try:
+            message = lr.loadSchedule.to_json()
+            self.vip.pubsub.publish(
+                peer="pubsub",
+                topic=self._config['loadshift_forecast_topic'],
+                headers={},
+                message=message)
+        except AttributeError:
+            _log.warn('Response requested not available')
 
         return None
 
