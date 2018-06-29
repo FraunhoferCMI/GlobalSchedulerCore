@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 import websocket
 from websocket import create_connection
+import ssl
 import json
 import pandas as pd
 import os
@@ -45,9 +46,14 @@ class IPKeys(object):
         # (3) check for response
         _log.info("Receiving Response from %s" % self.type)
         try:
+            print("I GET HERE!!!")
+            print(type(self.ws))
             result_json = self.ws.recv()
+            _log.info("Received Response from %s" % self.type)
         except websocket.WebSocketTimeoutException:
-            _log.warning("WebSocket Timeout Exception Occurred!!!")
+            _log.warning("""\
+WebSocket Timeout Exception While Waiting to Receive Response from %s
+Dummy Message Loaded""" % self.type)
             # the object of filling the following response is to allow for the remaining processes to execute their processes
             self.response = json.loads(json.dumps({"message":"WARNING TIMEOUT OCCURRED",
                                         "msg": {"loadSchedule" : [99999],
@@ -63,9 +69,12 @@ class IPKeys(object):
                                        ))
 
             ## TODO put all the desired
+        except:
+            _log.warning("An unforseen error has ocurred")
+            print("An unforseen error has ocurred")
+            raise
         else:
             self.response = json.loads(result_json)
-            _log.info("Received Response from %s" % self.type)
             # (4) check for errors
             assert self.response['type'] == self.type + 'Response', 'msg received is wrong type'
 
@@ -231,7 +240,9 @@ class LoadReport(IPKeys):
 
     def process(self):
 
+        _log.info("Processing %s" % self.type)
         if self.facilities:
+            print("FACILITIES ARE PRESENT")
             loadSchedules = []
             for facility in self.facilities:
                 self.baseline_request['msg']['facility'] = facility
@@ -243,10 +254,11 @@ class LoadReport(IPKeys):
                 loadSchedules.append(facility_loadSchedule)
             self.loadSchedule = pd.concat(loadSchedules)
         else:
+            print("FACILITIES ARE NOT PRESENT")
             self._send_receive()
             try:
                 self.loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
-                _log.info("loadSchedule:\n" + str(self.loadSchedule))
+                _log.debug("loadSchedule:\n" + str(self.loadSchedule))
             except KeyError:
                 _log.warn('previous request yielded no response')
 
@@ -351,7 +363,18 @@ def format_timeperiod(granularity):
 
 if __name__ == '__main__':
 
-    ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
+    url = "wss://flame.ipkeys.com/socket/msg"
+    ws_url = "wss://flame.ipkeys.com/socket/msg"
+    # old way
+    # ws = create_connection(url, timeout=None)
+    # insecure way, use this if certificate is giving problems
+    sslopt = {"cert_reqs": ssl.CERT_NONE})
+    # secure way
+    sslopt = {"ca_certs": 'IPKeys_Root.pem'})
+
+    ws = create_connection(ws_url, sslopt=sslopt
+
+    self.websocket = ws
 
     # Baseline
     def test_Baseline():

@@ -68,6 +68,7 @@ from .FLAME import *
 import websocket
 from websocket import create_connection
 websocket.setdefaulttimeout(60)
+import ssl
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -136,7 +137,19 @@ class FLAMECommsAgent(Agent):
         # baseline_msg = new_baseline_constructor
         # loadshift_msg = new_loadshift_constructor
 
-        self.websocket = create_connection("ws://flame.ipkeys.com:8888/socket/msg")
+        ### CREATE WEBSOCKET ###
+        ws_url = "wss://flame.ipkeys.com/socket/msg"
+        # old way
+        # ws = create_connection(url, timeout=None)
+        # insecure way, use this if certificate is giving problems
+        sslopt = {"cert_reqs": ssl.CERT_NONE})
+        # secure way
+        sslopt = {"ca_certs": 'IPKeys_Root.pem'})
+
+        ws = create_connection(ws_url, sslopt=sslopt
+
+        self.websocket = ws
+        print("INITIALIZED")
     ##############################################################################
     def configure(self, config_name, action, contents):
         self._config.update(contents)
