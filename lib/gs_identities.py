@@ -47,11 +47,16 @@ import os
 
 # execution flags
 USE_VOLTTRON = 1
-USE_LABVIEW  = 1
+USE_LABVIEW  = 0
+USE_DEVICE_LEVEL = 1
 
 # Site Operating Modes
 SITE_IDLE    = 0
 SITE_RUNNING = 1
+
+# Plant vs Device Level Ctrl
+PLANT_LEVEL  = 0
+DEVICE_LEVEL = 1
 
 # Site System Control Modes
 AUTO        = 0

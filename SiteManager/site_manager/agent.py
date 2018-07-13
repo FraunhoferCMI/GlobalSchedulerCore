@@ -249,6 +249,7 @@ class SiteManagerAgent(Agent):
 
     ##############################################################################
     def log_device_status(self, device):
+        _log.info(device.device_id)
         for k,v in device.op_status.data_dict.items():
             _log.info("Status-"+device.device_id+"-Ops: "+k+": "+str(v))
         for k,v in device.mode_status.data_dict.items():
@@ -449,6 +450,7 @@ class SiteManagerAgent(Agent):
         try:
             self.site.send_watchdog(self)
         except:
+            _log.info("error setting watchdog....")
             pass
 
     ##############################################################################

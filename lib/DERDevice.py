@@ -57,8 +57,7 @@ from volttron.platform.jsonrpc import RemoteError
 
 from volttron.platform.messaging import headers as headers_mod
 
-from gs_identities import (INTERACTIVE, AUTO, SITE_IDLE, SITE_RUNNING, PMC_WATCHDOG_RESET, IGNORE_HEARTBEAT_ERRORS,
-                           SSA_PTS_PER_SCHEDULE, USE_LABVIEW, MODBUS_PTS_PER_WINDOW, MODBUS_WRITE_ATTEMPTS, SIM_HRS_PER_HR)
+from gs_identities import *
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -859,6 +858,26 @@ class DERDevice():
         for cur_device in self.devices:
             cur_device.publish_device_data(SiteMgr)
 
+    ##############################################################################
+    def set_auto_mode(self, sitemgr):
+        for cur_device in self.devices:
+            cur_device.set_auto_mode(sitemgr)
+
+        pass
+
+    ##############################################################################
+    def set_interactive_mode(self, sitemgr):
+        for cur_device in self.devices:
+            cur_device.set_interactive_mode(sitemgr)
+
+        pass
+
+    ##############################################################################
+    def send_watchdog(self, sitemgr):
+        for cur_device in self.devices:
+           cur_device.send_watchdog(sitemgr)
+        pass
+
 
 
 ##############################################################################
@@ -967,10 +986,16 @@ class DERSite(DERDevice):
 
     ##############################################################################
     def set_auto_mode(self, sitemgr):
+        for cur_device in self.devices:
+            cur_device.set_auto_mode(sitemgr)
+
         pass
 
     ##############################################################################
     def set_interactive_mode(self, sitemgr):
+        for cur_device in self.devices:
+            cur_device.set_interactive_mode(sitemgr)
+
         pass
 
     ##############################################################################
@@ -979,10 +1004,6 @@ class DERSite(DERDevice):
         placeholder
         """
         self.control_mode = 0
-        pass
-
-    ##############################################################################
-    def send_watchdog(self, sitemgr):
         pass
 
     ##############################################################################
@@ -1005,7 +1026,6 @@ class DERModbusDevice(DERDevice):
         FIXME: Possibly need to include some latency / retry / or timeout period for the "check read" portion
         of this routine.  (i.e., in case there is some command latency...)
         """
-
         device_prefix = "devices/"  # was /devices/
         task_id = sitemgr.site.device_id  # "ShirleySouth" #FIXME need to automatically query from sitemgr #"set_point"
 
@@ -1126,10 +1146,24 @@ class ShirleySite(DERSite, DERModbusDevice):
             self.mode_ctrl_cmd.data_dict.update({"OpModeCtrl_cmd": SITE_RUNNING}) # deprecated
             self.set_point("ModeControl", "OpModeCtrl", sitemgr) # deprecated
 
+        if USE_DEVICE_LEVEL == 1:
+            self.mode_ctrl_cmd.data_dict.update({"GSModeCtrl_cmd": DEVICE_LEVEL})
+            self.writePending["GSModeStatus"] = 1
+            self.expectedValue["GSModeStatus"] = DEVICE_LEVEL
+            self.set_point("ModeControl", "GSModeCtrl", sitemgr)
+        else:
+            self.mode_ctrl_cmd.data_dict.update({"GSModeCtrl_cmd": PLANT_LEVEL})
+            self.writePending["GSModeStatus"] = 1
+            self.expectedValue["GSModeStatus"] = PLANT_LEVEL
+            self.set_point("ModeControl", "GSModeCtrl", sitemgr)
+
         self.mode_ctrl_cmd.data_dict.update({"SysModeCtrl_cmd": INTERACTIVE})
         self.writePending["SysModeStatus"] = 1
         self.expectedValue["SysModeStatus"] = INTERACTIVE
         self.set_point("ModeControl", "SysModeCtrl", sitemgr)
+
+        for cur_device in self.devices:
+            cur_device.set_interactive_mode(sitemgr)
 
 
 
@@ -1147,6 +1181,9 @@ class ShirleySite(DERSite, DERModbusDevice):
         self.writePending["SysModeStatus"] = 1
         self.expectedValue["SysModeStatus"] = AUTO
         self.set_point("ModeControl", "SysModeCtrl", sitemgr)
+
+        for cur_device in self.devices:
+            cur_device.set_auto_mode(sitemgr)
 
 
 
@@ -1204,6 +1241,10 @@ class ShirleySite(DERSite, DERModbusDevice):
         if self.mode_ctrl_cmd.data_dict["PMCWatchDog_cmd"] == PMC_WATCHDOG_RESET:
             self.mode_ctrl_cmd.data_dict["PMCWatchDog_cmd"] = 0
         self.set_point("ModeControl", "PMCWatchDog", sitemgr)
+
+        for cur_device in self.devices:
+           cur_device.send_watchdog(sitemgr)
+
 
     ##############################################################################
     def check_mode(self):
@@ -1437,6 +1478,62 @@ class ESSCtrlNode(DERModbusCtrlNode):
     def update_state_vars(self):
         DERCtrlNode.update_state_vars(self)
 
+    ##############################################################################
+    def send_watchdog(self, sitemgr):
+        """
+        No longer needed in latest revision of spec!
+        increments the watchdog counter
+        :return:
+        """
+        # TODO - review/test whether this should be incremented from the Watchdog_cmd or the Watchdog
+        # TODO - end pt
+
+        _log.info("ESS Watchdog in ESSCtrlNode!!!!!!")
+        if self.pwr_ctrl.data_dict["Heartbeat"] == 0xAA55:
+            self.pwr_ctrl_cmd.data_dict["Heartbeat_cmd"] =  0x55AA
+        else:
+            self.pwr_ctrl_cmd.data_dict["Heartbeat_cmd"] = 0xAA55
+
+        self.set_point("RealPwrCtrl", "Heartbeat", sitemgr)
+        for cur_device in self.devices:
+            cur_device.send_watchdog(sitemgr)
+
+
+    ##############################################################################
+    #@RPC.export
+    def set_interactive_mode(self, sitemgr):
+        """
+        Sets mode to interactive
+        1. changes system op mode to "running"
+        2. changes system ctrl mode to "interactive"
+        """
+        if USE_DEVICE_LEVEL == 1:
+            self.pwr_ctrl_cmd.data_dict.update({"mode_cmd": 1})
+            self.set_point("RealPwrCtrl", "mode", sitemgr)
+
+            self.pwr_ctrl_cmd.data_dict.update({"TimeoutWindow_cmd": 600})
+            self.set_point("RealPwrCtrl", "TimeoutWindow", sitemgr)
+
+
+        for cur_device in self.devices:
+            cur_device.set_interactive_mode(sitemgr)
+
+    ##############################################################################
+    #@RPC.export
+    def set_auto_mode(self, sitemgr):
+        """
+        Sets mode to interactive
+        1. changes system op mode to "running"
+        2. changes system ctrl mode to "interactive"
+        """
+        if USE_DEVICE_LEVEL == 1:
+            self.pwr_ctrl_cmd.data_dict.update({"mode": 0})
+            self.set_point("RealPwrCtrl", "mode", sitemgr) # deprecated
+
+        for cur_device in self.devices:
+            cur_device.set_auto_mode(sitemgr)
+
+
 ##############################################################################
 class PVCtrlNode(DERModbusCtrlNode):
 
@@ -1497,6 +1594,7 @@ class ESSDevice(DERDevice):
                                 "MinSOE_kWh": 0.0,
                                 "Nameplate_kW": float(device_info["max_dischg_pwr"]) if("max_dischg_pwr" in device_info) else 0.0})
         _log.info("ESS Device init - state vars: "+str(self.state_vars))
+
 
 ##############################################################################
 class PVDevice(DERDevice):
