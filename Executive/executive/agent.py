@@ -256,53 +256,54 @@ class ExecutiveAgent(Agent):
         _log.info("SiteMgrConfig: **********INSTANTIATING NEW SITES*******************")
         self.sitemgr_list = []
         for site in self.SiteCfgList:
-            _log.info("SiteMgr Config: "+str(site["ID"]))
-            _log.info("SiteMgr Config: "+str(site))
+            if site["Use"] == "Y":
+                _log.info("SiteMgr Config: "+str(site["ID"]))
+                _log.info("SiteMgr Config: "+str(site))
 
-            # check to see if an agent associated with the site already exists:
-            uuid = None
-            agents = self.vip.rpc.call(CONTROL, "list_agents").get(timeout=5)
-            for cur_agent in agents:
-                if cur_agent["identity"] == site["ID"]:
-                    uuid = cur_agent["uuid"]
-                    break
-            if uuid != None:  # remove existing agent
-                _log.info("removing agent "+site["ID"])
+                # check to see if an agent associated with the site already exists:
+                uuid = None
+                agents = self.vip.rpc.call(CONTROL, "list_agents").get(timeout=5)
+                for cur_agent in agents:
+                    if cur_agent["identity"] == site["ID"]:
+                        uuid = cur_agent["uuid"]
+                        break
+                if uuid != None:  # remove existing agent
+                    _log.info("removing agent "+site["ID"])
+                    self.vip.rpc.call(CONTROL,
+                                      "remove_agent",
+                                      uuid)
+                    gevent.sleep(1.0)
+
+                uuid = self.vip.rpc.call(CONTROL,
+                                         "install_agent_local",
+                                         self.packaged_site_manager_fname,
+                                         vip_identity=site["ID"],secretkey=None,publickey=None).get(timeout=30)
+                _log.info("Setup: Installing Agent - uuid is:" + uuid)
                 self.vip.rpc.call(CONTROL,
-                                  "remove_agent",
-                                  uuid)
+                                  "start_agent",
+                                  uuid).get(timeout=5)
+
+                # I would like the "init_site" routine in SiteManager Agent to be part of the init, but I
+                # can't figure out how to pass a parameter to an Agent constructor, so instead we call
+                # an init routine ("init_site") that is supposed to follow the SiteManager __init__ function
+                # which provides configuration data for the actual site.
+
+                # the following sleep message is supposed to pause operation for long enough for site manager
+                # to finish its initialization.  There is a more elegant / robust way to accomplish this.
                 gevent.sleep(1.0)
 
-            uuid = self.vip.rpc.call(CONTROL,
-                                     "install_agent_local",
-                                     self.packaged_site_manager_fname,
-                                     vip_identity=site["ID"],secretkey=None,publickey=None).get(timeout=30)
-            _log.info("Setup: Installing Agent - uuid is:" + uuid)
-            self.vip.rpc.call(CONTROL,
-                              "start_agent",
-                              uuid).get(timeout=5)
-
-            # I would like the "init_site" routine in SiteManager Agent to be part of the init, but I
-            # can't figure out how to pass a parameter to an Agent constructor, so instead we call
-            # an init routine ("init_site") that is supposed to follow the SiteManager __init__ function
-            # which provides configuration data for the actual site.
-
-            # the following sleep message is supposed to pause operation for long enough for site manager
-            # to finish its initialization.  There is a more elegant / robust way to accomplish this.
-            gevent.sleep(1.0)
-
-            # The following gets a handle to the agent that we've just created.
-            # It gets a list of agents and find one that matches to the uuid, then breaks
-            agents = self.vip.rpc.call(CONTROL, "list_agents").get(timeout=5)
-            for cur_agent in agents:
-                if cur_agent["uuid"] == uuid:
-                    self.sitemgr_list.append(cur_agent)
-                    _log.info("Setup: Agent name is: "+cur_agent["name"])
-                    #_log.info("Agent dir is: "+str(dir(cur_agent)))
-                    _log.info("Setup: Agent id is: "+cur_agent["identity"])
-                    break
-            # TODO - return something from init_site indicating success??
-            self.vip.rpc.call(cur_agent["identity"], "init_site", site)
+                # The following gets a handle to the agent that we've just created.
+                # It gets a list of agents and find one that matches to the uuid, then breaks
+                agents = self.vip.rpc.call(CONTROL, "list_agents").get(timeout=5)
+                for cur_agent in agents:
+                    if cur_agent["uuid"] == uuid:
+                        self.sitemgr_list.append(cur_agent)
+                        _log.info("Setup: Agent name is: "+cur_agent["name"])
+                        #_log.info("Agent dir is: "+str(dir(cur_agent)))
+                        _log.info("Setup: Agent id is: "+cur_agent["identity"])
+                        break
+                # TODO - return something from init_site indicating success??
+                self.vip.rpc.call(cur_agent["identity"], "init_site", site)
 
         # SiteManager Initialization complete
 
@@ -346,7 +347,7 @@ class ExecutiveAgent(Agent):
                                     "SIM_START_TIME",
                                     SIM_START_TIME.strftime("%Y-%m-%dT%H:%M:%S.%f"))
 
-        self.OperatingMode_set = IDLE
+        self.OperatingMode_set = USER_CONTROL
 
 
     ##############################################################################
