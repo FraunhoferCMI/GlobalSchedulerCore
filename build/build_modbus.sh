@@ -7,7 +7,8 @@ volttron-ctl config delete platform.driver --all
 #volttron-ctl config store platform.driver config ../../../core/MasterDriverAgent/config
 volttron-ctl config store platform.driver devices/Site1 ../cfg/Modbus/demo_site_devicefile
 #volttron-ctl config store platform.driver registry_configs/site1_registry.csv ../cfg/Modbus/ShirleyCore.csv --csv
-volttron-ctl config store platform.driver registry_configs/site1_registry.csv ../cfg/Modbus/CtrlCore.csv --csv
+#volttron-ctl config store platform.driver registry_configs/site1_registry.csv ../cfg/Modbus/CtrlCore.csv --csv
+volttron-ctl config store platform.driver registry_configs/site1_registry.csv ../cfg/Modbus/ShirleyTest.csv --csv
 
 #volttron-ctl config store platform.driver registry_configs/site1_registry.csv ../cfg/Modbus/DemoRegistry.csv --csv
 
