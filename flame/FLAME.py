@@ -363,18 +363,19 @@ def format_timeperiod(granularity):
 
 if __name__ == '__main__':
 
-    url = "wss://flame.ipkeys.com/socket/msg"
-    ws_url = "wss://flame.ipkeys.com/socket/msg"
+    url = "wss://flame.ipkeys.com:9443/socket/msg"
+    ws_url = "wss://flame.ipkeys.com:9443/socket/msg"
     # old way
     # ws = create_connection(url, timeout=None)
     # insecure way, use this if certificate is giving problems
-    sslopt = {"cert_reqs": ssl.CERT_NONE})
+    sslopt = {"cert_reqs": ssl.CERT_NONE}
     # secure way
-    sslopt = {"ca_certs": 'IPKeys_Root.pem'})
+    #sslopt = {"ca_certs": 'IPKeys_Root.pem'}
+    #sslopt = {"ca_certs": 'eiss2flame.pem'}
 
-    ws = create_connection(ws_url, sslopt=sslopt
+    ws = create_connection(ws_url, sslopt=sslopt)
 
-    self.websocket = ws
+    #websocket = ws
 
     # Baseline
     def test_Baseline():
@@ -389,7 +390,7 @@ if __name__ == '__main__':
         print("Here's the Baseline forecast:\n", bl.forecast)
         print("done processing Baseline")
         return bl
-    # bl = test_Baseline()
+    bl = test_Baseline()
 ##
     def test_LoadShift():
         print("running LoadShift")
