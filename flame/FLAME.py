@@ -380,10 +380,10 @@ if __name__ == '__main__':
     # Baseline
     def test_Baseline():
         print("running Baseline")
-        start =  '2018-03-01T00:00:00'
+        start =  '2018-07-14T00:00:00'
         granularity = 24
         # granularity =  'PT1H'
-        duration = 'PT24H'
+        duration = 'PT48H'
         bl = Baseline(start, granularity, duration, ws)
         print("processing Baseline")
         bl.process()
@@ -414,15 +414,20 @@ if __name__ == '__main__':
     ##
     def test_LoadReport():
         print("running LoadReport")
+        current_time = datetime.now().replace(microsecond=0, second=0, minute=0)
+        time_delta = timedelta(hours=24)
+        start_time = current_time - time_delta
+        print(start_time)
         loadReport_kwargs = {
-            "dstart": "2018-01-01T00:00:00",        #start time for report
+            "dstart": start_time.strftime("%Y-%m-%dT%H:%M:%S"), #"2018-07-14T00:00:00",        #start time for report
             "sampleInterval": "PT1H",            #sample interval
-            "duration": "PT24H"            # duration of request
+            "duration": "PT1H",           # duration of request
         }
         lr = LoadReport(ws, **loadReport_kwargs)
         lr.process()
         # print("Here's the LoadReport response:\n", lr.response)
-        print("Here's the LoadReport loadSchedule:\n", str(lr.loadSchedule))
+        print("Here's the LoadReport loadSchedule:\n")# str(lr.loadSchedule))
+        print(lr.loadSchedule)
         print("done processing LoadReport")
         return lr
     lr = test_LoadReport()

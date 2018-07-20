@@ -115,6 +115,7 @@ class FLAMECommsAgent(Agent):
             "comm_status_topic": "devices/flame/all",
             "loadshift_forecast_topic": "devices/flame/loadshift_forecast/all",     #FIXME - doublecheck naming
             "load_option_select_topic": "devices/flame/load_shift_select/all",
+            "load_report_topic": "datalogger/flame/load_report",
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "DEFAULT_MESSAGE": 'FLAME_COMMS_MSG',
             "DEFAULT_AGENTID": "FLAME_COMMS_AGENT",
@@ -138,15 +139,15 @@ class FLAMECommsAgent(Agent):
         # loadshift_msg = new_loadshift_constructor
 
         ### CREATE WEBSOCKET ###
-        ws_url = "wss://flame.ipkeys.com/socket/msg"
+        ws_url = "wss://flame.ipkeys.com:9443/socket/msg"
         # old way
         # ws = create_connection(url, timeout=None)
         # insecure way, use this if certificate is giving problems
-        sslopt = {"cert_reqs": ssl.CERT_NONE})
+        sslopt = {"cert_reqs": ssl.CERT_NONE}
         # secure way
-        sslopt = {"ca_certs": 'IPKeys_Root.pem'})
+        #sslopt = {"ca_certs": 'IPKeys_Root.pem'}
 
-        ws = create_connection(ws_url, sslopt=sslopt
+        ws = create_connection(ws_url, sslopt=sslopt)
 
         self.websocket = ws
         print("INITIALIZED")
@@ -169,11 +170,10 @@ class FLAMECommsAgent(Agent):
         ### Get gs_start_time
         try:
             v1 = self.vip.rpc.call("executiveagent-1.0_1", "get_gs_start_time").get(timeout=5)
-            self.gs_start_time = datetime.strptime(v1, "%Y-%m-%dT%H:%M:%S")  # .replace()  # was .%f
+            self.gs_start_time = datetime.strptime(v1, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)
         except:
             _log.info("FLAME comms - gs_start_time not found.  Using current time as gs_start_time")
             self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
-            self.gs_start_time = self.gs_start_time.replace(tzinfo=None)
             _log.info("GS STart time is " + str(self.gs_start_time))
 
         self.initialization_complete = 1
@@ -219,9 +219,11 @@ class FLAMECommsAgent(Agent):
             _log.info("querying baseline")
             # Baseline
 
+            start_time = get_schedule(self.gs_start_time,
+                                      resolution=SSA_SCHEDULE_RESOLUTION) #.strftime("%Y-%m-%dT%H:%M:%S")
             # websocket = create_connection( WEBSOCKET_URL, timeout=None)
             baseline_kwargs = dict(
-                start =  '2018-03-01T00:00:00',
+                start =  start_time,
                 granularity = DEMAND_FORECAST_RESOLUTION,
                 duration = 'PT24H',
                 websocket = self.websocket
@@ -301,28 +303,39 @@ class FLAMECommsAgent(Agent):
         Request standardized Load Report from FLAME server.
         '''
         # determine report start time
-        current_time = datetime.now()
+        #FIXME - should use get_schedule()
+
+        current_time = datetime.now().replace(microsecond=0, second=0, minute=0)
         time_delta = timedelta(hours=DEMAND_REPORT_DURATION)
         start_time = current_time - time_delta
-        dstart = start_time.isoformat()[:-7]
+        dstart = start_time.strftime("%Y-%m-%dT%H:%M:%S")
         duration = format_timeperiod(DEMAND_REPORT_DURATION)
+        sampleInterval = format_timeperiod(DEMAND_REPORT_RESOLUTION)
 
         loadReport_kwargs = {
             "dstart": dstart, # start time for report
-            "sampleInterval": DEMAND_REPORT_RESOLUTION, # sample interval
+            "sampleInterval": sampleInterval, # sample interval
             "duration": duration # "PT" + str(DEMAND_REPORT_DURATION) + "H"            # duration of request
         }
         # ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
         lr = LoadReport(websocket=self.websocket, **loadReport_kwargs)
         lr.process()
 
+        #print(lr.loadSchedule)
         try:
-            message = lr.loadSchedule.to_json()
-            self.vip.pubsub.publish(
-                peer="pubsub",
-                topic=self._config['loadshift_forecast_topic'],
-                headers={},
-                message=message)
+            for xx in range(0, len(lr.loadSchedule)):
+                msg = {"Load": {"Readings": [lr.loadSchedule["dstart"][xx],
+                                             float(lr.loadSchedule["value"][xx])],
+                                "Units": "kW",
+                                "tz": "UTC",
+                                "data_type": "float"}}
+
+                _log.debug(msg)
+                self.vip.pubsub.publish(
+                    peer="pubsub",
+                    topic=self._config['load_report_topic'],
+                    headers={},
+                    message=msg)
         except AttributeError:
             _log.warn('Response requested not available')
 
