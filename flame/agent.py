@@ -150,7 +150,8 @@ class FLAMECommsAgent(Agent):
         ws = create_connection(ws_url, sslopt=sslopt)
 
         self.websocket = ws
-        print("INITIALIZED")
+        _log.info("Web Socket INITIALIZED")
+
     ##############################################################################
     def configure(self, config_name, action, contents):
         self._config.update(contents)
@@ -177,7 +178,10 @@ class FLAMECommsAgent(Agent):
             _log.info("GS STart time is " + str(self.gs_start_time))
 
         self.initialization_complete = 1
-
+        self.get_load_report()
+        self.query_baseline()
+        self.query_loadshift()
+        self.request_status()
 
     ##############################################################################
     @RPC.export
@@ -192,7 +196,7 @@ class FLAMECommsAgent(Agent):
         lsel = LoadSelect(websocket=self.websocket, optionID=optionID)
         lsel.process()
 
-        print("LoadSelect status: " + lsel.status) # TODO setup self.comm_status check based on status
+        _log.info("LoadSelect status: " + lsel.status) # TODO setup self.comm_status check based on status
         self.vip.pubsub.publish(
             peer="pubsub",
             topic=self._config['load_option_select_topic'],
@@ -204,10 +208,11 @@ class FLAMECommsAgent(Agent):
     @Core.periodic(period=STATUS_REPORT_SCHEDULE)
     def request_status(self):
         # ws = create_connection(WEBSOCKET_URL, timeout=None)
-        status = Status(websocket=self.websocket)
-        status.process()
-        print("LoadSelect alertStatus: " + str(status.alertStatus))
-        print("LoadSelect currentProfile: " + str(status.currentProfile))
+        if self.initialization_complete == 1:
+            status = Status(websocket=self.websocket)
+            status.process()
+            _log.info("LoadSelect alertStatus: " + str(status.alertStatus))
+            _log.info("LoadSelect currentProfile: " + str(status.currentProfile))
 
         return None
 
@@ -228,11 +233,11 @@ class FLAMECommsAgent(Agent):
                 duration = 'PT24H',
                 websocket = self.websocket
             )
-            print('setup baseline')
+            _log.debug('setup baseline')
             bl = Baseline(**baseline_kwargs)
             bl.process()
             # websocket.close()
-            print('baseline setup')
+            _log.debug('baseline setup')
 
             #### code for publishing to the volttron bus
             message_parts = bl.fo
@@ -305,39 +310,41 @@ class FLAMECommsAgent(Agent):
         # determine report start time
         #FIXME - should use get_schedule()
 
-        current_time = datetime.now().replace(microsecond=0, second=0, minute=0)
-        time_delta = timedelta(hours=DEMAND_REPORT_DURATION)
-        start_time = current_time - time_delta
-        dstart = start_time.strftime("%Y-%m-%dT%H:%M:%S")
-        duration = format_timeperiod(DEMAND_REPORT_DURATION)
-        sampleInterval = format_timeperiod(DEMAND_REPORT_RESOLUTION)
+        if self.initialization_complete == 1:
 
-        loadReport_kwargs = {
-            "dstart": dstart, # start time for report
-            "sampleInterval": sampleInterval, # sample interval
-            "duration": duration # "PT" + str(DEMAND_REPORT_DURATION) + "H"            # duration of request
-        }
-        # ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
-        lr = LoadReport(websocket=self.websocket, **loadReport_kwargs)
-        lr.process()
+            current_time = datetime.now().replace(microsecond=0, second=0, minute=0)
+            time_delta = timedelta(hours=DEMAND_REPORT_DURATION)
+            start_time = current_time - time_delta
+            dstart = start_time.strftime("%Y-%m-%dT%H:%M:%S")
+            duration = format_timeperiod(DEMAND_REPORT_DURATION)
+            sampleInterval = format_timeperiod(DEMAND_REPORT_RESOLUTION)
 
-        #print(lr.loadSchedule)
-        try:
-            for xx in range(0, len(lr.loadSchedule)):
-                msg = {"Load": {"Readings": [lr.loadSchedule["dstart"][xx],
-                                             float(lr.loadSchedule["value"][xx])],
-                                "Units": "kW",
-                                "tz": "UTC",
-                                "data_type": "float"}}
+            loadReport_kwargs = {
+                "dstart": dstart, # start time for report
+                "sampleInterval": sampleInterval, # sample interval
+                "duration": duration # "PT" + str(DEMAND_REPORT_DURATION) + "H"            # duration of request
+            }
+            # ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
+            lr = LoadReport(websocket=self.websocket, **loadReport_kwargs)
+            lr.process()
 
-                _log.debug(msg)
-                self.vip.pubsub.publish(
-                    peer="pubsub",
-                    topic=self._config['load_report_topic'],
-                    headers={},
-                    message=msg)
-        except AttributeError:
-            _log.warn('Response requested not available')
+            #print(lr.loadSchedule)
+            try:
+                for xx in range(0, len(lr.loadSchedule)):
+                    msg = {"Load": {"Readings": [lr.loadSchedule["dstart"][xx],
+                                                 float(lr.loadSchedule["value"][xx])],
+                                    "Units": "kW",
+                                    "tz": "UTC",
+                                    "data_type": "float"}}
+
+                    _log.info(msg)
+                    self.vip.pubsub.publish(
+                        peer="pubsub",
+                        topic=self._config['load_report_topic'],
+                        headers={},
+                        message=msg)
+            except AttributeError:
+                _log.warn('Response requested not available')
 
         return None
 

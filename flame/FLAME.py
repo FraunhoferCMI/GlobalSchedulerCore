@@ -46,8 +46,8 @@ class IPKeys(object):
         # (3) check for response
         _log.info("Receiving Response from %s" % self.type)
         try:
-            print("I GET HERE!!!")
-            print(type(self.ws))
+            #print("I GET HERE!!!")
+            #print(type(self.ws))
             result_json = self.ws.recv()
             _log.info("Received Response from %s" % self.type)
         except websocket.WebSocketTimeoutException:
@@ -242,7 +242,7 @@ class LoadReport(IPKeys):
 
         _log.info("Processing %s" % self.type)
         if self.facilities:
-            print("FACILITIES ARE PRESENT")
+            _log.info("FACILITIES ARE PRESENT")
             loadSchedules = []
             for facility in self.facilities:
                 self.baseline_request['msg']['facility'] = facility
@@ -254,7 +254,7 @@ class LoadReport(IPKeys):
                 loadSchedules.append(facility_loadSchedule)
             self.loadSchedule = pd.concat(loadSchedules)
         else:
-            print("FACILITIES ARE NOT PRESENT")
+            _log.info("FACILITIES ARE NOT PRESENT")
             self._send_receive()
             try:
                 self.loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
