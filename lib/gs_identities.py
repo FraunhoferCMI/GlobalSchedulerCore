@@ -132,19 +132,19 @@ DEMAND_FILE          = DEMAND_FORECAST_FILE #"NYC_demand_interpolated.csv"
 DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN = 60
 DEMAND_FILE_TIME_RESOLUTION_MIN = DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN #1
 
-DEMAND_FORECAST_QUERY_INTERVAL = 10 # seconds
+DEMAND_FORECAST_QUERY_INTERVAL = 60*60 # seconds
 DEMAND_FORECAST_RESOLUTION = SSA_SCHEDULE_RESOLUTION # 60 minutes # MATT
 # DEMAND_FORECAST_RESOLUTION = "PT1H"
-LOADSHIFT_QUERY_INTERVAL = 10 # seconds
-DEMAND_REPORT_SCHEDULE = 10 # SECONDS
+LOADSHIFT_QUERY_INTERVAL = 60*60 # seconds
+DEMAND_REPORT_SCHEDULE = 60*60 # SECONDS
 # DEMAND_REPORT_RESOLUTION = "PT1H" # Time resolution of load request report
 DEMAND_REPORT_RESOLUTION = 15 # minutes # MATT
 # DEMAND_REPORT_DURATION =  60 # 24 hours Duration of load request reports in hours
-DEMAND_REPORT_DURATION   = 15 # minutes # MATT
+DEMAND_REPORT_DURATION   = 24 # hours # MATT
 N_LOADSHIFT_PROFILES   = 5
 # Desired resolution of forecast data points.  (ISO 8601 duration)
 LOADSHIFT_FORECAST_QUERY_INTERVAL = 30 # seconds
-STATUS_REPORT_SCHEDULE = 1 # in hours # Time interval at which the GS should poll the FLAME to check for status
+STATUS_REPORT_SCHEDULE = 60*60 # in seconds # Time interval at which the GS should poll the FLAME to check for status
 
 SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0) + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
 
