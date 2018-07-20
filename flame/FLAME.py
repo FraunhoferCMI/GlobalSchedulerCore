@@ -368,9 +368,9 @@ if __name__ == '__main__':
     # old way
     # ws = create_connection(url, timeout=None)
     # insecure way, use this if certificate is giving problems
-    sslopt = {"cert_reqs": ssl.CERT_NONE}
+    #sslopt = {"cert_reqs": ssl.CERT_NONE}
     # secure way
-    #sslopt = {"ca_certs": 'IPKeys_Root.pem'}
+    sslopt = {"ca_certs": 'IPKeys_Root.pem'}
     #sslopt = {"ca_certs": 'eiss2flame.pem'}
 
     ws = create_connection(ws_url, sslopt=sslopt)
