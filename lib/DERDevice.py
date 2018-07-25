@@ -58,6 +58,7 @@ from volttron.platform.jsonrpc import RemoteError
 from volttron.platform.messaging import headers as headers_mod
 
 from gs_identities import *
+import UnitConversion
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -232,21 +233,25 @@ class DERDevice():
         self.env_status = self.DeviceAttributes("EnvStatus")
         self.mode_ctrl = self.DeviceAttributes("ModeControl")
         self.pwr_ctrl = self.DeviceAttributes("RealPwrCtrl")
-	self.q_ctrl   = self.DeviceAttributes("QModeCtrl")
+        self.q_ctrl   = self.DeviceAttributes("QModeCtrl")
         self.pf_ctrl   = self.DeviceAttributes("PF")
         self.qSetPt_ctrl   = self.DeviceAttributes("QSetPt")
         self.PFComp_ctrl   = self.DeviceAttributes("PFComp")
         self.Vreg_ctrl   = self.DeviceAttributes("Vreg")
         self.Vcomp_ctrl   = self.DeviceAttributes("Vcomp")
+        self.DroopCtrl    = self.DeviceAttributes("DroopCtrl")
+        self.FreqSupport    = self.DeviceAttributes("FreqSupport")
         self.forecast = self.DeviceAttributes("Forecast")
         self.mode_ctrl_cmd = self.DeviceAttributes("ModeControlCmd")
         self.pwr_ctrl_cmd = self.DeviceAttributes("RealPwrCtrlCmd")
-	self.q_ctrl_cmd   = self.DeviceAttributes("QModeCtrlCmd")
+        self.q_ctrl_cmd   = self.DeviceAttributes("QModeCtrlCmd")
         self.pf_ctrl_cmd   = self.DeviceAttributes("PFCmd")
         self.qSetPt_ctrl_cmd   = self.DeviceAttributes("QSetPtCmd")
         self.PFComp_ctrl_cmd   = self.DeviceAttributes("PFCompCmd")
         self.Vreg_ctrl_cmd   = self.DeviceAttributes("VregCmd")
         self.Vcomp_ctrl_cmd   = self.DeviceAttributes("VcompCmd")
+        self.DroopCtrl_cmd    = self.DeviceAttributes("DroopCtrlCmd")
+        self.FreqSupport_cmd    = self.DeviceAttributes("FreqSupportCmd")
 
         _log.info("device is ..." + self.device_id)
         self.datagroup_dict_list = {}
@@ -263,6 +268,8 @@ class DERDevice():
         self.datagroup_dict_list.update({"PFComp": self.PFComp_ctrl})
         self.datagroup_dict_list.update({"Vreg": self.Vreg_ctrl})
         self.datagroup_dict_list.update({"Vcomp": self.Vcomp_ctrl})
+        self.datagroup_dict_list.update({"DroopCtrl": self.DroopCtrl})
+        self.datagroup_dict_list.update({"FreqSupport": self.FreqSupport})
         self.datagroup_dict_list.update({"Forecast": self.forecast})
         self.datagroup_dict_list.update({"ModeControlCmd": self.mode_ctrl_cmd})
         self.datagroup_dict_list.update({"RealPwrCtrlCmd": self.pwr_ctrl_cmd})
@@ -272,6 +279,8 @@ class DERDevice():
         self.datagroup_dict_list.update({"PFCompCmd": self.PFComp_ctrl_cmd})
         self.datagroup_dict_list.update({"VregCmd": self.Vreg_ctrl_cmd})
         self.datagroup_dict_list.update({"VcompCmd": self.Vcomp_ctrl_cmd})
+        self.datagroup_dict_list.update({"DroopCtrlCmd": self.DroopCtrl_cmd})
+        self.datagroup_dict_list.update({"FreqSupportCmd": self.FreqSupport_cmd})
 
 
 
@@ -612,6 +621,63 @@ class DERDevice():
 
         #_log.info("UpdateStatus: "+self.device_id+": data valid = "+str(self.isDataValid)+"; ControlAvailable = "+str(self.isControlAvailable))
 
+
+    ##############################################################################
+    def convert_units_from_endpt2(self, k, endpt_units, cur_topic_name):
+        """
+        """
+        cur_device = self.extpt_to_device_dict[cur_topic_name+"_"+k]
+        cur_attribute = self.extpt_to_device_dict[cur_topic_name+"_"+k].datagroup_dict[k]
+        keyval = cur_attribute.data_mapping_dict[k]
+
+        conversionKey = endpt_units+"To"+cur_attribute.units[keyval]
+        nameplate     = cur_device.get_nameplate()
+
+        try:
+            if type(cur_attribute.data_dict[keyval]) is list:
+                tmplist = [eval(self.unit_conversion_table[conversionKey]) for val in cur_attribute.data_dict[keyval]]
+                del cur_attribute.data_dict[keyval][:]
+                cur_attribute.data_dict[keyval] = tmplist[:]
+                _log.debug("PopEndpts: converted " + k + "from " + endpt_units +
+                           " to " + cur_attribute.units[keyval] + ". New val = " + str(cur_attribute.data_dict[keyval]))
+            else:
+                val = cur_attribute.data_dict[keyval]
+                cur_attribute.data_dict[keyval] = eval(self.unit_conversion_table[conversionKey])
+
+                # something that should work for a SunSpecScale(keyval, cur_attribute.data_dict, 1000.0, "kW")
+                # need to change convention to call the pt name = _<units>, so we wouldn't store the raw value.
+
+        except KeyError:
+            _log.debug(k + ': No unit conversion required - skipping')
+
+
+    ##############################################################################
+    def convert_units_to_endpt2(self, attribute, cmd, site):
+
+        ext_endpt = self.datagroup_dict_list[attribute].map_int_to_ext_endpt[cmd]
+
+        try:
+            to_units = self.datagroup_dict_list[attribute].endpt_units[ext_endpt]
+            from_units = self.datagroup_dict_list[attribute].units[cmd]
+            conversionKey = from_units+"To"+to_units
+            _log.info(conversionKey)
+            _log.info("SetPt: Ext End pt is "+ext_endpt+". Ext units are "+to_units)
+            _log.info("SetPt: Int End pt is "+cmd+".  Int units are "+from_units)
+
+            nameplate     = self.get_nameplate()
+            val           = self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]
+            _log.info(nameplate)
+            self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"] = \
+                eval(site.unit_conversion_table[conversionKey])
+
+            _log.info("SetPt: New val = "+str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
+
+        except KeyError as e:
+            _log.info("SetPt: No units found for "+ext_endpt+".  Assume no conversion is needed.")
+
+
+
+
     ##############################################################################
     def convert_units_from_endpt(self, k, endpt_units, cur_topic_name):
         """
@@ -761,7 +827,7 @@ class DERDevice():
 
         for k in incoming_msg:
             try:
-                self.convert_units_from_endpt(k, meta_data[k]["units"], cur_topic_name)
+                self.convert_units_from_endpt2(k, meta_data[k]["units"], cur_topic_name)
             except KeyError as e:
                 _log.info("Skipping: Key "+k+" not found")
         self.update_status()
@@ -984,6 +1050,19 @@ class DERSite(DERDevice):
                 _log.info("Key = " + keyval + ", Val = " + self.extpt_to_device_dict[keyval].device_id)
 
 
+            try:
+                unit_conversion_file = (data_map_dir + "UnitConversions.csv")
+                with open(unit_conversion_file, 'rb') as csvfile:
+                    unit_conversions = csv.reader(csvfile)
+                    self.unit_conversion_table = {}
+                    for row in unit_conversions:
+                        self.unit_conversion_table.update({row[2]: row[3]})
+            except IOError as e:
+                _log.info("unit conversion file "+unit_conversion_file+" not found")
+                pass
+
+
+
     ##############################################################################
     def set_auto_mode(self, sitemgr):
         for cur_device in self.devices:
@@ -1052,7 +1131,7 @@ class DERModbusDevice(DERDevice):
         res = 0
         # FIXME check for exceptions
         # convert units if necessary:
-        self.convert_units_to_endpt(attribute, cmd)
+        self.convert_units_to_endpt2(attribute, cmd, sitemgr.site)
         try:
             ret = sitemgr.vip.rpc.call(
                 "platform.actuator",
