@@ -32,8 +32,9 @@ receive_interval = 5
 
 
 def get_date():
-    dt_strt = datetime.datetime.isoformat(datetime.datetime.now(tz=pytz.timezone('America/New_York')).replace(microsecond=0,second=0,minute=0)+ timedelta(hours=1))
-    dt_end  = datetime.datetime.isoformat(datetime.datetime.now(tz=pytz.timezone('America/New_York')).replace(microsecond=0,second=0,minute=0)+timedelta(hours=6))
+    dt_now = datetime.datetime.now(tz=pytz.timezone('America/New_York')).replace(microsecond=0, second=0)
+    dt_strt = datetime.datetime.isoformat(dt_now + timedelta(minutes=5))
+    dt_end  = datetime.datetime.isoformat(dt_now + timedelta(hours=6, minutes=5))
     return dt_strt, dt_end
 
 class CPRPub(Agent):
