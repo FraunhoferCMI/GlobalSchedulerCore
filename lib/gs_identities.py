@@ -76,7 +76,7 @@ MINUTES_PER_DAY = 24 * MINUTES_PER_HR
 # Configuration Files
 GS_ROOT_DIR     = os.environ['GS_ROOT_DIR']
 CFG_PATH        = "cfg/"
-SITE_CFG_FILE   = "SiteConfiguration-1siteAndDemand.json"
+SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json" #"SiteConfiguration-PlantLevel.json" #"SiteConfiguration-1siteAndDemand.json"
 SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
 
 # Site Timeout

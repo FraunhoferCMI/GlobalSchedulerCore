@@ -264,7 +264,11 @@ class SiteManagerAgent(Agent):
         try:
             for k,v in device.config.data_dict.items():
                 _log.info("Status-"+device.device_id+"-Config: "+k+": "+str(v))
+        except:
+            _log.info("Warning! Config not found")
+            pass
 
+        try:
             for k,v in device.qSetPtr_ctrl.data_dict.items():
                 _log.info("Status-"+device.device_id+"-QSetPt: "+k+": "+str(v))
 
@@ -272,7 +276,7 @@ class SiteManagerAgent(Agent):
                 _log.info("Status-"+device.device_id+"-QModeCtrl: "+k+": "+str(v))
 
         except:
-            _log.info("Error! val not found")
+            _log.info("Warning! Q SetPt not found")
             pass
 
 
@@ -378,16 +382,13 @@ class SiteManagerAgent(Agent):
         if device == None:
             _log.info("SetPt: ERROR! Device "+device_id+" not found in "+self.site.device_id)
             # FIXME: other error trapping needed?
-        elif device.device_type not in self.site.DGPlant:
-            _log.info("SetPt: ERROR! Pwr dispatch command sent to non-controllable device "+device.device_id)
-            _log.info("SetPt: Device type = "+device.device_type)
-            # FIXME: other error trapping needed?
         else:
             # send the command
             self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
             _log.info("Ramp Rate: Sending Cmd!")
-            device.set_ramprate_real(val, self)
-
+            success = device.set_ramprate_real(val, self)
+            if success == 0:
+                self.dirtyFlag = 0 # invalid write
 
     ##############################################################################
     @RPC.export
@@ -405,15 +406,16 @@ class SiteManagerAgent(Agent):
         if device == None:
             _log.info("SetPt: ERROR! Device "+device_id+" not found in "+self.site.device_id)
             # FIXME: other error trapping needed?
-        elif device.device_type not in self.site.DGPlant:
-            _log.info("SetPt: ERROR! Pwr dispatch command sent to non-controllable device "+device.device_id)
-            _log.info("SetPt: Device type = "+device.device_type)
-            # FIXME: other error trapping needed?
+        #elif device.device_type not in self.site.DGPlant:
+        #    _log.info("SetPt: ERROR! Pwr dispatch command sent to non-controllable device " + device.device_id)
+        #    _log.info("SetPt: Device type = " + device.device_type)
         else:
             # send the command
             self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
             _log.info("SetPt: Sending Cmd!")
-            device.set_power_real(val, self)
+            success = device.set_power_real(val, self)
+            if success == 0:
+                self.dirtyFlag = 0 # invalid write
 
     ##############################################################################
     @RPC.export

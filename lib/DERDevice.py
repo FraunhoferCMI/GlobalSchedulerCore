@@ -100,9 +100,36 @@ ess_update_list = ["MaxSOE_kWh", "SOE_kWh", "MaxChargePwr_kW", "MaxDischargePwr_
 device_update_list = ["Nameplate_kW", "Pwr_kW", "AvgPwr_kW"]
 
 site_lookup = {"Shirley":"ShirleySite(site_info, None, data_map_dir)",
+               "ShirleyDeviceLevelCtrl":"ShirleySiteDeviceLevelCtrl(site_info, None, data_map_dir)",
+               "ShirleyEmulator": "ShirleySiteEmulator(site_info, None, data_map_dir)",
                "FLAME": "FLAMESite(site_info, None, data_map_dir)",
                "ModbusSite": "DERModbusSite(site_info, None, data_map_dir)",
                "Site": "DERSite(site_info, None, data_map_dir)"}
+
+device_keys = {"ESS": "ESSDevice(device, parent_device=self)",
+               "Tesla": "TeslaPowerPack(device, parent_device=self)",
+               "Solectria": "SolectriaInverter(device, parent_device=self)",
+               "PV": "PVDevice(device, parent_device=self)",
+               "ESSCtrlNode": "ESSCtrlNode(device, parent_device=self)",
+               "TeslaCtrlNode": "TeslaCtrlNode(device, parent_device=self)",
+               "SolectriaPVCtrlNode": "SolectriaPVCtrlNode(device, parent_device=self)",
+               "PVCtrlNode": "PVCtrlNode(device, parent_device=self)",
+               "LoadShiftCtrlNode": "LoadShiftCtrlNode(device, parent_device=self)"}
+
+# bit maps for Solectria status, control, and trigger registers per Modbus 9 spec
+SOLECTRIA_RAMP_BITMAP = {"Q_RAMP": 0x0008,
+                         "REAL_PWR_RAMP": 0x0004}
+
+SOLECTRIA_PWR_BITMAP = {"FreqWatt": 0x8000,
+                        "Connect": 0x4000,
+                        "HVRT": 0x0800,
+                        "LVRT": 0x0400,
+                        "VoltVar": 0x0080,
+                        "QCtrl": 0x0040,
+                        "VoltWatt": 0x0008,
+                        "RealPwrCtrl": 0x0004,
+                        "LFRT": 0x0002,
+                        "HFRT": 0x0001}
 
 
 ##############################################################################
@@ -122,7 +149,7 @@ class DERDevice():
     ##############################################################################
     def __init__(self, device_info, parent_device=None):
 
-        self.DGPlant = ["ESSCtrlNode", "PVCtrlNode", "LoadShiftCtrlNode"]
+        self.DGPlant = ["ESSCtrlNode", "PVCtrlNode", "LoadShiftCtrlNode", "TeslaCtrlNode"]
 
         self.parent_device = parent_device
         if self.parent_device == None:
@@ -152,31 +179,12 @@ class DERDevice():
 
         for device in device_info["DeviceList"]:
             _log.info(device["ResourceType"] + " " + device["ID"])
-            if device["ResourceType"] == 'ESS':
-                self.devices.append(
-                    ESSDevice(device, parent_device=self))
-            elif device["ResourceType"] == 'Tesla':
-                self.devices.append(
-                    TeslaPowerPack(device, parent_device=self))
-            elif device["ResourceType"] == 'Solectria':
-                _log.info("SOLECTRICA INVERTER!!")
-                self.devices.append(
-                    SolectriaInverter(device, parent_device=self))
-            elif device["ResourceType"] == 'PV':
-                self.devices.append(
-                    PVDevice(device, parent_device=self))
-            elif (device["ResourceType"] == "ESSCtrlNode"):
-                self.devices.append(
-                    ESSCtrlNode(device, parent_device=self))
-            elif (device["ResourceType"] == "PVCtrlNode"):
-                self.devices.append(
-                    PVCtrlNode(device, parent_device=self))
-            elif (device["ResourceType"] == "LoadShiftCtrlNode"):
-                self.devices.append(
-                    LoadShiftCtrlNode(device, parent_device=self))
-            else:
-                self.devices.append(
-                    DERDevice(device, parent_device=self))
+
+            try:
+                self.devices.append(eval(device_keys[device["ResourceType"]]))
+            except KeyError:
+                self.devices.append(DERDevice(device, parent_device=self))
+
         self.init_attributes()
 
         # todo: think about if this should happen at end of site __init__
@@ -281,8 +289,6 @@ class DERDevice():
         self.datagroup_dict_list.update({"VcompCmd": self.Vcomp_ctrl_cmd})
         self.datagroup_dict_list.update({"DroopCtrlCmd": self.DroopCtrl_cmd})
         self.datagroup_dict_list.update({"FreqSupportCmd": self.FreqSupport_cmd})
-
-
 
     ##############################################################################
     def find_device(self, device_id):
@@ -822,14 +828,14 @@ class DERDevice():
                     _log.info("PopEndpts: No Meta data found!")
 
             except KeyError as e:
-                _log.info("Warning: Key "+k+" not found")
+                _log.debug("Warning: Key "+k+" not found")
                 pass
 
         for k in incoming_msg:
             try:
                 self.convert_units_from_endpt2(k, meta_data[k]["units"], cur_topic_name)
             except KeyError as e:
-                _log.info("Skipping: Key "+k+" not found")
+                _log.debug("Skipping: Key "+k+" not found")
         self.update_status()
 
     ##############################################################################
@@ -842,6 +848,18 @@ class DERDevice():
         #FIXME - right now, this is only writing int data types..
         self.datagroup_dict_list[cmd_attribute].data_dict.update({cmd_pt: int(val)})
         self.set_point(attribute, pt, sitemgr)
+
+    ##############################################################################
+    def set_power_real(self, val, sitemgr):
+        _log.info("DERDevice - SetPt: ERROR! Pwr dispatch command sent to non-controllable device " + self.device_id)
+        _log.info("DERDevice - SetPt: Device type = " + self.device_type)
+        return 0
+
+    ##############################################################################
+    def set_ramprate_real(self, val, sitemgr):
+        _log.info("DERDevice - SetPt: ERROR! Ramp Rate command sent to non-controllable device " + self.device_id)
+        _log.info("DERDevice - SetPt: Device type = " + self.device_type)
+        return 0
 
     ##############################################################################
     def set_point(self, attribute, cmd, sitemgr):
@@ -1192,9 +1210,6 @@ class ShirleySite(DERSite, DERModbusDevice):
         self.writeError = {"SysModeStatus": 0,
                            "WatchDogTimeoutEnable": 0}
 
-
-
-
     ##############################################################################
     def check_device_status(self):
         # TODO - check for register mismatch (i.e., status != mode)
@@ -1221,20 +1236,16 @@ class ShirleySite(DERSite, DERModbusDevice):
 
         _log.info("Shirley Site!!!!!!")
         # set internal commands to new operating state:
-        if USE_LABVIEW == 1:
-            self.mode_ctrl_cmd.data_dict.update({"OpModeCtrl_cmd": SITE_RUNNING}) # deprecated
-            self.set_point("ModeControl", "OpModeCtrl", sitemgr) # deprecated
 
-        if USE_DEVICE_LEVEL == 1:
-            self.mode_ctrl_cmd.data_dict.update({"GSModeCtrl_cmd": DEVICE_LEVEL})
-            self.writePending["GSModeStatus"] = 1
-            self.expectedValue["GSModeStatus"] = DEVICE_LEVEL
-            self.set_point("ModeControl", "GSModeCtrl", sitemgr)
-        else:
-            self.mode_ctrl_cmd.data_dict.update({"GSModeCtrl_cmd": PLANT_LEVEL})
-            self.writePending["GSModeStatus"] = 1
-            self.expectedValue["GSModeStatus"] = PLANT_LEVEL
-            self.set_point("ModeControl", "GSModeCtrl", sitemgr)
+        self.mode_ctrl_cmd.data_dict.update({"GSModeCtrl_cmd": PLANT_LEVEL})
+        self.writePending["GSModeStatus"] = 1
+        self.expectedValue["GSModeStatus"] = PLANT_LEVEL
+        self.set_point("ModeControl", "GSModeCtrl", sitemgr)
+
+        self.pwr_ctrl_cmd.data_dict.update({"Enable_cmd": int(1)})
+        _log.info("Enabling power control")
+        self.set_point("RealPwrCtrl", "Enable", sitemgr)
+        # make sure that the enable commmand has been written.
 
         self.mode_ctrl_cmd.data_dict.update({"SysModeCtrl_cmd": INTERACTIVE})
         self.writePending["SysModeStatus"] = 1
@@ -1377,6 +1388,70 @@ class ShirleySite(DERSite, DERModbusDevice):
 
 
 ##############################################################################
+class ShirleySiteEmulator(ShirleySite):
+    """
+    addresses variance between actual shirley site and CSE emulator
+    """
+    ##############################################################################
+    #@RPC.export
+    def set_interactive_mode(self, sitemgr):
+        """
+        Sets mode to interactive
+        1. changes system op mode to "running"
+        2. changes system ctrl mode to "interactive"
+        """
+        _log.info("Shirley Site - Configuring for Emulator!!!!!!")
+        # set internal commands to new operating state:
+        self.mode_ctrl_cmd.data_dict.update({"OpModeCtrl_cmd": SITE_RUNNING}) # deprecated
+        self.set_point("ModeControl", "OpModeCtrl", sitemgr) # deprecated
+
+        self.mode_ctrl_cmd.data_dict.update({"GSModeCtrl_cmd": PLANT_LEVEL})
+        self.writePending["GSModeStatus"] = 1
+        self.expectedValue["GSModeStatus"] = PLANT_LEVEL
+        self.set_point("ModeControl", "GSModeCtrl", sitemgr)
+
+        self.mode_ctrl_cmd.data_dict.update({"SysModeCtrl_cmd": INTERACTIVE})
+        self.writePending["SysModeStatus"] = 1
+        self.expectedValue["SysModeStatus"] = INTERACTIVE
+        self.set_point("ModeControl", "SysModeCtrl", sitemgr)
+
+        for cur_device in self.devices:
+            cur_device.set_interactive_mode(sitemgr)
+
+##############################################################################
+class ShirleySiteDeviceLevelCtrl(ShirleySite):
+    ##############################################################################
+    #@RPC.export
+    def set_interactive_mode(self, sitemgr):
+        """
+        Sets mode to interactive
+        1. changes system op mode to "running"
+        2. changes system ctrl mode to "interactive"
+        """
+        #TODO - also: when / how does the site go into SITE_IDLE mode?
+
+        self.mode_ctrl_cmd.data_dict.update({"GSModeCtrl_cmd": DEVICE_LEVEL})
+        self.writePending["GSModeStatus"] = 1
+        self.expectedValue["GSModeStatus"] = DEVICE_LEVEL
+        self.set_point("ModeControl", "GSModeCtrl", sitemgr)
+
+        self.mode_ctrl_cmd.data_dict.update({"SysModeCtrl_cmd": INTERACTIVE})
+        self.writePending["SysModeStatus"] = 1
+        self.expectedValue["SysModeStatus"] = INTERACTIVE
+        self.set_point("ModeControl", "SysModeCtrl", sitemgr)
+
+        #self.pwr_ctrl_cmd.data_dict.update({"Enable_cmd": int(0)})
+        #self.set_point("RealPwrCtrl", "Enable", sitemgr)
+        # make sure that the disable commmand has been written.
+
+
+        for cur_device in self.devices:
+            cur_device.set_interactive_mode(sitemgr)
+
+
+
+
+##############################################################################
 class DERCtrlNode(DERDevice):
 
     ##############################################################################
@@ -1434,6 +1509,7 @@ class DERCtrlNode(DERDevice):
         _log.info("Setting Power to " + str(val))
         self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
         # where does the actual pwr ctrl live???
+        return 1
 
 
 ##############################################################################
@@ -1468,6 +1544,7 @@ class LoadShiftCtrlNode(DERDevice):
 
         self.writePending["SetPoint"] = 1
         self.expectedValue["SetPoint"] = int(val)
+        return 1
 
 
 ##############################################################################
@@ -1487,33 +1564,23 @@ class DERModbusCtrlNode(DERModbusDevice, DERCtrlNode):
 
     ##############################################################################
     def set_power_real(self, val, sitemgr):
-        # 1. Enable
-        # 2. Verify that it is enabled
-        # 3. set the value
-        # 4. set the trigger
-        # 5. make sure that the value has propagated
-        # 6. <optional> read output
-
+        """
+        send a real power command for a generic modbus device.
+        This is the simplest version of this method - it just writes value to the identified power control register.
+        More sophisticated actions (e.g., multi step writes with trigger, etc) can be defined in overloaded methods in
+        sub classes
+        :param val: value to be written
+        :param sitemgr: reference to the associated site manager agent
+        :return: None
+        """
         # This method has a number of issues -
         #TODO: Limit check
-
-        if USE_LABVIEW == 0:
-            # implement a complete handshake process for writing a power command -
-            try:
-                self.pwr_ctrl_cmd.data_dict.update({"Enable": int(1)})
-                _log.info("Enabling power control")
-                self.set_point("RealPwrCtrl", "Enable", sitemgr)
-
-                # make sure that the enable commmand has been written.
-
-            except:
-                pass
-
         self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": int(val)})
         _log.info("Setting Power to "+str(val))
         self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
         self.writePending["SetPoint"] = 1
         self.expectedValue["SetPoint"] = int(val)
+        return 1
 
 
 
@@ -1557,6 +1624,10 @@ class ESSCtrlNode(DERModbusCtrlNode):
     def update_state_vars(self):
         DERCtrlNode.update_state_vars(self)
 
+
+##############################################################################
+class TeslaCtrlNode(ESSCtrlNode):
+
     ##############################################################################
     def send_watchdog(self, sitemgr):
         """
@@ -1586,13 +1657,12 @@ class ESSCtrlNode(DERModbusCtrlNode):
         1. changes system op mode to "running"
         2. changes system ctrl mode to "interactive"
         """
-        if USE_DEVICE_LEVEL == 1:
-            self.pwr_ctrl_cmd.data_dict.update({"mode_cmd": 1})
-            self.set_point("RealPwrCtrl", "mode", sitemgr)
+        #if USE_DEVICE_LEVEL == 1:
+        self.pwr_ctrl_cmd.data_dict.update({"mode_cmd": 1})
+        self.set_point("RealPwrCtrl", "mode", sitemgr)
 
-            self.pwr_ctrl_cmd.data_dict.update({"TimeoutWindow_cmd": 600})
-            self.set_point("RealPwrCtrl", "TimeoutWindow", sitemgr)
-
+        self.pwr_ctrl_cmd.data_dict.update({"TimeoutWindow_cmd": 600})
+        self.set_point("RealPwrCtrl", "TimeoutWindow", sitemgr)
 
         for cur_device in self.devices:
             cur_device.set_interactive_mode(sitemgr)
@@ -1605,9 +1675,9 @@ class ESSCtrlNode(DERModbusCtrlNode):
         1. changes system op mode to "running"
         2. changes system ctrl mode to "interactive"
         """
-        if USE_DEVICE_LEVEL == 1:
-            self.pwr_ctrl_cmd.data_dict.update({"mode": 0})
-            self.set_point("RealPwrCtrl", "mode", sitemgr) # deprecated
+        #if USE_DEVICE_LEVEL == 1:
+        self.pwr_ctrl_cmd.data_dict.update({"mode": 0})
+        self.set_point("RealPwrCtrl", "mode", sitemgr) # deprecated
 
         for cur_device in self.devices:
             cur_device.set_auto_mode(sitemgr)
@@ -1655,6 +1725,60 @@ class PVCtrlNode(DERModbusCtrlNode):
         DERCtrlNode.update_state_vars(self)
 
 ##############################################################################
+class SolectriaPVCtrlNode(DERModbusCtrlNode):
+
+    ##############################################################################
+    def set_interactive_mode(self, sitemgr):
+        """
+        Sets mode to interactive
+        Needs to enable control of real power and ramp rate control, set connect to "ON"
+        """
+        #TODO: need to add register check
+
+        real_pwr_ctrl_enable_cmd  = SOLECTRIA_PWR_BITMAP["Connect"] | SOLECTRIA_PWR_BITMAP["RealPwrCtrl"]
+        self.mode_ctrl_cmd.data_dict.update({"pwr_ctrl_enable_cmd": real_pwr_ctrl_enable_cmd})
+        self.set_point("ModeControl", "pwr_ctrl_enable", sitemgr)
+
+        for cur_device in self.devices:
+            cur_device.set_interactive_mode(sitemgr)
+
+    ##############################################################################
+    def set_power_real(self, val, sitemgr):
+        """
+        Real power set point for solectria inverter
+        :param val:
+        :param sitemgr:
+        :return:
+        """
+
+        # we could add -
+        # (1) check for status, check for device level control
+        # (2) limit check?
+
+
+        # 1. Enable
+        # 2. Verify that it is enabled
+        # 3. set the value
+        # 4. set the trigger
+        # 5. make sure that the value has propagated
+        # 6. <optional> read output
+
+        # This method has a number of issues -
+        #TODO: Limit check
+        self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": int(val)})
+        _log.info("Setting Power to "+str(val))
+        self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
+        self.writePending["SetPoint"] = 1
+        self.expectedValue["SetPoint"] = int(val)
+
+        real_pwr_ctrl_trigger_cmd = SOLECTRIA_PWR_BITMAP["Connect"] | SOLECTRIA_PWR_BITMAP["RealPwrCtrl"]
+        self.mode_ctrl_cmd.data_dict.update({"pwr_ctrl_trigger_cmd": real_pwr_ctrl_trigger_cmd})
+        self.set_point("ModeControl", "pwr_ctrl_trigger", sitemgr)
+        # TODO: check to make sure it was written:
+        return 1
+
+
+##############################################################################
 class ESSDevice(DERDevice):
 
     ##############################################################################
@@ -1674,15 +1798,6 @@ class ESSDevice(DERDevice):
                                 "Nameplate_kW": float(device_info["max_dischg_pwr"]) if("max_dischg_pwr" in device_info) else 0.0})
         _log.info("ESS Device init - state vars: "+str(self.state_vars))
 
-
-##############################################################################
-class PVDevice(DERDevice):
-
-    ##############################################################################
-    def __init__(self, device_info, parent_device=None):
-
-        DERDevice.__init__(self, device_info, parent_device) #device_id, device_type, parent_device)
-        self.state_vars.update({"Nameplate_kW": float(device_info["nameplate_rating_kW"]) if("nameplate_rating_kW" in device_info) else 0.0})
 
 ##############################################################################
 class TeslaPowerPack(ESSDevice):
@@ -1749,8 +1864,16 @@ class TeslaPowerPack(ESSDevice):
 
 
 ##############################################################################
-class SolectriaInverter(PVDevice):
+class PVDevice(DERDevice):
 
+    ##############################################################################
+    def __init__(self, device_info, parent_device=None):
+
+        DERDevice.__init__(self, device_info, parent_device) #device_id, device_type, parent_device)
+        self.state_vars.update({"Nameplate_kW": float(device_info["nameplate_rating_kW"]) if("nameplate_rating_kW" in device_info) else 0.0})
+
+##############################################################################
+class SolectriaInverter(PVDevice):
     ##############################################################################
     def check_comm_status(self):
 
