@@ -1,6 +1,7 @@
 W,kW,WTokW,"UnitConversion.Scale(val, 0.001)"
 Wh,kWh,WhTokWh,"UnitConversion.ScaleEnergy(val,0.001)"
 cA,A,cAToA,"UnitConversion.Scale(val, 0.01)"
+dkV,kV,dkVTokV,"UnitConversion.Scale(val, 0.1)"
 dkV,V,dkVToV,"UnitConversion.Scale(val, 100.0)"
 cHz,Hz,cHzToHz,"UnitConversion.Scale(val, 0.01)"
 100W,kWh,100WTokWh,"UnitConversion.Scale(val, 0.1)"
