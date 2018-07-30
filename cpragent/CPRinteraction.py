@@ -2,12 +2,12 @@ import xml.etree.ElementTree as ET
 from  xml.etree.ElementTree import tostring
 from xml.dom import minidom
 
-import datetime
-from  datetime import timedelta
+from  datetime import timedelta, datetime
 import pytz
 import isodate
 import requests
 from requests.auth import HTTPBasicAuth
+from gs_identities import *
 
 def create_xml_query(start, end, TimeResolution_Minutes):
     "Create xml query to CPR model"
@@ -33,7 +33,7 @@ def create_xml_query(start, end, TimeResolution_Minutes):
                              GeneralDerate_Percent="85.00")
     Inverters = ET.SubElement(PvSystem, "Inverters")
     Inverter = ET.SubElement(Inverters, "Inverter",
-                             Count="2",
+                             Count="1",
                              MaxPowerOutputAC_kW="500.00000",
                              EfficiencyRating_Percent="98.000000")
 
@@ -41,7 +41,7 @@ def create_xml_query(start, end, TimeResolution_Minutes):
     PvArray = ET.SubElement(PvArrays, "PvArray")
     PvModules = ET.SubElement(PvArray, "PvModules")
     PvModule = ET.SubElement(PvModules, "PvModule",
-                             Count="3222",
+                             Count="1710",
                              NameplateDCRating_kW="0.310000",
                              PtcRating_kW="0.284800",
                              PowerTemperatureCoefficient_PercentPerDegreeC="0.43",
@@ -58,7 +58,11 @@ def create_xml_query(start, end, TimeResolution_Minutes):
                                       OutputFields=",".join(["StartTime",
                                                              "EndTime",
                                                              "PowerAC_kW",
+                                                             "EnergyAC_kWh",
                                                              "GlobalHorizontalIrradiance_WattsPerMeterSquared",
+                                                             "DirectNormalIrradiance_WattsPerMeterSquared",
+                                                             "DiffuseHorizontalIrradiance_WattsPerMeterSquared",
+                                                             "IrradianceObservationType",
                                                              "AmbientTemperature_DegreesC"
                                                              ]))
 
@@ -82,18 +86,26 @@ def parse_query(query):
 
     time = []
     forecast = []
+    ghi      = []
     for sim in SimPd:
         iso_datetime = isodate.parse_datetime(sim.attributes['StartTime'].value)
         time.append(iso_datetime.astimezone(pytz.UTC).strftime("%Y-%m-%dT%H:%M:%S"))
         try:
-            print(sim.attributes['StartTime'].value + ": " + sim.attributes['PowerAC_kW'].value)
+            #print(sim.attributes['StartTime'].value + ": " + sim.attributes['PowerAC_kW'].value)
             forecast.append(float(sim.attributes['PowerAC_kW'].value))
         except KeyError:
-            print(sim.attributes['StartTime'].value + ": " + "synthesized 0.0")
+            #print(sim.attributes['StartTime'].value + ": " + "synthesized 0.0")
             forecast.append(0.0)
+
+        try:
+            ghi.append(float(sim.attributes["GlobalHorizontalIrradiance_WattsPerMeterSquared"].value))
+        except KeyError:
+            ghi.append(0.0)
+
 
     parsed_forecast = dict(
         forecast = forecast,
+        ghi      = ghi,
         time = time,
         units = "kWh",
         # tz = "UTC-5",
@@ -102,12 +114,16 @@ def parse_query(query):
 
     return parsed_forecast
 
-def get_date():
-    dt_now = datetime.datetime.now(tz=pytz.timezone('America/New_York')).replace(microsecond=0, second=0)
-    dt_strt = datetime.datetime.isoformat(dt_now + timedelta(minutes=5))
-    dt_end  = datetime.datetime.isoformat(dt_now + timedelta(hours=4,
-                                                             # minutes=5
-                                                             ))
+def get_date(query_interval, duration):
+    dt_now = datetime.now(tz=pytz.timezone('America/New_York')).replace(microsecond=0, second=0)
+
+    if query_interval == 1:
+        dt_strt = datetime.isoformat(dt_now + timedelta(minutes=5))
+        dt_end  = datetime.isoformat(dt_now + timedelta(minutes=duration*60+5))
+    else:
+        dt_strt = datetime.isoformat(dt_now.replace(minute=0))  # align to top of the hour
+        dt_end  = datetime.isoformat(dt_now + timedelta(hours=duration))
+
     return dt_strt, dt_end
 
 if __name__ == "__main__":
@@ -117,11 +133,12 @@ if __name__ == "__main__":
     userName = "schoudhary@cse.fraunhofer.org"
     password = "Shines2017"
     querystring = {"key":"FRHR3MXX7"}
-    start, end = get_date()
+    TimeResolution_Minutes = 1
+    duration = 5
+    start, end = get_date(TimeResolution_Minutes, duration)
 
     ##
     print("Request model")
-    TimeResolution_Minutes = 1
     # TimeResolution_Minutes = 60
     generated = create_xml_query(start, end, TimeResolution_Minutes)
 

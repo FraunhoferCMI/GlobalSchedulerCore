@@ -1,5 +1,4 @@
 {
-                "query_interval":60,
                 "receive_interval":5,
                 "sim_interval":60,
                 "userName": "schoudhary@cse.fraunhofer.org",

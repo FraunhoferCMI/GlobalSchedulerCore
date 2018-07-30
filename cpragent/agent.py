@@ -27,7 +27,6 @@ _log = logging.getLogger(__name__)
 __version__="0.1"
 
 _log.info("Agent Code begins here")
-query_interval = 60
 receive_interval = 5
 
 
@@ -37,11 +36,18 @@ class CPRPub(Agent):
         super(CPRPub,self).__init__(**kwargs)
 
         self._conf = utils.load_config(config_path)
-        self._conf['topic'] = "".join(["devices/cpr",
+
+        if self._conf['sim_interval'] == 60:
+            self._conf['topic'] = "devices/cpr/forecast/all"
+            self.query_interval = LIVE_CPR_QUERY_INTERVAL
+            self.duration       = SSA_SCHEDULE_DURATION
+        else:
+            self._conf['topic'] = "".join(["devices/cpr/forecast",
                                        str(self._conf['sim_interval']),
-                                       "m"])
-        query_interval = self._conf.get("query_interval")
-        receive_interval = self._conf.get("receive_interval")
+                                       "m/all"])
+            self.query_interval = LIVE_1MIN_CPR_QUERY_INTERVAL
+            self.duration       = DURATION_1MIN_FORECAST
+        #receive_interval = self._conf.get("receive_interval")
 
         _log.info("Initializing - STEP 3")
         self.initialization_complete = False
@@ -79,15 +85,18 @@ class CPRPub(Agent):
        self.status_pending = False
        self.request_cpr_model()
 
+    @Core.receiver('onstart')
+    def onstart(self, sender, **kwargs):
+        self.periodic_greenlet = self.core.periodic(self.query_interval, self.request_cpr_model)
 
-    @Core.periodic(period = LIVE_CPR_QUERY_INTERVAL)
+    #@Core.periodic(period = LIVE_CPR_QUERY_INTERVAL)
     def request_cpr_model(self):
 
         if self.initialization_complete == True:     # queries server only after config steps are completed
             if self.status_pending is False:
                 _log.info("Make a model request")
                 _log.info("Creating cpr request")
-                self.start_date, self.end_date = get_date()
+                self.start_date, self.end_date = get_date(self._conf['sim_interval'], self.duration)
                 _log.debug("start date = "+str(self.start_date)+"; end date is "+str(self.end_date))
                 cur_payload = create_xml_query(start=self.start_date,
                                                end=self.end_date,
@@ -127,8 +136,12 @@ class CPRPub(Agent):
             if status == 'Done':
                 #_log.info(data.content)
                 parsed_response = parse_query(data.content)
-                _log.info("Model received, Parsed Response Sending: {}".format(parsed_response))
-                cprModel = Forecast(**parsed_response)
+                _log.debug("Model received, Parsed Response Sending: {}".format(parsed_response))
+                cprModel = Forecast(resolution = self._conf['sim_interval'],
+                                    duration=self.duration,
+                                    **parsed_response)
+                #duration = self.duration,
+                #
 
                 message = cprModel.forecast_obj
                 self.vip.pubsub.publish(
