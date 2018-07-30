@@ -19,7 +19,7 @@ from volttron.platform.messaging import headers as headers_mod
 
 from gs_utilities import Forecast
 
-from .CPRinteraction import create_xml_query, parse_query
+from CPRinteraction import create_xml_query, parse_query, get_date
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -31,18 +31,15 @@ query_interval = 60
 receive_interval = 5
 
 
-def get_date():
-    dt_now = datetime.datetime.now(tz=pytz.timezone('America/New_York')).replace(microsecond=0, second=0)
-    dt_strt = datetime.datetime.isoformat(dt_now + timedelta(minutes=5))
-    dt_end  = datetime.datetime.isoformat(dt_now + timedelta(hours=6, minutes=5))
-    return dt_strt, dt_end
-
 class CPRPub(Agent):
     _log.info("Entering Agent class - STEP 2")
     def __init__(self,config_path,**kwargs):
         super(CPRPub,self).__init__(**kwargs)
 
         self._conf = utils.load_config(config_path)
+        self._conf['topic'] = "".join(["devices/cpr",
+                                       str(self._conf['sim_interval']),
+                                       "m"])
         query_interval = self._conf.get("query_interval")
         receive_interval = self._conf.get("receive_interval")
 
@@ -86,14 +83,14 @@ class CPRPub(Agent):
     def request_cpr_model(self):
 
         if self.initialization_complete == True:     # queries server only after config steps are completed
-
-            _log.info("Attempting to make a model request")
             if self.status_pending is False:
-
+                _log.info("Make a model request")
                 _log.info("Creating cpr request")
                 self.start_date, self.end_date = get_date()
                 _log.debug("start date = "+str(self.start_date)+"; end date is "+str(self.end_date))
-                cur_payload = create_xml_query(self.start_date, self.end_date)
+                cur_payload = create_xml_query(start=self.start_date,
+                                               end=self.end_date,
+                                               TimeResolution_Minutes=self._conf['sim_interval'])
                 _log.debug("current payload:\n"+ minidom.parseString(cur_payload).toprettyxml())
 
                 _log.info("Making model request:\n{}".format(cur_payload))

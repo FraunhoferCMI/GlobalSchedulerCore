@@ -8,8 +8,13 @@ import pytz
 import requests
 from requests.auth import HTTPBasicAuth
 
-def create_xml_query(start, end):
+def create_xml_query(start, end, TimeResolution_Minutes):
     "Create xml query to CPR model"
+    if TimeResolution_Minutes== 60:
+       PerformTimeShifting = "true"
+    else:
+       PerformTimeShifting = "false"
+
 
     CreateSimulationRequest = ET.Element("CreateSimulationRequest",
                                          xmlns="http://service.solaranywhere.com/api/v2")
@@ -59,15 +64,13 @@ def create_xml_query(start, end):
     WeatherDataOptions = ET.SubElement(SimulationOptions, "WeatherDataOptions",
                                        WeatherDataSource="SolarAnywhere3_2",
                                        WeatherDataPreference = "Auto",
-                                       PerformTimeShifting = "true",
+                                       PerformTimeShifting = PerformTimeShifting,
                                        StartTime=start,
                                        EndTime=end,
                                        SpatialResolution_Degrees="0.01",
-                                       TimeResolution_Minutes="60")
+                                       TimeResolution_Minutes=str(TimeResolution_Minutes))
 
     xml_string = tostring(CreateSimulationRequest)
-    # ppxml = xml.dom.minidom.parseString(xml_fname)
-    # print(ppxml.toprettyxml())
 
     return xml_string
 
@@ -92,6 +95,14 @@ def parse_query(query):
 
     return parsed_forecast
 
+def get_date():
+    dt_now = datetime.datetime.now(tz=pytz.timezone('America/New_York')).replace(microsecond=0, second=0)
+    dt_strt = datetime.datetime.isoformat(dt_now + timedelta(minutes=5))
+    dt_end  = datetime.datetime.isoformat(dt_now + timedelta(hours=4,
+                                                             # minutes=5
+                                                             ))
+    return dt_strt, dt_end
+
 if __name__ == "__main__":
     headers =  {'content-type': "text/xml; charset=utf-8",
                 'content-length': "length",}
@@ -99,12 +110,15 @@ if __name__ == "__main__":
     userName = "schoudhary@cse.fraunhofer.org"
     password = "Shines2017"
     querystring = {"key":"FRHR3MXX7"}
-    start = datetime.datetime.isoformat(datetime.datetime.now(tz=pytz.timezone('America/New_York')).replace(microsecond=0,second=0,minute=0)+timedelta(hours=1))
-    end  = datetime.datetime.isoformat(datetime.datetime.now(tz=pytz.timezone('America/New_York')).replace(microsecond=0,second=0,minute=0)+timedelta(hours=6))
+    start, end = get_date()
 
     ##
     print("Request model")
-    generated = create_xml_query(start, end)
+    TimeResolution_Minutes = 1
+    # TimeResolution_Minutes = 60
+    generated = create_xml_query(start, end, TimeResolution_Minutes)
+
+
     response = requests.post(url,
                              auth=HTTPBasicAuth(userName, password),
                              data=generated.decode(),
@@ -121,5 +135,9 @@ if __name__ == "__main__":
     parsed_response = parse_query(data.content)
     parsed_response
     ##
-
-
+    # review the generated
+    import xml.dom.minidom
+    parsed = xml.dom.minidom.parseString(generated)
+    print("This is the submitted response: ")
+    print(parsed.toprettyxml())
+    ##

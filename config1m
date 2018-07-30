@@ -1,7 +1,7 @@
 {
                 "query_interval":60,
                 "receive_interval":5,
-                "sim_interval":60,
+                "sim_interval":1,
                 "userName": "schoudhary@cse.fraunhofer.org",
                 "password":"Shines2017",
                 "querystring":{"key":"FRHR3MXX7"},
