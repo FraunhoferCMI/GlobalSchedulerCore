@@ -147,6 +147,7 @@ def get_gs_path(local_path, fname):
 ##############################################################################
 class ForecastObject():
     """
+    deprecated?
     Data class for storing forecast data in a serializable format that is consumable by the VOLTTRON Historian
     """
     ##############################################################################
@@ -167,26 +168,44 @@ class Forecast():
     Stores forecast data in a serializable format that is consumable by the
     VOLTTRON Historian
     """
-    def __init__(self, forecast, time, units, datatype):
+    def __init__(self, forecast, time, units, datatype, ghi = None,
+                 duration =  SSA_SCHEDULE_DURATION,
+                 resolution = SSA_SCHEDULE_RESOLUTION):
         assert isinstance(forecast, list)
         assert isinstance(time, list)
         self.forecast = forecast
         self.time = time
         self.units = units
         self.datatype = datatype
+        self.duration = duration
+        self.resolution = resolution
+        self.ghi      = ghi
 
         self.serialize()
         return None
 
     def serialize(self):
-        self.forecast_values = {"Forecast": self.forecast,
-                                "Time": self.time,
-                                "Duration": SSA_SCHEDULE_DURATION,
-                                "Resolution": SSA_SCHEDULE_RESOLUTION}
-        self.forecast_meta_data = {"Forecast": {"units": self.units, "type": self.datatype},
-                                   "Time": {"units": "UTC", "type": "str"},
-                                   "Duration": {"units": "hr", "type": "int"},
-                                   "Resolution": {"units": "min", "type": "int"}}
+        if self.ghi == None:
+            self.forecast_values = {"Forecast": self.forecast,
+                                    "Time": self.time,
+                                    "Duration": self.duration,
+                                    "Resolution": self.resolution}
+            self.forecast_meta_data = {"Forecast": {"units": self.units, "type": self.datatype},
+                                       "Time": {"units": "UTC", "type": "str"},
+                                       "Duration": {"units": "hr", "type": "int"},
+                                       "Resolution": {"units": "min", "type": "int"}}
+        else:
+            self.forecast_values = {"Forecast": self.forecast,
+                                    "ghi": self.ghi,
+                                    "Time": self.time,
+                                    "Duration": self.duration,
+                                    "Resolution": self.resolution}
+            self.forecast_meta_data = {"Forecast": {"units": self.units, "type": self.datatype},
+                                       "ghi": {"units": self.units, "type": self.datatype},
+                                       "Time": {"units": "UTC", "type": "str"},
+                                       "Duration": {"units": "hr", "type": "int"},
+                                       "Resolution": {"units": "min", "type": "int"}}
+
 
         self.forecast_obj = [self.forecast_values, self.forecast_meta_data]
 

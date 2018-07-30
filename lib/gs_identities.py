@@ -106,11 +106,13 @@ MODBUS_AVERAGING_WINDOW = 180 # period in seconds over which to average instanta
 MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
 CPR_QUERY_INTERVAL = 5 # period in seconds for forecasts to arrive
 LIVE_CPR_QUERY_INTERVAL = 300
+LIVE_1MIN_CPR_QUERY_INTERVAL = 300
 MODBUS_WRITE_ATTEMPTS  = 5  # number of modbus reads before a write error is thrown
 
 SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedules
 SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
 SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
+DURATION_1MIN_FORECAST = 5 # hrs
 
 REGULATE_ESS_OUTPUT = True #False
 SEARCH_LOADSHIFT_OPTIONS = False
