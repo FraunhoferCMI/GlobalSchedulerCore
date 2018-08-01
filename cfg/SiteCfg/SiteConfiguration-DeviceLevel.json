@@ -7,7 +7,8 @@
             "TopicName":"Modbus",
             "TopicPath":"devices/Site1",
             "TopicAgent":"platform.driver",
-            "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3"
+            "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3",
+            "TopicDataMapFile": "ShirleySouthDeviceLevel-Modbus-data-map.csv"
          },
          {
             "TopicName":"Forecast",
