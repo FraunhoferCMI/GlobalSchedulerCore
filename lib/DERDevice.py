@@ -1725,7 +1725,7 @@ class PVCtrlNode(DERModbusCtrlNode):
         DERCtrlNode.update_state_vars(self)
 
 ##############################################################################
-class SolectriaPVCtrlNode(DERModbusCtrlNode):
+class SolectriaPVCtrlNode(PVCtrlNode):
 
     ##############################################################################
     def set_interactive_mode(self, sitemgr):
