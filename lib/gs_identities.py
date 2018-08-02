@@ -46,9 +46,12 @@ from datetime import datetime, timedelta
 import os
 
 # execution flags
+USE_SIM      = 1
 USE_VOLTTRON = 1
-USE_LABVIEW  = 0
-USE_DEVICE_LEVEL = 1
+
+# Configuration File Locations
+SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json" #"SiteConfiguration-PlantLevel.json" #"SiteConfiguration-1siteAndDemand.json"
+SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
 
 # Site Operating Modes
 SITE_IDLE    = 0
@@ -72,12 +75,9 @@ SEC_PER_MIN = 60.0
 MINUTES_PER_HR = 60
 MINUTES_PER_DAY = 24 * MINUTES_PER_HR
 
-
-# Configuration Files
+# Directories
 GS_ROOT_DIR     = os.environ['GS_ROOT_DIR']
 CFG_PATH        = "cfg/"
-SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json" #"SiteConfiguration-PlantLevel.json" #"SiteConfiguration-1siteAndDemand.json"
-SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
 
 # Site Timeout
 PMC_HEARTBEAT_TIMEOUT = 100 # timeout, in seconds
@@ -104,9 +104,6 @@ START_LATENCY = 0 # time in seconds, to delay execution
 MODBUS_SCRAPE_INTERVAL  = 3 # period in seconds for modbus device to post on the IEB bus
 MODBUS_AVERAGING_WINDOW = 180 # period in seconds over which to average instantaneous readings
 MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
-CPR_QUERY_INTERVAL = 5 # period in seconds for forecasts to arrive
-LIVE_CPR_QUERY_INTERVAL = 300
-LIVE_1MIN_CPR_QUERY_INTERVAL = 300
 MODBUS_WRITE_ATTEMPTS  = 5  # number of modbus reads before a write error is thrown
 
 SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedules
@@ -118,7 +115,6 @@ REGULATE_ESS_OUTPUT = True #False
 SEARCH_LOADSHIFT_OPTIONS = False
 
 # For configuring w/simulated data
-USE_SIM        = 1
 USE_SOLAR_SIM  = 1
 USE_DEMAND_SIM = 1
 SIM_SCENARIO   = 1
@@ -139,20 +135,32 @@ DEMAND_FILE          = DEMAND_FORECAST_FILE #"NYC_demand_interpolated.csv"
 DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN = 60
 DEMAND_FILE_TIME_RESOLUTION_MIN = DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN #1
 
-DEMAND_FORECAST_QUERY_INTERVAL = 10 # seconds
-DEMAND_FORECAST_RESOLUTION = SSA_SCHEDULE_RESOLUTION # 60 minutes # MATT
-# DEMAND_FORECAST_RESOLUTION = "PT1H"
-LOADSHIFT_QUERY_INTERVAL = 10 # seconds
-DEMAND_REPORT_SCHEDULE = 10 # SECONDS
-# DEMAND_REPORT_RESOLUTION = "PT1H" # Time resolution of load request report
-DEMAND_REPORT_RESOLUTION = 15 # minutes # MATT
-# DEMAND_REPORT_DURATION =  60 # 24 hours Duration of load request reports in hours
-DEMAND_REPORT_DURATION   = 15 # minutes # MATT
-N_LOADSHIFT_PROFILES   = 5
-# Desired resolution of forecast data points.  (ISO 8601 duration)
-LOADSHIFT_FORECAST_QUERY_INTERVAL = 30 # seconds
-STATUS_REPORT_SCHEDULE = 1 # in hours # Time interval at which the GS should poll the FLAME to check for status
-
 SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0) + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
 
 DEMAND_CHARGE_THRESHOLD = 250
+
+
+# SCHEDULES
+if USE_SIM == 1:   # schedules for simulated testing
+    CPR_QUERY_INTERVAL = 60 # period in seconds for forecasts to arrive
+    CPR_1MIN_QUERY_INTERVAL = 30
+    DEMAND_FORECAST_QUERY_INTERVAL = 10 # seconds
+    DEMAND_FORECAST_RESOLUTION = SSA_SCHEDULE_RESOLUTION # 60 minutes # MATT
+    LOADSHIFT_QUERY_INTERVAL = 10 # seconds
+    DEMAND_REPORT_SCHEDULE = 10 # SECONDS
+    DEMAND_REPORT_RESOLUTION = 60 # minutes Time resolution of load request report - ONLY SUPPORTS 60 MIN
+    DEMAND_REPORT_DURATION   = 15 # Hours - (or minutes?) FIXME! - duration of load report.
+    N_LOADSHIFT_PROFILES   = 5
+    STATUS_REPORT_SCHEDULE = 60 # in seconds # Time interval at which the GS should poll the FLAME to check for status
+
+else:   # schedules associated with live testing
+    CPR_QUERY_INTERVAL = 20*60 # period in seconds for forecasts to arrive
+    CPR_1MIN_QUERY_INTERVAL = 300
+    DEMAND_FORECAST_QUERY_INTERVAL = 60*60 # seconds
+    DEMAND_FORECAST_RESOLUTION = SSA_SCHEDULE_RESOLUTION # 60 minutes # MATT - "PT1H"
+    LOADSHIFT_QUERY_INTERVAL = 60*60 # seconds
+    DEMAND_REPORT_SCHEDULE = 10 # SECONDS
+    DEMAND_REPORT_RESOLUTION = 60 # minutes Time resolution of load request report - ONLY SUPPORTS 60 MIN
+    DEMAND_REPORT_DURATION =  24 # hours Duration of load request reports in hours
+    N_LOADSHIFT_PROFILES   = 5
+    STATUS_REPORT_SCHEDULE = 60*60 # in seconds # Time interval at which the GS should poll the FLAME to check for status

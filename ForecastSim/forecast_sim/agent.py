@@ -286,7 +286,13 @@ class CPRAgent(Agent):
         """
         next_forecast_timestamps = self.get_timestamps(self.sim_time_corr)
         next_forecast            = self.demand_series.get(next_forecast_timestamps)
-        self.load_report = next_forecast[0]
+        print("Next Forecast")
+        # this take hourly data and resamples and interpolates to one minutes
+        minute_next_forecast = next_forecast.resample('min').mean().interpolate()
+        # print(minute_next_forecast)
+        print(minute_next_forecast[0])
+        self.load_report = minute_next_forecast[0]
+        # self.load_report = next_forecast[0]
 
 
         #TimeStamp = utils.get_aware_utc_now()  # datetime.now()
@@ -362,6 +368,11 @@ class CPRAgent(Agent):
         next_forecast_timestamps = self.get_timestamps(sim_time_corr = self.sim_time_corr)
         next_forecast            = self.ghi_series.get(next_forecast_timestamps)
 
+        print("NEXT FORECAST SOLAR")
+
+        minute_next_forecast = next_forecast.resample('min').mean().interpolate()
+        print(minute_next_forecast)
+
         # Convert irradiance to a percentage
         self.solar_forecast.forecast_values["Forecast"] = [100 * v / 1000 for v in next_forecast]
         self.solar_forecast.forecast_values["Time"]     = [datetime.strftime(ts, "%Y-%m-%dT%H:%M:%S") for ts in next_forecast_timestamps]  # was .%f
@@ -402,7 +413,7 @@ class CPRAgent(Agent):
     @Core.periodic(period = LOADSHIFT_QUERY_INTERVAL)
     def query_loadshift_forecast(self):
         """
-        called at interval defined in LOADSHIFT_FORECAST_QUERY_INTERVAL (gs_identities)
+        called at interval defined in LOADSHIFT_QUERY_INTERVAL (gs_identities)
         publishes loadshift forecast corresponding to the next planned optimizer pass
         """
         if USE_DEMAND_SIM == 1:

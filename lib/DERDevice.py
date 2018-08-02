@@ -649,12 +649,14 @@ class DERDevice():
             else:
                 val = cur_attribute.data_dict[keyval]
                 cur_attribute.data_dict[keyval] = eval(self.unit_conversion_table[conversionKey])
+                _log.debug("PopEndpts: converted " + k + "from " + endpt_units +
+                           " to " + cur_attribute.units[keyval] + ". New val = " + str(cur_attribute.data_dict[keyval]))
 
                 # something that should work for a SunSpecScale(keyval, cur_attribute.data_dict, 1000.0, "kW")
                 # need to change convention to call the pt name = _<units>, so we wouldn't store the raw value.
 
         except KeyError:
-            _log.debug(k + ': No unit conversion required - skipping')
+            _log.debug(k + ': No unit conversion required - skipping: ' + conversionKey)
 
 
     ##############################################################################
@@ -680,125 +682,6 @@ class DERDevice():
 
         except KeyError as e:
             _log.info("SetPt: No units found for "+ext_endpt+".  Assume no conversion is needed.")
-
-
-
-
-    ##############################################################################
-    def convert_units_from_endpt(self, k, endpt_units, cur_topic_name):
-        """
-        Method for converting units between external end points and internal values.
-        Only a few conversions are implemented -
-        - W to kW, Wh to kWh.
-        - SunSpec scale factors
-        - Pct to kW
-        This is a bit kludgy but it works...
-        :return:
-        """
-
-        cur_device = self.extpt_to_device_dict[cur_topic_name+"_"+k]
-        cur_attribute = self.extpt_to_device_dict[cur_topic_name+"_"+k].datagroup_dict[k]
-        keyval = cur_attribute.data_mapping_dict[k]
-
-        if ((endpt_units == "W") and
-                (cur_attribute.units[keyval] == "kW")) or\
-                ((endpt_units == "Wh") and
-                     (cur_attribute.units[keyval] == "kWh")):
-            if type(cur_attribute.data_dict[keyval]) is list:
-                # FIXME - ugh
-                tmplist = [float(v)/1000.0 for v in cur_attribute.data_dict[keyval]]
-                del cur_attribute.data_dict[keyval][:]
-                cur_attribute.data_dict[keyval] = tmplist[:]
-                _log.debug("PopEndpts: converted "+k+"from "+endpt_units+
-                          " to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
-            else:
-                cur_attribute.data_dict[keyval] = float(cur_attribute.data_dict[keyval])/1000.0
-
-                if (endpt_units == "Wh"):
-                    cur_attribute.data_dict[keyval] *= SIM_HRS_PER_HR #FIXME - temp for doing fast sims
-
-                _log.debug("PopEndpts: converted "+k+"from "+endpt_units+" to "+
-                          cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
-
-        if (endpt_units == "ScaledW") and (cur_attribute.units[keyval] == "kW"):
-            base_name = keyval[:len(keyval)-len("raw")] # assume this has "_raw" on the end of the name
-            cur_attribute.data_dict[base_name+"kW"] = \
-                (cur_attribute.data_dict[keyval]*10.0**cur_attribute.data_dict[base_name+"SF"])/1000.0
-            _log.debug("PopEndpts: converted "+k+"from "+endpt_units+" to "+
-                      cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[base_name+"kW"]))
-
-        if (endpt_units == "NegScaledW") and (cur_attribute.units[keyval] == "kW"):
-            base_name = keyval[:len(keyval)-len("raw")] # assume this has "_raw" on the end of the name
-            cur_attribute.data_dict[base_name+"kW"] = \
-                -1*(cur_attribute.data_dict[keyval]*10.0**cur_attribute.data_dict[base_name+"SF"])/1000.0
-            _log.debug("PopEndpts: converted "+k+"from "+endpt_units+" to "+
-                      cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[base_name+"kW"]))
-
-        if (endpt_units == "Pct") and (cur_attribute.units[keyval] == "kW"):   # FIXME - make this PctkW?
-            # #_log.info("converting pct to kW")
-            nameplate = cur_device.get_nameplate()
-            _log.debug("val is "+str(nameplate))
-
-            if type(cur_attribute.data_dict[keyval]) is list:
-                _log.debug("converting list from pct to kW")
-                # FIXME - ugh
-                tmplist = [(float(v) / 100.0) * nameplate for v in cur_attribute.data_dict[keyval]]
-                del cur_attribute.data_dict[keyval][:]
-                cur_attribute.data_dict[keyval] = tmplist[:]
-            else: # assume int
-                _log.debug("converting single pt from pct to kW")
-                _log.debug("value is "+str(cur_attribute.data_dict[keyval])+"; nameplate is "+str(nameplate))
-                cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100.0) * nameplate)
-                _log.debug("new value is "+str(cur_attribute.data_dict[keyval]))
-                #cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100) * cur_device.get_nameplate())
-                #_log.info("Unsupported data type for conversion pct to kW")
-	        _log.debug("PopEndpts: converted "+k+"from "+endpt_units+" to "+cur_attribute.units[keyval]+". New val = "+str(cur_attribute.data_dict[keyval]))
-
-        if (endpt_units == "NegPct") and (cur_attribute.units[keyval] == "kW"):  # FIXME - make this PctkW?
-            # #_log.info("converting pct to kW")
-            nameplate = cur_device.get_nameplate()
-            _log.debug("val is " + str(nameplate))
-
-            if type(cur_attribute.data_dict[keyval]) is list:
-                _log.debug("converting list from neg pct to kW")
-                # FIXME - ugh
-                tmplist = [-1*(float(v) / 100.0) * nameplate for v in cur_attribute.data_dict[keyval]]
-                del cur_attribute.data_dict[keyval][:]
-                cur_attribute.data_dict[keyval] = tmplist[:]
-            else:  # assume int
-                _log.debug("converting single pt from pct to kW")
-                _log.debug("value is " + str(cur_attribute.data_dict[keyval]) + "; nameplate is " + str(nameplate))
-                cur_attribute.data_dict[keyval] = int(-1*(float(cur_attribute.data_dict[keyval]) / 100.0) * nameplate)
-                _log.debug("new value is " + str(cur_attribute.data_dict[keyval]))
-                # cur_attribute.data_dict[keyval] = int((float(cur_attribute.data_dict[keyval]) / 100.0) * cur_device.get_nameplate())
-                # _log.info("Unsupported data type for conversion pct to kW")
-            _log.debug("PopEndpts: converted " + k + "from " + endpt_units + " to " + cur_attribute.units[
-                keyval] + ". New val = " + str(cur_attribute.data_dict[keyval]))
-
-    ##############################################################################
-    def convert_units_to_endpt(self, attribute, cmd):
-
-        ext_endpt = self.datagroup_dict_list[attribute].map_int_to_ext_endpt[cmd]
-        try:
-            _log.debug("SetPt: Ext End pt is "+ext_endpt+". Ext units are "+
-                      self.datagroup_dict_list[attribute].endpt_units[ext_endpt])
-            _log.debug("SetPt: Int End pt is "+cmd+".  Int units are "+
-                      self.datagroup_dict_list[attribute].units[cmd])
-            if (self.datagroup_dict_list[attribute].endpt_units[ext_endpt] == "Pct") and \
-                    (self.datagroup_dict_list[attribute].units[cmd] == "kW"):   # FIXME - make this PctkW?
-                self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"] = \
-                    int((float(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]) /
-                         self.get_nameplate()) * 100)
-            if (self.datagroup_dict_list[attribute].endpt_units[ext_endpt] == "NegPct") and \
-                    (self.datagroup_dict_list[attribute].units[cmd] == "kW"):   # FIXME - make this PctkW?
-                self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"] = \
-                    int(-1*(float(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]) /
-                         self.get_nameplate()) * 100)
-
-            _log.info("SetPt: New val = "+str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
-
-        except KeyError as e:
-            _log.info("SetPt: No units found for "+ext_endpt+".  Assume no conversion is needed.")        
 
 
     ##############################################################################
@@ -1044,8 +927,12 @@ class DERSite(DERDevice):
         cnt = 0
         #self.topics = site_info["Topics"]
         for topics in site_info["Topics"]: #self.topics:
-            csv_name = (data_map_dir + self.device_id +"-"+ topics["TopicName"]+"-data-map.csv")
-            _log.info(csv_name)
+            try:
+                csv_name =data_map_dir+topics["TopicDataMapFile"]
+                _log.info("Using data map file: "+csv_name)
+            except KeyError:
+                csv_name = (data_map_dir + self.device_id +"-"+ topics["TopicName"]+"-data-map.csv")
+                _log.info("Data Map file not specified - using default: "+ csv_name)
 
             try:
                 with open(csv_name, 'rb') as csvfile:
@@ -1657,7 +1544,6 @@ class TeslaCtrlNode(ESSCtrlNode):
         1. changes system op mode to "running"
         2. changes system ctrl mode to "interactive"
         """
-        #if USE_DEVICE_LEVEL == 1:
         self.pwr_ctrl_cmd.data_dict.update({"mode_cmd": 1})
         self.set_point("RealPwrCtrl", "mode", sitemgr)
 
@@ -1675,7 +1561,6 @@ class TeslaCtrlNode(ESSCtrlNode):
         1. changes system op mode to "running"
         2. changes system ctrl mode to "interactive"
         """
-        #if USE_DEVICE_LEVEL == 1:
         self.pwr_ctrl_cmd.data_dict.update({"mode": 0})
         self.set_point("RealPwrCtrl", "mode", sitemgr) # deprecated
 
