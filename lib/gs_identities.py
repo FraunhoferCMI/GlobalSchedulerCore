@@ -101,7 +101,7 @@ UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls U
 START_LATENCY = 0 # time in seconds, to delay execution
 
 #FIXME - Placeholder!
-MODBUS_SCRAPE_INTERVAL  = 3 # period in seconds for modbus device to post on the IEB bus
+MODBUS_SCRAPE_INTERVAL  = 5 # period in seconds for modbus device to post on the IEB bus
 MODBUS_AVERAGING_WINDOW = 180 # period in seconds over which to average instantaneous readings
 MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
 MODBUS_WRITE_ATTEMPTS  = 5  # number of modbus reads before a write error is thrown
@@ -159,7 +159,7 @@ else:   # schedules associated with live testing
     DEMAND_FORECAST_QUERY_INTERVAL = 60*60 # seconds
     DEMAND_FORECAST_RESOLUTION = SSA_SCHEDULE_RESOLUTION # 60 minutes # MATT - "PT1H"
     LOADSHIFT_QUERY_INTERVAL = 60*60 # seconds
-    DEMAND_REPORT_SCHEDULE = 10 # SECONDS
+    DEMAND_REPORT_SCHEDULE = 60*60 # SECONDS
     DEMAND_REPORT_RESOLUTION = 60 # minutes Time resolution of load request report - ONLY SUPPORTS 60 MIN
     DEMAND_REPORT_DURATION =  24 # hours Duration of load request reports in hours
     N_LOADSHIFT_PROFILES   = 5
