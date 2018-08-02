@@ -1544,7 +1544,6 @@ class TeslaCtrlNode(ESSCtrlNode):
         1. changes system op mode to "running"
         2. changes system ctrl mode to "interactive"
         """
-        #if USE_DEVICE_LEVEL == 1:
         self.pwr_ctrl_cmd.data_dict.update({"mode_cmd": 1})
         self.set_point("RealPwrCtrl", "mode", sitemgr)
 
@@ -1562,7 +1561,6 @@ class TeslaCtrlNode(ESSCtrlNode):
         1. changes system op mode to "running"
         2. changes system ctrl mode to "interactive"
         """
-        #if USE_DEVICE_LEVEL == 1:
         self.pwr_ctrl_cmd.data_dict.update({"mode": 0})
         self.set_point("RealPwrCtrl", "mode", sitemgr) # deprecated
 

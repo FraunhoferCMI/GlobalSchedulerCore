@@ -402,7 +402,7 @@ class CPRAgent(Agent):
     @Core.periodic(period = LOADSHIFT_QUERY_INTERVAL)
     def query_loadshift_forecast(self):
         """
-        called at interval defined in LOADSHIFT_FORECAST_QUERY_INTERVAL (gs_identities)
+        called at interval defined in LOADSHIFT_QUERY_INTERVAL (gs_identities)
         publishes loadshift forecast corresponding to the next planned optimizer pass
         """
         if USE_DEMAND_SIM == 1:
