@@ -8,7 +8,8 @@ import json
 import pandas as pd
 import os
 import logging
-# import ipdb # be sure to comment this out while running in Volttron instance
+from random import randint
+import ipdb # be sure to comment this out while running in Volttron instance
 
 websocket.setdefaulttimeout(10) # set timeout quicker for testing purposes, normally 60
 
@@ -305,20 +306,60 @@ def parse_Baseline_response(result):
     forecast_values.set_index('dstart', inplace=True)
     return forecast_values
 
-def create_load_request():
+def create_load_request(duration='PT1H', nLoadOptions=12,
+                        borders=[randint(10, 30) * 10 for i in range(24)]):
+    # # OLD STATIC WAY
     gs_root_dir = os.environ['GS_ROOT_DIR']
     flame_path  = "FLAME-v2/flame/"
     fname       = 'defaultLoadRequest.json'
     filepath    = os.path.join(gs_root_dir, flame_path, fname)
-
     with open(filepath) as f:
-        msg = json.load(f)
+        old_msg = json.load(f)
+
+    # new dynamic way
+    now = pd.datetime.utcnow()
+    nearest_minute = datetime(now.year, now.month, now.day, 0).isoformat()
+    # nearest_minute = now - timedelta(#minutes=now.minute,
+    #     seconds=now.second,
+    #     microseconds=now.microsecond)
+    hourlist = pd.date_range(nearest_minute,
+                             freq='H',
+                             periods=24)
+
+
+
+    priceMaps =[build_priceMap(border) for border in borders]
+    # TODO: get current pricemaps from volttron, use above for testing only
+
+    marginalCostCurve = [{'dstart': unicode(hourlist[i].isoformat()),
+                          'duration': unicode(duration),
+                          'priceMap': priceMaps[i]} for i in range(len(hourlist))]
+    msg = {'nLoadOptions': unicode(nLoadOptions),
+           'marginalCostCurve': marginalCostCurve}
+
+    # ipdb.set_trace()
     payload_request = json.dumps(
         {"type": "LoadRequest",
          "msg": msg
          }
     )
     return payload_request
+
+def build_priceMap(border):
+    assert isinstance(border, int)
+
+    low = {u"LB": u"-Infinity",
+           u"UB": u"0",
+           u"price": u"0.05"}
+    med = {u"LB": u"0",
+           u"UB": unicode(border),
+           u"price": u"0.0"}
+    high = {u"LB": unicode(border),
+            u"UB": u"Infinity",
+            u"price": u"4.94"}
+    priceMap = [low, med, high]
+
+    return priceMap
 
 def parse_LoadShift_response(response):
     # forecast = response
@@ -363,19 +404,15 @@ def format_timeperiod(granularity):
 
 if __name__ == '__main__':
 
-    url = "wss://flame.ipkeys.com:9443/socket/msg"
     ws_url = "wss://flame.ipkeys.com:9443/socket/msg"
     # old way
-    # ws = create_connection(url, timeout=None)
+    # ws = create_connection(ws_url, timeout=None)
     # insecure way, use this if certificate is giving problems
-    sslopt = {"cert_reqs": ssl.CERT_NONE}
+    # sslopt = {"cert_reqs": ssl.CERT_NONE}
     # secure way
-    #sslopt = {"ca_certs": 'IPKeys_Root.pem'}
-    #sslopt = {"ca_certs": 'eiss2flame.pem'}
+    sslopt = {"ca_certs": 'IPKeys_Root.pem'}
 
     ws = create_connection(ws_url, sslopt=sslopt)
-
-    #websocket = ws
 
     # Baseline
     def test_Baseline():
@@ -390,7 +427,7 @@ if __name__ == '__main__':
         print("Here's the Baseline forecast:\n", bl.forecast)
         print("done processing Baseline")
         return bl
-    bl = test_Baseline()
+    # bl = test_Baseline()
 ##
     def test_LoadShift():
         print("running LoadShift")

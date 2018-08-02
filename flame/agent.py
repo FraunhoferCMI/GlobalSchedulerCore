@@ -107,6 +107,7 @@ class FLAMECommsAgent(Agent):
     def __init__(self, config_path, **kwargs):
         super(FLAMECommsAgent, self).__init__(**kwargs)
 
+        _log.info("CONFIGURATION PATH IS %s" % config_path)
         self.volttron_root = os.getcwd()
         self.volttron_root = self.volttron_root + "/../../../../"
 
@@ -145,7 +146,7 @@ class FLAMECommsAgent(Agent):
         # insecure way, use this if certificate is giving problems
         sslopt = {"cert_reqs": ssl.CERT_NONE}
         # secure way
-        #sslopt = {"ca_certs": 'IPKeys_Root.pem'}
+        # sslopt = {"ca_certs": 'IPKeys_Root.pem'}
 
         ws = create_connection(ws_url, sslopt=sslopt)
 
