@@ -155,6 +155,19 @@ class CPRPub(Agent):
                              parsed_response["forecast"][5],
                              TimeStamp_str=parsed_response["time"][5])
 
+                publish_data(self,
+                             "cpr/ghi"+str(self._conf['sim_interval']),
+                             "W/m2",
+                             "tPlus1",
+                             parsed_response["ghi"][1],
+                             TimeStamp_str=parsed_response["time"][1])
+
+                publish_data(self,
+                             "cpr/ghi"+str(self._conf['sim_interval']),
+                             "W/m2",
+                             "tPlus5",
+                             parsed_response["ghi"][5],
+                             TimeStamp_str=parsed_response["time"][5])
 
                 message = cprModel.forecast_obj
                 self.vip.pubsub.publish(
