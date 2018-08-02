@@ -107,7 +107,7 @@ def parse_query(query):
         forecast = forecast,
         ghi      = ghi,
         time = time,
-        units = "kWh",
+        units = "kW",
         # tz = "UTC-5",
         datatype = "float"
     )

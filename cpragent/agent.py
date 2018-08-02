@@ -18,7 +18,7 @@ from volttron.platform.messaging import headers as headers_mod
 
 from gs_identities import *
 from gs_utilities import Forecast, get_schedule
-
+from HistorianTools import publish_data
 from CPRinteraction import create_xml_query, parse_query, get_date
 
 utils.setup_logging()
@@ -39,13 +39,13 @@ class CPRPub(Agent):
 
         if self._conf['sim_interval'] == 60:
             self._conf['topic'] = "devices/cpr/forecast/all"
-            self.query_interval = LIVE_CPR_QUERY_INTERVAL
+            self.query_interval = CPR_QUERY_INTERVAL
             self.duration       = SSA_SCHEDULE_DURATION
         else:
             self._conf['topic'] = "".join(["devices/cpr/forecast",
                                        str(self._conf['sim_interval']),
                                        "m/all"])
-            self.query_interval = LIVE_1MIN_CPR_QUERY_INTERVAL
+            self.query_interval = CPR_1MIN_QUERY_INTERVAL
             self.duration       = DURATION_1MIN_FORECAST
         #receive_interval = self._conf.get("receive_interval")
 
@@ -89,7 +89,6 @@ class CPRPub(Agent):
     def onstart(self, sender, **kwargs):
         self.periodic_greenlet = self.core.periodic(self.query_interval, self.request_cpr_model)
 
-    #@Core.periodic(period = LIVE_CPR_QUERY_INTERVAL)
     def request_cpr_model(self):
 
         if self.initialization_complete == True:     # queries server only after config steps are completed
@@ -142,6 +141,20 @@ class CPRPub(Agent):
                                     **parsed_response)
                 #duration = self.duration,
                 #
+                publish_data(self,
+                             "cpr/forecast"+str(self._conf['sim_interval']),
+                             parsed_response["units"],
+                             "tPlus1",
+                             parsed_response["forecast"][1],
+                             TimeStamp_str=parsed_response["time"][1])
+
+                publish_data(self,
+                             "cpr/forecast"+str(self._conf['sim_interval']),
+                             parsed_response["units"],
+                             "tPlus5",
+                             parsed_response["forecast"][5],
+                             TimeStamp_str=parsed_response["time"][5])
+
 
                 message = cprModel.forecast_obj
                 self.vip.pubsub.publish(
