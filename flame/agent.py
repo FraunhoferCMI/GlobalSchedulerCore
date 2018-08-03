@@ -175,7 +175,8 @@ class FLAMECommsAgent(Agent):
             self.gs_start_time = datetime.strptime(v1, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)
         except:
             _log.info("FLAME comms - gs_start_time not found.  Using current time as gs_start_time")
-            self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
+            # self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
+            self.gs_start_time = datetime.now().replace(microsecond=0)
             _log.info("GS STart time is " + str(self.gs_start_time))
 
         self.initialization_complete = 1

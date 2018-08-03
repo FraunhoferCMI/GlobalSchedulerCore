@@ -304,6 +304,7 @@ def create_baseline_request(start, granularity, duration):
 def parse_Baseline_response(result):
     forecast_values = pd.DataFrame(result['msg']['loadSchedule'])
     forecast_values.set_index('dstart', inplace=True)
+    forecast_values.index = convert_FLAME_time_to_UTC(forecast_values.index)
     return forecast_values
 
 def create_load_request(duration='PT1H', nLoadOptions=12,
@@ -337,7 +338,6 @@ def create_load_request(duration='PT1H', nLoadOptions=12,
     msg = {'nLoadOptions': unicode(nLoadOptions),
            'marginalCostCurve': marginalCostCurve}
 
-    # ipdb.set_trace()
     payload_request = json.dumps(
         {"type": "LoadRequest",
          "msg": msg
@@ -379,7 +379,15 @@ def parse_LoadShift_response(response):
         ind_options.append(option_values)
     forecast = pd.concat(ind_options, axis=1)
 
+    forecast.index = convert_FLAME_time_to_UTC(forecast.index)
     return forecast, costs
+
+def convert_FLAME_time_to_UTC(FLAME_time):
+    datetime_aware = pd.to_datetime(FLAME_time)
+    timezone_aware = datetime_aware.tz_localize('US/Eastern')
+    converted_timezone = timezone_aware.tz_convert('UTC')
+    stringified = converted_timezone.to_native_types() # .tz_localize(None) # use for removing timezone info
+    return stringified
 
 def format_timeperiod(granularity):
     # print(granularity/60)
@@ -427,7 +435,7 @@ if __name__ == '__main__':
         print("Here's the Baseline forecast:\n", bl.forecast)
         print("done processing Baseline")
         return bl
-    # bl = test_Baseline()
+    bl = test_Baseline()
 ##
     def test_LoadShift():
         print("running LoadShift")
@@ -473,6 +481,7 @@ if __name__ == '__main__':
     def test_Status():
         print("running Status")
         status = Status(ws)
+        print("Status processing")
         status.process()
         # print("Here's the Status response:\n", status.response)
         print("Here's the Status alertStatus:\n", status.alertStatus)
