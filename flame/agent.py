@@ -120,6 +120,7 @@ class FLAMECommsAgent(Agent):
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "DEFAULT_MESSAGE": 'FLAME_COMMS_MSG',
             "DEFAULT_AGENTID": "FLAME_COMMS_AGENT",
+            "facilities": ["Facility1", "Facility2", "Facility3"]
         }
         self._config = self.default_config.copy()
         self._agent_id = self._config.get("DEFAULT_AGENTID")
@@ -324,7 +325,8 @@ class FLAMECommsAgent(Agent):
             loadReport_kwargs = {
                 "dstart": dstart, # start time for report
                 "sampleInterval": sampleInterval, # sample interval
-                "duration": duration # "PT" + str(DEMAND_REPORT_DURATION) + "H"            # duration of request
+                "duration": duration, # "PT" + str(DEMAND_REPORT_DURATION) + "H"            # duration of request
+                "facilities": self._config['facilities']
             }
             # ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
             lr = LoadReport(websocket=self.websocket, **loadReport_kwargs)

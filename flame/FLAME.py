@@ -217,9 +217,13 @@ class LoadReport(IPKeys):
 
         self.type = u'LoadReport'
 
+        self.websocket = websocket
+        self.dstart = dstart
+        self.sampleInterval = sampleInterval
+        self.duration = duration
         self.facilities = facilities
 
-        self.baseline_request = {
+        baseline_request = {
             'type': 'LoadReportRequest',
             'msg': {
                 "dstart": dstart,        #start time for report
@@ -227,42 +231,50 @@ class LoadReport(IPKeys):
                 "duration": duration            # duration of request
             }
         }
-        self.request = json.dumps(
-            self.baseline_request
-        )
+        if facilities:
+            _log.info("FACILITIES ARE PRESENT")
+            requests =  []
+            for facility in self.facilities:
+                request = baseline_request.copy()
+                request['msg']['facility'] = facility
+                requests.append(request)
+        else:
+            _log.info("FACILITIES ARE NOT PRESENT")
+            requests = [baseline_request]
+        self.requests = requests
 
         return None
 
     def __repr__(self):
         return ('\n'.join(['%s(' % self.__class__.__name__,
-                           # '%s,' % self.start,
-                           # '%s,' % self.granularity,
-                           # '%s)' % self.duration,
+                           '%s,' % self.websocket,
+                           '%s,' % self.dstart,
+                           '%s,' % self.sampleInterval,
+                           '%s,' % self.duration,
+                           '%s,' % self.facilities,
+                           ')'
                            ]))
 
     def process(self):
 
         _log.info("Processing %s" % self.type)
-        if self.facilities:
-            _log.info("FACILITIES ARE PRESENT")
-            loadSchedules = []
-            for facility in self.facilities:
-                self.baseline_request['msg']['facility'] = facility
-                self.request = self.baseline_request
-                self._send_receive()
-                assert self.facility is self.response['msg']['facility'],\
-                    'facility response does not match requested facility'
-                facility_loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
-                loadSchedules.append(facility_loadSchedule)
-            self.loadSchedule = pd.concat(loadSchedules)
-        else:
-            _log.info("FACILITIES ARE NOT PRESENT")
+        loadSchedules = []
+        for request in self.requests:
+            if 'facility' in request['msg'].keys():
+                facility = request['msg']['facility']
+            self.request = json.dumps(
+               request
+            )
             self._send_receive()
+            # assert facility is self.response['msg']['facility'],\
+            #     'facility response does not match requested facility'
             try:
-                self.loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
-                _log.debug("loadSchedule:\n" + str(self.loadSchedule))
+                facility_loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
+                _log.debug("loadSchedule:\n" + str(facility_loadSchedule))
             except KeyError:
                 _log.warn('previous request yielded no response')
+            loadSchedules.append(facility_loadSchedule)
+        self.loadSchedule = pd.concat(loadSchedules)
 
         return None
 
@@ -468,6 +480,8 @@ if __name__ == '__main__':
             "dstart": start_time.strftime("%Y-%m-%dT%H:%M:%S"), #"2018-07-14T00:00:00",        #start time for report
             "sampleInterval": "PT1H",            #sample interval
             "duration": "PT1H",           # duration of request
+            "facilities": ["Facility1", "Facility2", "Facility3"]
+            # "facilities": ["Mill", "Canner", "School"]
         }
         lr = LoadReport(ws, **loadReport_kwargs)
         lr.process()
