@@ -156,7 +156,8 @@ class LoadShift(IPKeys):
 
         self._send_receive()
         try:
-            forecast, costs = parse_LoadShift_response(self.response)
+            absolute_forecast, costs = parse_LoadShift_response(self.response)
+            forecast = absolute_forecast.sub(absolute_forecast[0], axis=0)
         except ValueError:
             print(self.response['msg']['error'])
             costs = {}
