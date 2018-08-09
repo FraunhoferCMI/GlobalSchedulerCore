@@ -271,13 +271,53 @@ class SiteManagerAgent(Agent):
         try:
             for k,v in device.qSetPtr_ctrl.data_dict.items():
                 _log.info("Status-"+device.device_id+"-QSetPt: "+k+": "+str(v))
+        except:
+            pass
 
+        try:
             for k,v in device.q_ctrl.data_dict.items():
                 _log.info("Status-"+device.device_id+"-QModeCtrl: "+k+": "+str(v))
-
         except:
-            _log.info("Warning! Q SetPt not found")
             pass
+
+        try:
+            for k,v in device.pf_ctrl.data_dict.items():
+                _log.info("Status-"+device.device_id+"-PFCtrl: "+k+": "+str(v))
+        except:
+            pass
+
+        try:
+            for k,v in device.PFComp_ctrl.data_dict.items():
+                _log.info("Status-"+device.device_id+"-PFComp: "+k+": "+str(v))
+        except:
+            pass
+
+        try:
+            for k,v in device.Vreg_ctrl.data_dict.items():
+                _log.info("Status-"+device.device_id+"-VReg: "+k+": "+str(v))
+        except:
+            pass
+
+        try:
+            for k,v in device.Vcomp_ctrl.data_dict.items():
+                _log.info("Status-"+device.device_id+"-VComp: "+k+": "+str(v))
+        except:
+            pass
+
+        try:
+            for k,v in device.DroopCtrl.data_dict.items():
+                _log.info("Status-"+device.device_id+"-DroopCtrl: "+k+": "+str(v))
+        except:
+            pass
+
+        try:
+            for k,v in device.FreqSupport.data_dict.items():
+                _log.info("Status-"+device.device_id+"-FreqSupport: "+k+": "+str(v))
+        except:
+            pass
+
+
+
 
 
     ##############################################################################
