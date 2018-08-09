@@ -123,13 +123,17 @@ def get_gs_time(gs_start_time, sim_time_corr):
     #gs_aware = gs_start_time.replace(tzinfo=pytz.UTC)
     _log.info("Cur time: " + now.strftime("%Y-%m-%dT%H:%M:%S") + "; gs start time= " + gs_start_time.strftime("%Y-%m-%dT%H:%M:%S"))
 
+    now = now.replace(tzinfo=None)
+    # gs_start_time = gs_start_time.replace(tzinfo=now.tzinfo)
     run_time         = (now - gs_start_time).total_seconds() # tells the elapsed real time
     sim_run_time     = timedelta(seconds=SIM_HRS_PER_HR * run_time)  # tells the elapsed "accelerated" time
     # was .total_seconds()
     #adj_sim_run_time = timedelta(seconds=sim_run_time - run_time)  # difference between GS frame of reference and real time
 
     _log.info("sim run time = " + str(sim_run_time) + "; actual run time = " + str(run_time))
-    return gs_start_time+sim_run_time-sim_time_corr  # current time, in the GS frame of reference
+    gs_time = gs_start_time + sim_run_time - sim_time_corr  # current time, in the GS frame of reference
+
+    return gs_time
 
 ##############################################################################
 def get_gs_path(local_path, fname):
