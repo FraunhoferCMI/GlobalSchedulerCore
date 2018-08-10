@@ -676,7 +676,7 @@ class DERDevice():
             val           = self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]
             _log.info(nameplate)
             self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"] = \
-                eval(site.unit_conversion_table[conversionKey])
+                int(eval(site.unit_conversion_table[conversionKey]))
 
             _log.info("SetPt: New val = "+str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
 
@@ -729,7 +729,11 @@ class DERDevice():
         cmd_pt = pt+"_cmd"
         cmd_attribute = attribute+"Cmd"
         #FIXME - right now, this is only writing int data types..
-        self.datagroup_dict_list[cmd_attribute].data_dict.update({cmd_pt: int(val)})
+	try:
+		new_val = int(val)
+	except:
+		new_val = float(val)
+        self.datagroup_dict_list[cmd_attribute].data_dict.update({cmd_pt: new_val})
         self.set_point(attribute, pt, sitemgr)
 
     ##############################################################################
