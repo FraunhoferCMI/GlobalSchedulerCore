@@ -134,11 +134,11 @@ SOLECTRIA_PWR_BITMAP = {"FreqWatt": 0x8000,
 
 ##############################################################################
 def get_site_handle(site_info, data_map_dir):
-    try:
+    if (1): #try:
         _log.info("Site instance is: "+site_lookup[site_info["SiteModel"]])
         site_handle =eval(site_lookup[site_info["SiteModel"]])
         return site_handle
-    except KeyError:
+    else: #except KeyError:
         _log.info("Error - invalid Site Configuration! SiteModel = "+site_info["SiteModel"])
         return None
     pass
@@ -1097,6 +1097,9 @@ class ShirleySite(DERSite, DERModbusDevice):
         self.writeError = {"SysModeStatus": 0,
                            "WatchDogTimeoutEnable": 0}
 
+        self.state_vars.update({"Nameplate_kW": 1000.0})
+
+
     ##############################################################################
     def check_device_status(self):
         # TODO - check for register mismatch (i.e., status != mode)
@@ -1267,6 +1270,27 @@ class ShirleySite(DERSite, DERModbusDevice):
         #    self.control_mode   = 0
         else:
             self.control_mode = 1
+
+
+    ##############################################################################
+    def set_power_real(self, val, sitemgr):
+        """
+        send a real power command for a generic modbus device.
+        This is the simplest version of this method - it just writes value to the identified power control register.
+        More sophisticated actions (e.g., multi step writes with trigger, etc) can be defined in overloaded methods in
+        sub classes
+        :param val: value to be written
+        :param sitemgr: reference to the associated site manager agent
+        :return: None
+        """
+        # This method has a number of issues -
+        #TODO: Limit check
+        self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": int(val)})
+        _log.info("Setting Power to "+str(val))
+        self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
+        self.writePending["SetPoint"] = 1
+        self.expectedValue["SetPoint"] = int(val)
+        return 1
 
 
     ##############################################################################
