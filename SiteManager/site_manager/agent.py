@@ -269,7 +269,7 @@ class SiteManagerAgent(Agent):
             pass
 
         try:
-            for k,v in device.qSetPtr_ctrl.data_dict.items():
+            for k,v in device.qSetPt_ctrl.data_dict.items():
                 _log.info("Status-"+device.device_id+"-QSetPt: "+k+": "+str(v))
         except:
             pass
