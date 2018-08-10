@@ -49,7 +49,7 @@
                   "ID":"Inverter1",
                   "ResourceType":"Solectria",
                   "Mfr": "Solectria",
-                  "nameplate_rating_kW": "1000",
+                  "nameplate_rating_kW": "500",
                   "Metered":"Y",
                   "DeviceList":[]
                }
