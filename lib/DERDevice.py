@@ -54,6 +54,7 @@ import HistorianTools
 from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC, Unreachable
 from volttron.platform.agent import utils
 from volttron.platform.jsonrpc import RemoteError
+import gevent
 
 from volttron.platform.messaging import headers as headers_mod
 
@@ -130,6 +131,12 @@ SOLECTRIA_PWR_BITMAP = {"FreqWatt": 0x8000,
                         "RealPwrCtrl": 0x0004,
                         "LFRT": 0x0002,
                         "HFRT": 0x0001}
+
+PMC_REACTIVE_CONTROL_MODES = {"PF":0,
+                              "Q": 1,
+                              "PFComp": 2,
+                              "VComp": 3,
+                              "VReg": 4}
 
 
 ##############################################################################
@@ -674,7 +681,7 @@ class DERDevice():
 
             nameplate     = self.get_nameplate()
             val           = self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]
-            _log.info(nameplate)
+            _log.info("SetPt: Name plate is "+str(nameplate))
             self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"] = \
                 int(eval(site.unit_conversion_table[conversionKey]))
 
@@ -874,6 +881,7 @@ def reserve_modbus(device, task_id, sitemgr, device_path):
             [device_path, start, end]).get()
 
         request_status = res["result"]
+        _log.info("request_status - "+request_status)
         if request_status == "FAILURE":
             _log.info("Request failed, reason is " + res["info"])
             #attempt += 1
@@ -881,7 +889,7 @@ def reserve_modbus(device, task_id, sitemgr, device_path):
     except:
         #FIXME - error handling not done correctly!!!
         #_log.info("Request failed, reason is " + res["info"])
-	_log.info("Request failed - agent not open")
+        _log.info("Request failed - agent not open")
         res = "FAILURE"
     return res
 
@@ -893,6 +901,8 @@ def release_modbus(device, task_id, sitemgr):
             "platform.actuator",
             "request_cancel_schedule",
             device.device_id, task_id).get()
+
+        _log.info("request_status - "+res["result"])
 
         if res["result"] == "FAILURE":
             _log.info("Release Modbus: Request failed, reason is " + res["info"])
@@ -1036,8 +1046,8 @@ class DERModbusDevice(DERDevice):
         else:
             _log.info("SetPt: Error in DERDevice.set_interactive_mode: device type invalid")
 
-        # res = reserve_modbus(self, task_id, sitemgr, device_path)
-        res = 0
+        res = reserve_modbus(self, task_id, sitemgr, device_path)
+        #res = 0
         # FIXME check for exceptions
         # convert units if necessary:
         self.convert_units_to_endpt2(attribute, cmd, sitemgr.site)
@@ -1048,8 +1058,6 @@ class DERModbusDevice(DERDevice):
                 "SiteManager",
                 cmd_path,
                 self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"])
-
-            # res = release_modbus(self, task_id, sitemgr)
 
             val = sitemgr.vip.rpc.call(
                 "platform.actuator",
@@ -1064,6 +1072,11 @@ class DERModbusDevice(DERDevice):
         except Unreachable: #Exception as exception:
             #_log.info(type(exception).__name__)
             _log.info("ERROR: Agent 'platform.actuator' not found.  Command not written.")
+
+
+        res = release_modbus(self, task_id, sitemgr)
+
+        #gevent.sleep(1.0)
 
 
 ##############################################################################
@@ -1145,6 +1158,36 @@ class ShirleySite(DERSite, DERModbusDevice):
         self.writePending["SysModeStatus"] = 1
         self.expectedValue["SysModeStatus"] = INTERACTIVE
         self.set_point("ModeControl", "SysModeCtrl", sitemgr)
+
+        # set plant power limit to nameplate
+        self.set_power_real(self.state_vars["Nameplate_kW"], sitemgr)
+
+        # set all child ESS to 0
+        # FIXME - once this is fixed, this should set dispatch commands for all devices to 0.
+        for device in self.devices:
+            if device.device_type == "ESSCtrlNode":
+                device.set_power_real(0, sitemgr)
+
+
+        # set ramp limit to 10% per second
+        self.pwr_ctrl_cmd.data_dict.update({"PVRampLimit_cmd": 10.0})
+        self.set_point("RealPwrCtrl", "PVRampLimit", sitemgr)
+        # make sure that the commmand has been written.
+
+        # set ramp limit to 10% per second
+        self.q_ctrl_cmd.data_dict.update({"RampLimit_cmd": 10.0})
+        self.set_point("QModeCtrl", "RampLimit", sitemgr)
+        # make sure that the commmand has been written.
+
+        # set Reactive Power Control Mode to PF Control
+        self.q_ctrl_cmd.data_dict.update({"qMode_cmd": PMC_REACTIVE_CONTROL_MODES["PF"]})
+        self.set_point("QModeCtrl", "qMode", sitemgr)
+        # make sure that the commmand has been written.
+
+        # set to unity PF
+        self.pf_ctrl_cmd.data_dict.update({"SetPoint_cmd": 1.000})
+        self.set_point("PF", "SetPoint", sitemgr)
+        # make sure that the commmand has been written.
 
         for cur_device in self.devices:
             cur_device.set_interactive_mode(sitemgr)
