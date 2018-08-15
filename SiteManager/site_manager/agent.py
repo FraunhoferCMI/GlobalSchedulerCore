@@ -61,7 +61,7 @@ from volttron.platform.agent.known_identities import (
 
 from . import settings
 from gs_identities import *
-
+import StringIO
 utils.setup_logging()
 _log = logging.getLogger(__name__)
 __version__ = '1.0'
@@ -144,6 +144,28 @@ class SiteManagerAgent(Agent):
             topics.update({"isValid": "N"})
             topics.update({"last_read_time": utils.get_aware_utc_now()})
             topics.update({"SCRAPE_TIMEOUT": eval(topics["TopicScrapeTimeout"])})
+
+            # the following is a way to pre-load units for a topic that needs to be initialized with known values in
+            # control registers.  This is a work around to an issue where modbus registers were being initialized with
+            # data that had not been converted from GS native units to end point units
+            endpt_units = {}
+            try:
+                registry = self.vip.rpc.call(CONFIGURATION_STORE,
+                                             "manage_get",
+                                             topics["TopicAgent"],
+                                             topics["TopicRegistry"]).get(timeout=5)
+                csv_map = csv.reader(StringIO.StringIO(registry),
+                                     dialect=csv.excel)
+                cnt = 0
+                for row in csv_map:
+                    if cnt != 0:
+                        endpt_units.update({row[1]: row[2]})
+                    cnt += 1
+                _log.info(endpt_units)
+            except:
+                _log.info("failed to populate ext end pts for "+topics["TopicAgent"])
+                pass
+            topics.update({"endpt_units": endpt_units})
             _log.info("SiteManagerConfig: Subscribing to new topic: "+topics["TopicPath"]+'/all')
 
         self.site = DERDevice.get_site_handle(cursite, self.data_map_dir)
@@ -151,6 +173,32 @@ class SiteManagerAgent(Agent):
                                 'data/NewSite/all', 
                                 headers={}, 
                                 message=[self.site.device_id]).get(timeout=10.0)
+
+
+        if 0:
+            e = self.vip.rpc.call(CONFIGURATION_STORE,
+                                  "manage_get",
+                                  "platform.driver", "devices/Site1").get(timeout=5)
+            f = ""
+            for line in e.splitlines():
+                if line.lstrip()[0] != "#":
+                    f = f+line
+                    #print(line)
+
+            #_log.info(e)
+            v = json.loads(f)
+            _log.info(v["interval"])
+            v["interval"] = 10
+            s = json.dumps(v)
+            _log.info(s)
+
+            #self.vip.rpc.call(CONFIGURATION_STORE,
+            #                      "set_config",
+            #                      "devices/Site1",
+            #                      s,
+            #                    trigger_callback=True).get(timeout=5)
+            #set_config(self, config_name, contents, trigger_callback=False, send_update=True):
+
         self.mode = AUTO # site is initialized - transition to auto        
 
     ##############################################################################
@@ -222,7 +270,7 @@ class SiteManagerAgent(Agent):
 
         try:
             self.updating = 1  # indicates that data is updating - do not trust until populate end pts is complete
-            self.site.populate_endpts(data, meta_data, cur_topic_name)
+            self.site.populate_endpts(data, self, meta_data, cur_topic_name)
             self.dirtyFlag = 0 # clear dirtyFlag on new read
             self.updating = 0
         except:

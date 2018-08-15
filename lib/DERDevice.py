@@ -328,6 +328,7 @@ class DERDevice():
             self.units = {}
             self.topic_map = {}
             self.endpt_units = {}
+            self.log_to_db   = {}
 
             # initialize certain known key word values that are inherited between parent/children devices
             if attribute_name == "HealthStatus":
@@ -337,7 +338,7 @@ class DERDevice():
                 self.data_dict["GSHeartBeat_prev"] = 0 
 
     ##############################################################################
-    def init_data_maps(self, device_id, group_id, int_endpt, ext_endpt, units, topic_index):
+    def init_data_maps(self, device_id, group_id, int_endpt, ext_endpt, units, topic_index, log_to_db, endpt_units):
         """
         This function traverses the device tree to find the object matching device_id,
         then initializes a data_mapping dictionary entry to be associated with that device
@@ -348,13 +349,22 @@ class DERDevice():
             self.datagroup_dict_list[group_id].map_int_to_ext_endpt.update({int_endpt: ext_endpt})
             self.datagroup_dict_list[group_id].data_dict.update({int_endpt: 0})
             self.datagroup_dict_list[group_id].units.update({int_endpt: units})
+
+            try:
+                self.datagroup_dict_list[group_id].endpt_units.update({ext_endpt: endpt_units[ext_endpt]})
+                _log.info(ext_endpt+": "+ endpt_units[ext_endpt])
+            except KeyError:
+                _log.info("end pt units not found for "+ext_endpt)
+                pass
+
             self.datagroup_dict_list[group_id].topic_map.update({int_endpt: topic_index})
+            self.datagroup_dict_list[group_id].log_to_db.update({int_endpt: log_to_db})
             self.datagroup_dict.update({ext_endpt: self.datagroup_dict_list[group_id]})
             return self
         else:
             for cur_device in self.devices:
                 child_device = cur_device.init_data_maps(device_id, group_id, int_endpt, ext_endpt,
-                                                         units, topic_index)
+                                                         units, topic_index, log_to_db, endpt_units)
                 if child_device != None:
                     return child_device
 
@@ -692,7 +702,7 @@ class DERDevice():
 
 
     ##############################################################################
-    def populate_endpts(self, incoming_msg, meta_data = None, cur_topic_name=None):
+    def populate_endpts(self, incoming_msg, SiteMgr, meta_data = None, cur_topic_name=None):
         """
         This populates DERDevice variables based on the topic list
         """
@@ -726,6 +736,22 @@ class DERDevice():
                 self.convert_units_from_endpt2(k, meta_data[k]["units"], cur_topic_name)
             except KeyError as e:
                 _log.debug("Skipping: Key "+k+" not found")
+
+            try:
+                cur_attribute = self.extpt_to_device_dict[cur_topic_name + "_" + k].datagroup_dict[k]
+                keyval = cur_attribute.data_mapping_dict[k]
+
+                if cur_attribute.log_to_db[keyval] == "Y":
+                    cur_device = self.extpt_to_device_dict[cur_topic_name+"_"+k].device_id
+                    device_path_str = cur_device.replace('-', '/')+"/"+cur_attribute.name
+                    HistorianTools.publish_data(SiteMgr,
+                                                device_path_str,
+                                                cur_attribute.units[keyval],
+                                                keyval,
+                                                cur_attribute.data_dict[keyval])
+            except KeyError:
+                pass
+
         self.update_status()
 
     ##############################################################################
@@ -736,12 +762,12 @@ class DERDevice():
         cmd_pt = pt+"_cmd"
         cmd_attribute = attribute+"Cmd"
         #FIXME - right now, this is only writing int data types..
-	try:
-		new_val = int(val)
-	except:
-		new_val = float(val)
-        self.datagroup_dict_list[cmd_attribute].data_dict.update({cmd_pt: new_val})
-        self.set_point(attribute, pt, sitemgr)
+        try:
+            new_val = int(val)
+        except:
+            new_val = float(val)
+            self.datagroup_dict_list[cmd_attribute].data_dict.update({cmd_pt: new_val})
+            self.set_point(attribute, pt, sitemgr)
 
     ##############################################################################
     def set_power_real(self, val, sitemgr):
@@ -953,8 +979,8 @@ class DERSite(DERDevice):
                     data_map = csv.reader(csvfile)
 
                     for row in data_map:
-                        _log.info("row[0] is " + row[0])
-                        cur_device = self.init_data_maps(row[1], row[2], row[3], row[0], row[5], cnt)
+                        #_log.info("row[0] is " + row[0])
+                        cur_device = self.init_data_maps(row[1], row[2], row[3], row[0], row[5], cnt, row[4], topics["endpt_units"])
                         if cur_device != None:
                             _log.info("cur_device id is "+cur_device.device_id)
                         else:
@@ -1170,13 +1196,13 @@ class ShirleySite(DERSite, DERModbusDevice):
 
 
         # set ramp limit to 10% per second
-        self.pwr_ctrl_cmd.data_dict.update({"PVRampLimit_cmd": 10.0})
-        self.set_point("RealPwrCtrl", "PVRampLimit", sitemgr)
+        self.pwr_ctrl_cmd.data_dict.update({"RampLimit_pct_cmd": 10.0})
+        self.set_point("RealPwrCtrl", "RampLimit_pct", sitemgr)
         # make sure that the commmand has been written.
 
         # set ramp limit to 10% per second
-        self.q_ctrl_cmd.data_dict.update({"RampLimit_cmd": 10.0})
-        self.set_point("QModeCtrl", "RampLimit", sitemgr)
+        self.q_ctrl_cmd.data_dict.update({"QRampLimit_pct_cmd": 10.0})
+        self.set_point("QModeCtrl", "QRampLimit_pct", sitemgr)
         # make sure that the commmand has been written.
 
         # set Reactive Power Control Mode to PF Control
@@ -1511,11 +1537,11 @@ class DERModbusCtrlNode(DERModbusDevice, DERCtrlNode):
     ##############################################################################
     def set_ramprate_real(self, val, sitemgr):
         try:
-            self.pwr_ctrl_cmd.data_dict.update({"RampRate_cmd": int(val)})
+            self.pwr_ctrl_cmd.data_dict.update({"RampLimit_pct_cmd": int(val)})
             _log.info("Setting ramp rate to "+str(val))
-            self.set_point("RealPwrCtrl", "RampRate", sitemgr)
-            self.writePending["RampRate"] = 1
-            self.expectedValue["RampRate"] = int(val)
+            self.set_point("RealPwrCtrl", "RampLimit_pct", sitemgr)
+            self.writePending["RampLimit_pct"] = 1
+            self.expectedValue["RampLimit_pct"] = int(val)
         except:
             pass
 
