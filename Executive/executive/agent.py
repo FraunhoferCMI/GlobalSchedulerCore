@@ -203,6 +203,7 @@ class ExecutiveAgent(Agent):
         self.run_optimizer_cnt     = 0
         self.send_ess_commands_cnt = 0
         self.update_endpt_cnt      = 0
+        self.data_log_cnt          = 0
 
         self.init_tariffs()
 
@@ -888,7 +889,12 @@ class ExecutiveAgent(Agent):
 
         # Wait until initialization has completed before checking on sites
         if self.OperatingMode != EXEC_STARTING:
-            self.check_site_statuses()
+
+            if self.data_log_cnt == DATA_LOG_SCHEDULE:
+                self.data_log_cnt = 0
+                self.check_site_statuses()
+            else:
+                self.data_log_cnt += 1
 
             if ((self.update_endpt_cnt == ENDPT_UPDATE_SCHEDULE) or
                     (self.run_optimizer_cnt == GS_SCHEDULE) or

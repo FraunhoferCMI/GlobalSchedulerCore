@@ -46,11 +46,12 @@ from datetime import datetime, timedelta
 import os
 
 # execution flags
-USE_SIM      = 1
+USE_SIM      = 0
 USE_VOLTTRON = 1
 
 # Configuration File Locations
-SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json" #"SiteConfiguration-PlantLevel.json" #"SiteConfiguration-1siteAndDemand.json"
+SITE_CFG_FILE   = "SiteConfiguration-PlantLevel.json" 
+#SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json"
 SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
 
 # Site Operating Modes
@@ -94,11 +95,11 @@ APPLICATION_CONTROL = 2
 EXEC_STARTING = 3
 
 EXECUTIVE_CLKTIME = 2 # period, in seconds, at which the executive polls system state
-ENDPT_UPDATE_SCHEDULE  = 1 #
+DATA_LOG_SCHEDULE = 10  # period at which state vars are logged, in executive clock cycles
+ENDPT_UPDATE_SCHEDULE  = DATA_LOG_SCHEDULE # period at which sundial system resource objects are updated
 GS_SCHEDULE       = 60  # GS optimizer period, in executive clock cycles
 ESS_SCHEDULE      = 2 # ess regulation period, in executive clock cycles
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
-START_LATENCY = 0 # time in seconds, to delay execution
 
 #FIXME - Placeholder!
 MODBUS_SCRAPE_INTERVAL  = 5 # period in seconds for modbus device to post on the IEB bus
