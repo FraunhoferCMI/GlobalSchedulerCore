@@ -229,6 +229,7 @@ class SimulatedAnnealer():
         schedule_var data points are valid
         :return: None
         """
+        run_optimization = False
 
         # get an initial set of commands to seed the ssa process
         # then, set least_cost_soln AND current_soln to initiate the SSA
@@ -241,7 +242,10 @@ class SimulatedAnnealer():
         # in a flat list, grouped by resource type.  Just simplifies data handling, speeds execution, particularly
         # for simple system topology
         # Currently, we are only handling a single SundialResource per resource_type.
-        self.load       = self.get_resource(current_soln, "Load")[0]
+        try:
+            self.load       = self.get_resource(current_soln, "Load")[0]
+        except:
+            self.load       = []
         try:
             self.load_shift = self.get_resource(current_soln, "LoadShiftCtrlNode")[0]
         except:
@@ -267,121 +271,121 @@ class SimulatedAnnealer():
 
         ## need to have least_cost_soln - global, and least_cost_soln - for the current load shift profile
 
+        if run_optimization == True:
+            # set initial tempearture
+            T0   = abs(self.O2T*init_soln.cost)
+            T    = T0;
 
-        # set initial tempearture
-        T0   = abs(self.O2T*init_soln.cost)
-        T    = T0;
+            _log.info("Jump is: "+str(self.init_jump))
+            _log.info("T is: "+str(T))
+            _log.info("Init Least Cost Solution is: "+str(least_cost_soln.total_cost))
 
-        _log.info("Jump is: "+str(self.init_jump))
-        _log.info("T is: "+str(T))
-        _log.info("Init Least Cost Solution is: "+str(least_cost_soln.total_cost))
+            copy_time   = 0.0
+            constraint_time = 0.0
+            cost_time = 0.0
+            loop_time = 0.0
 
-        copy_time   = 0.0
-        constraint_time = 0.0
-        cost_time = 0.0
-        loop_time = 0.0
-
-        rand_time = 0.0
-        essupdate_time = 0.0
-        sysupdate_time = 0.0
+            rand_time = 0.0
+            essupdate_time = 0.0
+            sysupdate_time = 0.0
 
 
-        t0 = datetime.now()
+            t0 = datetime.now()
 
-        jump = self.init_jump
-        dirty_flag = True
-
-        system_net_demand_baseline = self.system.state_vars["DemandForecast_kW"]
-
-        # From the initial solution, follow the simulated annealing logic: disturb
-        # 1 point and check if there is improvement.
-        for ii in range(self.nIterations):
-
-            if (ii % self.display_pd == 0): # for debug - periodically publish results
-                _log.info("Iteration "+str(ii)+": T="+str(T)+"; Least Cost Soln = "+str(least_cost_soln.total_cost))
-
-            if ((ii+1) % self.jump_decrease_pd) == 0: # check if it's time to decrease jump size.
-                # decrease jump size
-                jump = jump*self.fract_jump
-                #print("ii = "+str(ii)+"; Jump decrease - jump = " + str(jump))
-
-            if ((ii+1) % self.temp_decrease_pd) == 0: # check if it's time to decrease temperature
-                # decrease temperature, reset jump to the starting value from the last jump decrease
-                T         = self.fract_T*T
-                n         = floor(self.temp_decrease_pd/self.jump_decrease_pd)
-                jump = jump/(self.fract_jump**n)
-                #print("ii = "+str(ii)+"; Temp decrease - "+str(T)+"; jump = "+str(jump))
-                #print("ESS Weight is: " + str(self.ess.current_soln.weight))
-
-            # FIXME - Much of the following is taking advantage of a simple system topology by directly referencing
-            # FIXME - into system nodes.  The universal version should do much of the following by recursively
-            # FIXME - traversing the SundialResource tree.
-
-            # set the current test profile to the current least-cost solution
-            if dirty_flag == True:  # copy only if the last solution was not accepted
-                current_soln = self.copy_profile(least_cost_soln, current_soln) # set current soln to least cost soln
-
-            # Randomly perturb a single point by a random value dictated by the size of the jump parameter
-            # FIXME: currently this just deals with battery charge / discharge instructions - not other resources
-            # FIXME: e.g., PV curtailment
-            ind = int(floor(random()*self.nOptimizationPtsPerPd))
-            self.ess.state_vars["DemandForecast_kW"][ind] = self.calc_jump(self.ess.state_vars["DemandForecast_kW"][ind],
-                                                                           jump*(self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"]+self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])/2,
-                                                                           -1*self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"],
-                                                                           self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])
-
-            # Then: check for constraints.
-            # TODO - right now, just checking for battery limit violations.  Eventually put in ability to include
-            # TODO - additional constraints
-            self.ess.state_vars    = self.ess.sundial_resources.check_constraints2(self.ess.state_vars, ind)
-
-            # then: update resources.  This is a shortcut
-            # update overall "system" with new ESS profile - above, subtracted old ESS profile.  next line adds new profile
-            self.system.state_vars["DemandForecast_kW"] = system_net_demand_baseline + \
-                                                          self.ess.state_vars["DemandForecast_kW"]
-            self.system.state_vars["EnergyAvailableForecast_kWh"] = self.ess.state_vars["EnergyAvailableForecast_kWh"][:]
-
-            if (0):
-                # removed for speed up
-                # Sanity check to make sure that constraint check is working.  probably unnecessary at this pont.
-                if max(self.ess.state_vars["EnergyAvailableForecast_kWh"])>(self.ess.sundial_resources.state_vars["MaxSOE_kWh"])+0.001:
-                    _log.info("ii= "+str(ii)+": Max Constraint Error!!  "+str(max(self.ess.state_vars["EnergyAvailableForecast_kWh"])))
-
-                if min(self.ess.state_vars["EnergyAvailableForecast_kWh"])<(self.ess.sundial_resources.state_vars["MinSOE_kWh"])-0.001:
-                    _log.info("ii= "+str(ii)+": Min Constraint Error!! - "+str(min(self.ess.state_vars["EnergyAvailableForecast_kWh"])))
-
-            # Now calculate cost of the current solution and get timing for cumulative time on doing cost calcs.
-            total_cost = current_soln.calc_cost()
-
-            # Calculate delta cost between this test value and the current least cost solution
-            delta = total_cost - least_cost_soln.total_cost
-
+            jump = self.init_jump
             dirty_flag = True
-            if delta < 0.0:
-                # Current test value is a new least-cost solution.  Use this!
-                least_cost_soln = self.copy_profile(current_soln, least_cost_soln)  # set least cost soln to current soln
-                dirty_flag = False
 
-            elif delta > 0.0:
-                # Current test value is worse than current least-cost solution
-                # Adopt the current test value along a probabilistic
-                # distribution according to SSA parameters
-                # NOTE -- T must be greater than zero!!!  Need to watch out for this depending on obj fcn calcs.
-                th = exp(-delta / T)
-                r  = random()
-                if r < th:
-                    #print("non best solution adopted.  r="+str(r)+"; Th = "+str(th)+"; T="+str(T)+"; delta = "+str(delta))
+            system_net_demand_baseline = self.system.state_vars["DemandForecast_kW"]
+
+            # From the initial solution, follow the simulated annealing logic: disturb
+            # 1 point and check if there is improvement.
+            for ii in range(self.nIterations):
+
+                if (ii % self.display_pd == 0): # for debug - periodically publish results
+                    _log.info("Iteration "+str(ii)+": T="+str(T)+"; Least Cost Soln = "+str(least_cost_soln.total_cost))
+
+                if ((ii+1) % self.jump_decrease_pd) == 0: # check if it's time to decrease jump size.
+                    # decrease jump size
+                    jump = jump*self.fract_jump
+                    #print("ii = "+str(ii)+"; Jump decrease - jump = " + str(jump))
+
+                if ((ii+1) % self.temp_decrease_pd) == 0: # check if it's time to decrease temperature
+                    # decrease temperature, reset jump to the starting value from the last jump decrease
+                    T         = self.fract_T*T
+                    n         = floor(self.temp_decrease_pd/self.jump_decrease_pd)
+                    jump = jump/(self.fract_jump**n)
+                    #print("ii = "+str(ii)+"; Temp decrease - "+str(T)+"; jump = "+str(jump))
+                    #print("ESS Weight is: " + str(self.ess.current_soln.weight))
+
+                # FIXME - Much of the following is taking advantage of a simple system topology by directly referencing
+                # FIXME - into system nodes.  The universal version should do much of the following by recursively
+                # FIXME - traversing the SundialResource tree.
+
+                # set the current test profile to the current least-cost solution
+                if dirty_flag == True:  # copy only if the last solution was not accepted
+                    current_soln = self.copy_profile(least_cost_soln, current_soln) # set current soln to least cost soln
+
+                # Randomly perturb a single point by a random value dictated by the size of the jump parameter
+                # FIXME: currently this just deals with battery charge / discharge instructions - not other resources
+                # FIXME: e.g., PV curtailment
+                ind = int(floor(random()*self.nOptimizationPtsPerPd))
+                self.ess.state_vars["DemandForecast_kW"][ind] = self.calc_jump(self.ess.state_vars["DemandForecast_kW"][ind],
+                                                                               jump*(self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"]+self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])/2,
+                                                                               -1*self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"],
+                                                                               self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])
+
+                # Then: check for constraints.
+                # TODO - right now, just checking for battery limit violations.  Eventually put in ability to include
+                # TODO - additional constraints
+                self.ess.state_vars    = self.ess.sundial_resources.check_constraints2(self.ess.state_vars, ind)
+
+                # then: update resources.  This is a shortcut
+                # update overall "system" with new ESS profile - above, subtracted old ESS profile.  next line adds new profile
+                self.system.state_vars["DemandForecast_kW"] = system_net_demand_baseline + \
+                                                              self.ess.state_vars["DemandForecast_kW"]
+                self.system.state_vars["EnergyAvailableForecast_kWh"] = self.ess.state_vars["EnergyAvailableForecast_kWh"][:]
+
+                if (0):
+                    # removed for speed up
+                    # Sanity check to make sure that constraint check is working.  probably unnecessary at this pont.
+                    if max(self.ess.state_vars["EnergyAvailableForecast_kWh"])>(self.ess.sundial_resources.state_vars["MaxSOE_kWh"])+0.001:
+                        _log.info("ii= "+str(ii)+": Max Constraint Error!!  "+str(max(self.ess.state_vars["EnergyAvailableForecast_kWh"])))
+
+                    if min(self.ess.state_vars["EnergyAvailableForecast_kWh"])<(self.ess.sundial_resources.state_vars["MinSOE_kWh"])-0.001:
+                        _log.info("ii= "+str(ii)+": Min Constraint Error!! - "+str(min(self.ess.state_vars["EnergyAvailableForecast_kWh"])))
+
+                # Now calculate cost of the current solution and get timing for cumulative time on doing cost calcs.
+                total_cost = current_soln.calc_cost()
+
+                # Calculate delta cost between this test value and the current least cost solution
+                delta = total_cost - least_cost_soln.total_cost
+
+                dirty_flag = True
+                if delta < 0.0:
+                    # Current test value is a new least-cost solution.  Use this!
                     least_cost_soln = self.copy_profile(current_soln, least_cost_soln)  # set least cost soln to current soln
                     dirty_flag = False
 
-            # end of main loop (nIterations)
+                elif delta > 0.0:
+                    # Current test value is worse than current least-cost solution
+                    # Adopt the current test value along a probabilistic
+                    # distribution according to SSA parameters
+                    # NOTE -- T must be greater than zero!!!  Need to watch out for this depending on obj fcn calcs.
+                    th = exp(-delta / T)
+                    r  = random()
+                    if r < th:
+                        #print("non best solution adopted.  r="+str(r)+"; Th = "+str(th)+"; T="+str(T)+"; delta = "+str(delta))
+                        least_cost_soln = self.copy_profile(current_soln, least_cost_soln)  # set least cost soln to current soln
+                        dirty_flag = False
 
-        t8 = datetime.now()
-        deltaT = t8 - t0
-        total_time = deltaT.total_seconds()
+                # end of main loop (nIterations)
 
-        _log.info("least cost soln is "+str(least_cost_soln.total_cost))
-        _log.info("total time: "+str(total_time))
+            t8 = datetime.now()
+            deltaT = t8 - t0
+            total_time = deltaT.total_seconds()
+
+            _log.info("least cost soln is "+str(least_cost_soln.total_cost))
+            _log.info("total time: "+str(total_time))
 
         # dump some data to a csv file
         filename =  os.path.join(GS_ROOT_DIR, "ssa_results.csv")
@@ -398,7 +402,9 @@ class SimulatedAnnealer():
             results_writer.writerow(self.ess_least_cost.state_vars["DemandForecast_kW"])
             results_writer.writerow(self.ess_least_cost.state_vars["EnergyAvailableForecast_kWh"])
             results_writer.writerow(self.pv.state_vars["DemandForecast_kW"])
-            results_writer.writerow(self.load.state_vars["DemandForecast_kW"])
+
+            if self.load != []:
+                results_writer.writerow(self.load.state_vars["DemandForecast_kW"])
             #results_writer.writerow(self.pv.init_solution.schedule)
             #results_writer.writerow(self.demand.least_cost_soln.schedule)
 
@@ -491,8 +497,10 @@ if __name__ == '__main__':
         loadshift_resources = sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
     except:
         loadshift_resources = []
-    load_resources = sundial_resources.find_resource_type("Load")[0]
-
+    try:
+        load_resources = sundial_resources.find_resource_type("Load")[0]
+    except:
+        load_resources = []
 
     forecast_timestamps = [(gs_start_time +
                            timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%S") for t in range(0,
@@ -548,9 +556,10 @@ if __name__ == '__main__':
                                pk_capacity = 1000.0,
                                t=forecast_timestamps)
 
-    load_resources.load_scenario(demand_forecast = demand_forecast,
-                                 pk_capacity = 1000.0,
-                                 t=forecast_timestamps)
+    if load_resources != []:
+        load_resources.load_scenario(demand_forecast = demand_forecast,
+                                     pk_capacity = 1000.0,
+                                     t=forecast_timestamps)
 
     try:
         ls = pandas.read_excel("loadshift_example.xlsx", header=None)
