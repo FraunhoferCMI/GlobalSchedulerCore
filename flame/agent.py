@@ -107,6 +107,7 @@ class FLAMECommsAgent(Agent):
     def __init__(self, config_path, **kwargs):
         super(FLAMECommsAgent, self).__init__(**kwargs)
 
+        _log.info("CONFIGURATION PATH IS %s" % config_path)
         self.volttron_root = os.getcwd()
         self.volttron_root = self.volttron_root + "/../../../../"
 
@@ -119,6 +120,7 @@ class FLAMECommsAgent(Agent):
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "DEFAULT_MESSAGE": 'FLAME_COMMS_MSG',
             "DEFAULT_AGENTID": "FLAME_COMMS_AGENT",
+            "facilities": ["Facility1", "Facility2", "Facility3"]
         }
         self._config = self.default_config.copy()
         self._agent_id = self._config.get("DEFAULT_AGENTID")
@@ -145,7 +147,7 @@ class FLAMECommsAgent(Agent):
         # insecure way, use this if certificate is giving problems
         sslopt = {"cert_reqs": ssl.CERT_NONE}
         # secure way
-        #sslopt = {"ca_certs": 'IPKeys_Root.pem'}
+        # sslopt = {"ca_certs": 'IPKeys_Root.pem'}
 
         ws = create_connection(ws_url, sslopt=sslopt)
 
@@ -174,7 +176,8 @@ class FLAMECommsAgent(Agent):
             self.gs_start_time = datetime.strptime(v1, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)
         except:
             _log.info("FLAME comms - gs_start_time not found.  Using current time as gs_start_time")
-            self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
+            # self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
+            self.gs_start_time = datetime.now().replace(microsecond=0)
             _log.info("GS STart time is " + str(self.gs_start_time))
 
         self.initialization_complete = 1
@@ -322,7 +325,8 @@ class FLAMECommsAgent(Agent):
             loadReport_kwargs = {
                 "dstart": dstart, # start time for report
                 "sampleInterval": sampleInterval, # sample interval
-                "duration": duration # "PT" + str(DEMAND_REPORT_DURATION) + "H"            # duration of request
+                "duration": duration, # "PT" + str(DEMAND_REPORT_DURATION) + "H"            # duration of request
+                "facilities": self._config['facilities']
             }
             # ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
             lr = LoadReport(websocket=self.websocket, **loadReport_kwargs)
