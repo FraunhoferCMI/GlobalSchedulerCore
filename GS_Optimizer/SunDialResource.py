@@ -265,6 +265,8 @@ class SundialResource():
         if USE_SIM == 1:
             # set a time offset that matches gs start time to the desired sim start time
             self.sim_offset = SIM_START_TIME - datetime.strptime(gs_start_time,"%Y-%m-%dT%H:%M:%S")
+        else:
+            self.sim_offset = timedelta(0)
 
         self.pts_per_schedule = SSA_PTS_PER_SCHEDULE
         self.state_vars    = self.init_state_vars()
