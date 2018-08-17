@@ -205,6 +205,8 @@ class ExecutiveAgent(Agent):
         self.update_endpt_cnt      = 0
         self.data_log_cnt          = 0
 
+        self.last_forecast_start   = datetime(1900,1,1)
+
         self.init_tariffs()
 
 
@@ -333,7 +335,10 @@ class ExecutiveAgent(Agent):
             self.loadshift_resources = self.sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
         except:
             self.loadshift_resources = []
-        self.load_resources = self.sundial_resources.find_resource_type("Load")[0]
+        try:
+            self.load_resources = self.sundial_resources.find_resource_type("Load")[0]
+        except:
+            self.load_resources = []
 
         # get a time stamp of start time to database
         HistorianTools.publish_data(self,
@@ -477,7 +482,6 @@ class ExecutiveAgent(Agent):
         type SundialResource_to_SiteManager_lookup_table
         :return: None
         """
-
         for entries in sdr_to_sm_lookup_table:
             # for each SundialResource that maps to an end point device (i.e., terminal nodes in the
             # the resource tree)
@@ -505,6 +509,8 @@ class ExecutiveAgent(Agent):
         if update_forecasts == False:
             self.sundial_resources.update_sundial_resource()  # propagates new data to non-terminal nodes
             self.update_tariffs()
+
+
 
     ##############################################################################
     def calc_cost(self, sundial_resource):
@@ -745,18 +751,26 @@ class ExecutiveAgent(Agent):
                 sim_time_corr = timedelta(seconds = self.vip.rpc.call("forecast_simagent-0.1_1",
                                                                       "get_sim_time_corr").get())
                 schedule_timestamps = self.generate_schedule_timestamps(sim_time_corr=sim_time_corr)  # associated timestamps
-                if schedule_timestamps[0] == self.system_resources.schedule_vars["timestamp"][0]:
-                    # temporary work around to indicate to optimizer to use previous solution if cost was lower
-                    # fixme - this work around does not account for contingency if forecast or system state changes unexpectedly
-                    # same time window as previously
-                    self.optimizer.persist_lowest_cost = 1
-                else:
-                    self.optimizer.persist_lowest_cost = 0
-                _log.info("persist lower cost = "+str(self.optimizer.persist_lowest_cost)+"; new time = "+str(schedule_timestamps[0])+"; old time = "+str(self.system_resources.schedule_vars["timestamp"][0]))
-
             except:
                 _log.info("Forecast Sim RPC failed!")
                 schedule_timestamps = self.generate_schedule_timestamps()
+
+            #_log.info(self.system_resources.state_vars)
+            forecast_start = datetime.strptime(self.system_resources.state_vars["OrigDemandForecast_t_str"][0],
+                                               "%Y-%m-%dT%H:%M:%S")
+
+            if forecast_start == self.last_forecast_start:
+                #self.system_resources.schedule_vars["OrigDemandForecast_t_str"][0]:
+                # temporary work around to indicate to optimizer to use previous solution if cost was lower
+                # fixme - this work around does not account for contingency if forecast or system state changes unexpectedly
+                # same time window as previously
+                self.optimizer.persist_lowest_cost = 1
+            else:
+                self.optimizer.persist_lowest_cost = 0
+            _log.info("persist lower cost = "+str(self.optimizer.persist_lowest_cost)+"; new time = "+self.last_forecast_start.strftime("%Y-%m-%dT%H:%M:%S")+"; old time = "+self.system_resources.state_vars["OrigDemandForecast_t_str"][0])
+
+            self.last_forecast_start = forecast_start
+
 
             ## update forecast information and interopolate from native forecast time to optimizer time
             ## (so that all forecasts are defined from t = now)
