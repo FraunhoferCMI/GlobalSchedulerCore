@@ -229,7 +229,7 @@ class SimulatedAnnealer():
         schedule_var data points are valid
         :return: None
         """
-        run_optimization = False
+        run_optimization = True
 
         # get an initial set of commands to seed the ssa process
         # then, set least_cost_soln AND current_soln to initiate the SSA
@@ -419,7 +419,7 @@ class SimulatedAnnealer():
             export_schedule(least_cost_soln, timestamps)
         elif least_cost_soln.total_cost<sundial_resources.schedule_vars["total_cost"]:
             _log.info("SSA: Lower Cost Solution found - using new solution")
-            _log.info("new soln is"+str(least_cost_soln)+"; old soln = "+str(sundial_resources.schedule_vars["total_cost"]))
+            _log.info("new soln is"+str(least_cost_soln.total_cost)+"; old soln = "+str(sundial_resources.schedule_vars["total_cost"]))
             export_schedule(least_cost_soln, timestamps)
         else:
             _log.info("SSA: Lower cost solution not found - using previous solution")
@@ -521,22 +521,24 @@ if __name__ == '__main__':
     #                0.0, 0.0, -136.28581942, -96.68917457,
     #                49.07769182, 97.72753814, 111.3388077, 0.0]
 
-    ess_resources.load_scenario(init_SOE=1000.0,
-                                max_soe=2000.0,
+    ess_resources.load_scenario(init_SOE=219.0,
+                                max_soe=1000.0,
                                 min_soe=0.0,
                                 max_chg=500.0,
                                 max_discharge=500.0,
-                                chg_eff=0.95,
-                                dischg_eff=0.95,
+                                chg_eff=0.9,
+                                dischg_eff=0.9,
                                 demand_forecast=ess_forecast,
                                 t=forecast_timestamps)
 
-    pv_forecast = [0.0, 0.0, 0.0, 0.0,
-                   0.0, -5.769, -93.4666, -316.934,
-                   -544.388, -716.663, -822.318, -888.916,
-                   -898.478, -839.905, -706.972, -512.013,
-                   -265.994, -74.6933, -2.0346, 0.0,
-                   0.0, 0.0, 0.0, 0]
+    #pv_forecast = [0.0, 0.0, 0.0, 0.0,
+    #               0.0, -5.769, -93.4666, -316.934,
+    #               -544.388, -716.663, -822.318, -888.916,
+    #               -898.478, -839.905, -706.972, -512.013,
+    #               -265.994, -74.6933, -2.0346, 0.0,
+    #               0.0, 0.0, 0.0, 0]
+
+    pv_forecast = [0,0,0,0,0,0,0,0,-5.25, -19.585, -95.39, -169.4, -224,-255, -276, -278, -211, -124, -94, -61, -15, -0.45, 0,0]
 
     #pv_forecast = [0.5 * v for v in [0.0, 0.0, 0.0, 0.0,
     #                                 0.0, -5.769, -93.4666, -316.934,
@@ -562,11 +564,12 @@ if __name__ == '__main__':
                                      t=forecast_timestamps)
 
     try:
-        ls = pandas.read_excel("loadshift_example.xlsx", header=None)
-        print(ls)
-        load_shift_options = [ls[ii].tolist() for ii in range(0,13)]
-        loadshift_resources.load_scenario(load_options=load_shift_options,
-                                          t=forecast_timestamps)
+        if loadshift_resources != []:
+            ls = pandas.read_excel("loadshift_example.xlsx", header=None)
+            print(ls)
+            load_shift_options = [ls[ii].tolist() for ii in range(0,13)]
+            loadshift_resources.load_scenario(load_options=load_shift_options,
+                                              t=forecast_timestamps)
     except:
         pass
 
