@@ -62,8 +62,9 @@ _log.setLevel(logging.INFO)
 forecast_keys = ["DemandForecast_kW",
                  "EnergyAvailableForecast_kWh",
                  "DemandForecast_t",
-                 "OrigDemandForecast_kW"
+                 "OrigDemandForecast_kW",
                  "OrigDemandForecast_t_str",
+                 "OrigEnergyAvailableForecast_kWh",
                  "LoadShiftOptions_kW",
                  "LoadShiftOptions_t",
                  "LoadShiftOptions_t_str"]
@@ -405,7 +406,7 @@ class SundialResource():
 
         if self.virtual_plants != []: # not a terminal node
             # initialize all state_vars
-            self.state_vars = self.init_state_vars()
+            self.state_vars.update(self.init_state_vars())
 
             for virtual_plant in self.virtual_plants:
                 # retrieve data from child nodes and sum
