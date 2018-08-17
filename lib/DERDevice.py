@@ -766,8 +766,8 @@ class DERDevice():
             new_val = int(val)
         except:
             new_val = float(val)
-            self.datagroup_dict_list[cmd_attribute].data_dict.update({cmd_pt: new_val})
-            self.set_point(attribute, pt, sitemgr)
+        self.datagroup_dict_list[cmd_attribute].data_dict.update({cmd_pt: new_val})
+        self.set_point(attribute, pt, sitemgr)
 
     ##############################################################################
     def set_power_real(self, val, sitemgr):
@@ -1195,13 +1195,13 @@ class ShirleySite(DERSite, DERModbusDevice):
                 device.set_power_real(0, sitemgr)
 
 
-        # set ramp limit to 10% per second
-        self.pwr_ctrl_cmd.data_dict.update({"RampLimit_pct_cmd": 10.0})
+        # set ramp limit to 100% per second
+        self.pwr_ctrl_cmd.data_dict.update({"RampLimit_pct_cmd": 100.0})
         self.set_point("RealPwrCtrl", "RampLimit_pct", sitemgr)
         # make sure that the commmand has been written.
 
-        # set ramp limit to 10% per second
-        self.q_ctrl_cmd.data_dict.update({"QRampLimit_pct_cmd": 10.0})
+        # set ramp limit to 100% per second
+        self.q_ctrl_cmd.data_dict.update({"QRampLimit_pct_cmd": 100.0})
         self.set_point("QModeCtrl", "QRampLimit_pct", sitemgr)
         # make sure that the commmand has been written.
 
