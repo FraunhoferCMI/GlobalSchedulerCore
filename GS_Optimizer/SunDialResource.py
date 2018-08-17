@@ -471,9 +471,9 @@ class SundialResource():
             len_load_options = 0
             for virtual_plant in self.virtual_plants:
                 # retrieve data from child nodes and sum
-                virtual_plant.interpolate_forecast(schedule_timestamps)
                 _log.debug(self.resource_id)
                 _log.debug(virtual_plant.resource_id)
+                virtual_plant.interpolate_forecast(schedule_timestamps)
                 self.state_vars["DemandForecast_kW"]           += virtual_plant.state_vars["DemandForecast_kW"]
                 self.state_vars["EnergyAvailableForecast_kWh"] += virtual_plant.state_vars["EnergyAvailableForecast_kWh"]
 
@@ -875,9 +875,9 @@ class SundialSystemResource(SundialResource):
         self.update_required = 1  # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         # set up the specific set of objective functions to apply for the system
-        self.obj_fcns = [EnergyCostObjectiveFunction(desc="EnergyPrice", fname="energy_price_data.xlsx"),
-                         #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_data_load.xlsx")]#,
-                         DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0),
+        self.obj_fcns = [#EnergyCostObjectiveFunction(desc="EnergyPrice", fname="energy_price_data.xlsx"),
+                         LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_data_load.xlsx"),
+                         #DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0),
                          dkWObjectiveFunction(desc="dkW")]
 
 
