@@ -66,6 +66,7 @@ import numpy
 import pandas
 from SunDialResource import SundialSystemResource, SundialResource, SundialResourceProfile, build_SundialResource_to_SiteManager_lookup_table
 from SSA_Optimization import SimulatedAnnealer
+import GeneratePriceMap
 
 
 #utils.setup_logging()
@@ -543,73 +544,23 @@ class ExecutiveAgent(Agent):
         :param search_resolution: size of the demand tiers for initial search, in kW
         :return: tiers - list of lists of dictionary - each entry is defines price as a function of demand LB/UB and time
         """
-        total_cost = 0
-        epsilon    = 0.1 # minimum price difference required to differentiate a new price tier
 
-        #TODO - only deals with system level costs
-        #TODO - adjust for solar forecast
+        try:
+            sim_time_corr = timedelta(seconds=self.vip.rpc.call("forecast_simagent-0.1_1",
+                                                                "get_sim_time_corr").get())
+            schedule_timestamps = self.generate_schedule_timestamps(sim_time_corr=sim_time_corr)  # associated timestamps
+        except:
+            _log.info("Forecast Sim RPC failed!")
+            schedule_timestamps = self.generate_schedule_timestamps()
 
-        #pprint(self.sundial_resources.state_vars["DemandForecast_kW"])
+        self.sundial_resources.interpolate_forecast(schedule_timestamps)
+        self.sundial_resources.cfg_cost(schedule_timestamps, self.tariffs)
 
-        lb = min(self.sundial_resources.state_vars["DemandForecast_kW"])
-        ub = max(self.sundial_resources.state_vars["DemandForecast_kW"])
 
-        # adjust upper and lower bound limits to extend past forecast
-        if lb<0:
-            lb *= 1.2
-        else:
-            lb *= 0.8
-        if ub<0:
-            ub *= 0.8
-        else:
-            ub *= 1.2
-
-        #_log.info("UB = "+str(ub)+"; LB = "+str(lb))
-
-        if (lb + 4*search_resolution > ub): # indicates that no forecast is available, or demand lies over a narrow range
-            # use a default value
-            lb = -2000
-            ub = 4000
-        else: # set ub and lb to the nearest search resolution
-            lb = int(lb - (lb % search_resolution))
-            ub = int(ub - (ub % search_resolution) + search_resolution)
-
-        n_demand_steps = int((ub-lb)/search_resolution + 1)
-
-        cost_map = pandas.DataFrame([[0.0] * n_demand_steps] * n_time_steps)
-        test_profile = numpy.array([[0.0] * n_time_steps] * n_time_steps)
-        for ii in range(0, n_time_steps):
-            for jj in range(0, n_demand_steps):
-                test_profile[ii][ii] = lb + jj * search_resolution
-                # print(test_profile)
-                sv = {}
-                sv.update({"DemandForecast_kW": test_profile[ii]})
-                cost_map.iloc[ii][jj] = self.sundial_resources.calc_cost(sv, linear_approx = True)
-
-        v = cost_map.diff(axis=1)
-        v.columns = range(lb, ub+search_resolution, search_resolution)
-
-        tiers = []
-        for ii in range(0, n_time_steps):
-            jj = lb + 2*search_resolution
-            cnt = 0
-            tiers.append([{"LB": lb}])
-            tiers[ii][cnt].update({"price": v.iloc[ii][jj - search_resolution] / search_resolution})
-            while jj <= ub:
-                same_tier = True
-                while same_tier == True:
-                    if jj == ub:
-                        same_tier = False
-                        tiers[ii][cnt].update({"UB": jj})
-                    elif ((v.iloc[ii][jj] > v.iloc[ii][jj - search_resolution] + epsilon) or
-                          (v.iloc[ii][jj] < v.iloc[ii][jj - search_resolution] - epsilon)):
-                        tiers[ii][cnt].update({"UB": jj - search_resolution})
-                        cnt += 1
-                        tiers[ii].append({"LB": jj - search_resolution})
-                        tiers[ii][cnt].update({"price": v.iloc[ii][jj] / search_resolution})
-                        same_tier = False
-                    jj += search_resolution
-        return tiers
+        return GeneratePriceMap.generate_cost_map(self.sundial_resources,
+                                                  self.pv_resources,
+                                                  n_time_steps,
+                                                  search_resolution)
 
     ##############################################################################
     #@Core.periodic(ESS_SCHEDULE)
