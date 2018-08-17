@@ -1776,7 +1776,7 @@ class ESSDevice(DERDevice):
                                 "MaxDischargePwr_kW": float(device_info["max_dischg_pwr"]) if("max_dischg_pwr" in device_info) else 0.0,
                                 "ChgEff": float(device_info["chg_eff"]) if("chg_eff" in device_info) else 1.0,
                                 "DischgEff": float(device_info["dischg_eff"]) if("dischg_eff" in device_info) else 1.0,
-                                "MinSOE_kWh": 0.0,
+                                "MinSOE_kWh": ESS_MIN*float(device_info["max_soe"]) if("max_soe" in device_info) else 0.0,
                                 "Nameplate_kW": float(device_info["max_dischg_pwr"]) if("max_dischg_pwr" in device_info) else 0.0})
         _log.info("ESS Device init - state vars: "+str(self.state_vars))
 
@@ -1791,7 +1791,8 @@ class TeslaPowerPack(ESSDevice):
         :return:
         """
         DERDevice.update_state_vars(self)
-        self.state_vars.update({"MaxSOE_kWh": self.op_status.data_dict["FullChargeEnergy_kWh"],
+        self.state_vars.update({"MaxSOE_kWh": self.op_status.data_dict["FullChargeEnergy_kWh"]*ESS_MAX,
+                                "MinSOE_kWh": self.op_status.data_dict["FullChargeEnergy_kWh"] * ESS_MIN,
                                 "SOE_kWh": self.op_status.data_dict["Energy_kWh"],
                                 "MaxChargePwr_kW": self.op_status.data_dict["MaxChargePwr_kW"],
                                 "MaxDischargePwr_kW": self.op_status.data_dict["MaxDischargePwr_kW"],

@@ -139,7 +139,8 @@ DEMAND_FILE_TIME_RESOLUTION_MIN = DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN #1
 SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0) + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
 
 DEMAND_CHARGE_THRESHOLD = 250
-
+ESS_MAX = 0.95
+ESS_MIN = 0.05
 
 # SCHEDULES
 if USE_SIM == 1:   # schedules for simulated testing
