@@ -711,14 +711,15 @@ class ExecutiveAgent(Agent):
                                           update_forecasts=True)
             self.sundial_resources.interpolate_forecast(schedule_timestamps)
 
+            # work around to indicate to optimizer to use previous solution if cost was lower
+            # same time window as previously
+            # todo - looks only at solar forecast to determine whether new forecast has arrived...should this
+            # todo - look at other forecasts also?
+            # fixme - this work around does not account for contingency if forecast or system state changes unexpectedly
             forecast_start = datetime.strptime(self.pv_resources.state_vars["OrigDemandForecast_t_str"][0],
                                                "%Y-%m-%dT%H:%M:%S")
 
             if forecast_start == self.last_forecast_start:
-                #self.system_resources.schedule_vars["OrigDemandForecast_t_str"][0]:
-                # temporary work around to indicate to optimizer to use previous solution if cost was lower
-                # fixme - this work around does not account for contingency if forecast or system state changes unexpectedly
-                # same time window as previously
                 self.optimizer.persist_lowest_cost = 1
             else:
                 self.optimizer.persist_lowest_cost = 0
