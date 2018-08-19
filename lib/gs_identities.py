@@ -95,10 +95,10 @@ APPLICATION_CONTROL = 2
 EXEC_STARTING = 3
 
 EXECUTIVE_CLKTIME = 2 # period, in seconds, at which the executive polls system state
-DATA_LOG_SCHEDULE = 10  # period at which state vars are logged, in executive clock cycles
+DATA_LOG_SCHEDULE = 3  # period at which state vars are logged, in executive clock cycles
 ENDPT_UPDATE_SCHEDULE  = DATA_LOG_SCHEDULE # period at which sundial system resource objects are updated
 GS_SCHEDULE       = 60  # GS optimizer period, in executive clock cycles
-ESS_SCHEDULE      = 2 # ess regulation period, in executive clock cycles
+ESS_SCHEDULE      = 6 # ess regulation period, in executive clock cycles
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
 
 #FIXME - Placeholder!
