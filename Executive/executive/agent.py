@@ -506,7 +506,6 @@ class ExecutiveAgent(Agent):
 
                         except KeyError:
                             _log.debug("Key not found!!")
-
         if update_forecasts == False:
             self.sundial_resources.update_sundial_resource()  # propagates new data to non-terminal nodes
             self.update_tariffs()
@@ -706,8 +705,13 @@ class ExecutiveAgent(Agent):
                 _log.info("Forecast Sim RPC failed!")
                 schedule_timestamps = self.generate_schedule_timestamps()
 
-            #_log.info(self.system_resources.state_vars)
-            forecast_start = datetime.strptime(self.system_resources.state_vars["OrigDemandForecast_t_str"][0],
+            ## update forecast information and interopolate from native forecast time to optimizer time
+            ## (so that all forecasts are defined from t = now)
+            self.update_sundial_resources(self.sdr_to_sm_lookup_table,
+                                          update_forecasts=True)
+            self.sundial_resources.interpolate_forecast(schedule_timestamps)
+
+            forecast_start = datetime.strptime(self.pv_resources.state_vars["OrigDemandForecast_t_str"][0],
                                                "%Y-%m-%dT%H:%M:%S")
 
             if forecast_start == self.last_forecast_start:
@@ -718,16 +722,9 @@ class ExecutiveAgent(Agent):
                 self.optimizer.persist_lowest_cost = 1
             else:
                 self.optimizer.persist_lowest_cost = 0
-            _log.info("persist lower cost = "+str(self.optimizer.persist_lowest_cost)+"; new time = "+self.last_forecast_start.strftime("%Y-%m-%dT%H:%M:%S")+"; old time = "+self.system_resources.state_vars["OrigDemandForecast_t_str"][0])
+            _log.info("persist lower cost = "+str(self.optimizer.persist_lowest_cost)+"; old time = "+self.last_forecast_start.strftime("%Y-%m-%dT%H:%M:%S")+"; new time = "+forecast_start.strftime("%Y-%m-%dT%H:%M:%S"))
 
             self.last_forecast_start = forecast_start
-
-
-            ## update forecast information and interopolate from native forecast time to optimizer time
-            ## (so that all forecasts are defined from t = now)
-            self.update_sundial_resources(self.sdr_to_sm_lookup_table,
-                                          update_forecasts=True)
-            self.sundial_resources.interpolate_forecast(schedule_timestamps)
 
             ## queue up time-differentiated cost data
             self.sundial_resources.cfg_cost(schedule_timestamps,
