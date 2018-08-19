@@ -692,14 +692,15 @@ class DERDevice():
             nameplate     = self.get_nameplate()
             val           = self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]
             _log.info("SetPt: Name plate is "+str(nameplate))
-            self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"] = \
-                int(eval(site.unit_conversion_table[conversionKey]))
+            #self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"] = \
+            converted_val = int(eval(site.unit_conversion_table[conversionKey]))
 
-            _log.info("SetPt: New val = "+str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
+            _log.info("SetPt: New val = "+ str(converted_val)) #str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
 
         except KeyError as e:
             _log.info("SetPt: No units found for "+ext_endpt+".  Assume no conversion is needed.")
-
+            converted_val = self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]
+        return converted_val
 
     ##############################################################################
     def populate_endpts(self, incoming_msg, SiteMgr, meta_data = None, cur_topic_name=None):
@@ -1076,25 +1077,26 @@ class DERModbusDevice(DERDevice):
         #res = 0
         # FIXME check for exceptions
         # convert units if necessary:
-        self.convert_units_to_endpt2(attribute, cmd, sitemgr.site)
+        converted_val = self.convert_units_to_endpt2(attribute, cmd, sitemgr.site)
         try:
             ret = sitemgr.vip.rpc.call(
                 "platform.actuator",
                 "set_point",
                 "SiteManager",
                 cmd_path,
-                self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"])
+                converted_val)
+                #self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"])
 
-            val = sitemgr.vip.rpc.call(
-                "platform.actuator",
-                "get_point",
-                cmd_path).get()
+            #val = sitemgr.vip.rpc.call(
+            #    "platform.actuator",
+            #    "get_point",
+            #    cmd_path).get()
 
-            if val != self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]:
-                # command wasn't written - raise an error
-                _log.info("SetPt: SiteManager.set_point: Command " + str(cmd_path) + " not written. for " + self.device_id)
-                _log.info("SetPt: Expected " + str(
-                    self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]) + "; Read: " + str(val))
+            #if val != self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]:
+            #    # command wasn't written - raise an error
+            #    _log.debug("SetPt: SiteManager.set_point: Command " + str(cmd_path) + " not written. for " + self.device_id)
+            #    _log.debug("SetPt: Expected " + str(
+            #        self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]) + "; Read: " + str(val))
         except Unreachable: #Exception as exception:
             #_log.info(type(exception).__name__)
             _log.info("ERROR: Agent 'platform.actuator' not found.  Command not written.")

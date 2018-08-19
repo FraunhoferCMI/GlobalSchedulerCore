@@ -876,9 +876,9 @@ class SundialSystemResource(SundialResource):
         self.update_required = 1  # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         # set up the specific set of objective functions to apply for the system
-        self.obj_fcns = [#EnergyCostObjectiveFunction(desc="EnergyPrice", fname="energy_price_data.xlsx"),
-                         LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_data_load.xlsx"),
-                         #DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0),
+        self.obj_fcns = [EnergyCostObjectiveFunction(desc="EnergyPrice", fname="energy_price_data.xlsx"),
+                         #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_data_load.xlsx"),
+                         DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0),
                          dkWObjectiveFunction(desc="dkW")]
 
 
