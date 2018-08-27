@@ -477,6 +477,7 @@ if __name__ == '__main__':
     # the following is a rough demo of how a system gets constructed.
     # this is a hard-coded version of what might happen in the executive
     # would eventually do all this via external configuration files, etc.
+    shift_to_start_of_day = False
 
     _log.setLevel(logging.INFO)
     msgs = logging.StreamHandler(stream=sys.stdout)
@@ -487,8 +488,14 @@ if __name__ == '__main__':
     sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
 
     gs_start_time = datetime.utcnow().replace(microsecond=0)
+    if shift_to_start_of_day == True:
+        gs_start_time = gs_start_time.replace(hour=0, minute=0, second=0)
+
     gs_start_time_str = gs_start_time.strftime("%Y-%m-%dT%H:%M:%S")
+
+    _log.info(gs_start_time_str)
     sundial_resources = SundialSystemResource(sundial_resource_cfg_list, gs_start_time_str)
+
 
     ess_resources = sundial_resources.find_resource_type("ESSCtrlNode")[0]
     pv_resources = sundial_resources.find_resource_type("PVCtrlNode")[0]
@@ -521,7 +528,7 @@ if __name__ == '__main__':
     #                0.0, 0.0, -136.28581942, -96.68917457,
     #                49.07769182, 97.72753814, 111.3388077, 0.0]
 
-    ess_resources.load_scenario(init_SOE=219.0,
+    ess_resources.load_scenario(init_SOE=300.0,
                                 max_soe=1000.0,
                                 min_soe=0.0,
                                 max_chg=500.0,
@@ -538,7 +545,8 @@ if __name__ == '__main__':
     #               -265.994, -74.6933, -2.0346, 0.0,
     #               0.0, 0.0, 0.0, 0]
 
-    pv_forecast = [0,0,0,0,0,0,0,0,-5.25, -19.585, -95.39, -169.4, -224,-255, -276, -278, -211, -124, -94, -61, -15, -0.45, 0,0]
+    # forecast, indexed to 00:00
+    pv_forecast_base = [0,0,0,0,0,0,0,0,-5.25, -19.585, -95.39, -169.4, -224,-255, -276, -278, -211, -124, -94, -61, -15, -0.45, 0,0]
 
     #pv_forecast = [0.5 * v for v in [0.0, 0.0, 0.0, 0.0,
     #                                 0.0, -5.769, -93.4666, -316.934,
@@ -547,12 +555,26 @@ if __name__ == '__main__':
     #                                 -265.994, -74.6933, -2.0346, 0.0,
     #                                 0.0, 0.0, 0.0, 0]]
 
-    demand_forecast = [142.4973, 142.4973, 142.4973, 145.9894,
-                       160.094, 289.5996, 339.7752, 572.17,
-                       658.6025, 647.2883, 650.1958, 639.7053,
-                       658.044, 661.158, 660.3772, 673.1098,
-                       640.9227, 523.3306, 542.7008, 499.3727,
-                       357.9398, 160.0936, 145.9894, 142.4973]
+    demand_forecast_base = [142.4973, 142.4973, 142.4973, 145.9894,
+                            160.094, 289.5996, 339.7752, 572.17,
+                            658.6025, 647.2883, 650.1958, 639.7053,
+                            658.044, 661.158, 660.3772, 673.1098,
+                            640.9227, 523.3306, 542.7008, 499.3727,
+                            357.9398, 160.0936, 145.9894, 142.4973]
+
+
+    if shift_to_start_of_day == False:
+        # shift starting point to match up to current hour
+        pv_forecast = pv_forecast_base[gs_start_time.hour:len(pv_forecast_base)]
+        pv_forecast.extend(pv_forecast_base[0:gs_start_time.hour])
+
+        demand_forecast = demand_forecast_base[gs_start_time.hour:len(demand_forecast_base)]
+        demand_forecast.extend(demand_forecast_base[0:gs_start_time.hour])
+
+    else:  # start sim at start of day.
+        pv_forecast     = pv_forecast_base
+        demand_forecast = demand_forecast_base
+
 
     pv_resources.load_scenario(demand_forecast = pv_forecast,
                                pk_capacity = 1000.0,

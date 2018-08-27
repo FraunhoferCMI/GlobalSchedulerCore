@@ -82,7 +82,6 @@ class ObjectiveFunction():
 
         ### what am I having problems with?
         # options -
-
         start_ind = numpy.argmin(numpy.abs(self.obj_fcn_data.index - (schedule_timestamps[0] + sim_offset)))
 
         if self.obj_fcn_data.index[start_ind] > schedule_timestamps[0]:
@@ -309,7 +308,8 @@ class LoadShapeObjectiveFunction(ObjectiveFunction):
     ##############################################################################
     def __init__(self, desc="", **kwargs): #fname, schedule_timestamps, sim_offset=timedelta(0), desc=""):
         init_params = {'fname': None,
-                       'schedule_timestamps':[0]}
+                       'schedule_timestamps':[0],
+                       'vble_price': False}
         ObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
 
         self.obj_fcn_data = self.load_data_file(self.init_params["fname"])
@@ -330,11 +330,16 @@ class LoadShapeObjectiveFunction(ObjectiveFunction):
         cost is calculated as square of the error relative to the target load shape.
         :return: cost of executing proposed profile, in $
         """
-        price = 10.0  # sort of arbitrary, just needs to be a number big enough to drive behavior in the desired direction.
+        self.err = (profile["DemandForecast_kW"] - self.init_params["cur_cost"][0]) ** 2
+
+        if self.init_params["vble_price"] == False:
+            price = 10.0  # sort of arbitrary, just needs to be a number big enough to drive behavior in the desired direction.
+            self.cost = sum(self.err) * price
+        else:
+            price = self.init_params["cur_cost"][1]  # sort of arbitrary, just needs to be a number big enough to drive behavior in the desired direction.
+            self.cost = sum(self.err * price)
         #demand = numpy.array(profile)
 
-        self.err = (profile["DemandForecast_kW"] - self.init_params["cur_cost"][0]) ** 2
-        self.cost = sum(self.err) * price
         return self.cost
 
     ##############################################################################
