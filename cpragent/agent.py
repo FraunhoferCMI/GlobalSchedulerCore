@@ -39,14 +39,18 @@ class CPRPub(Agent):
 
         if self._conf['sim_interval'] == 60:
             self._conf['topic'] = "devices/cpr/forecast/all"
-            self.query_interval = CPR_QUERY_INTERVAL
+            self.query_interval = CPR_QUERY_INTERVAL        #sets query interval using hourly query interval from gs_identities
             self.duration       = SSA_SCHEDULE_DURATION
+            self.requesttimeout = CPR_TIMEOUT
+            self.frequency = "hour"
         else:
             self._conf['topic'] = "".join(["devices/cpr/forecast",
                                        str(self._conf['sim_interval']),
                                        "m/all"])
-            self.query_interval = CPR_1MIN_QUERY_INTERVAL
+            self.query_interval = CPR_1MIN_QUERY_INTERVAL   #sets query interval using 1min query interval from gs_identities
             self.duration       = DURATION_1MIN_FORECAST
+            self.requesttimeout = CPR_1M_TIMEOUT        
+            self.frequency = "minute"
         #receive_interval = self._conf.get("receive_interval")
 
         _log.info("Initializing - STEP 3")
@@ -184,9 +188,18 @@ class CPRPub(Agent):
                 self.process_times.append(request_process_time)
                 receive_interval = sum(self.process_times)/len(self.process_times)
 
-
+            # Checks the pending status on the request
             elif status == 'Pending':
-                _log.info("model still pending, waiting...")
+                # resubmit query  if timeout has been reached                           
+                if (round(time.time() - self.start_time, 2) >= self.requesttimeout):
+                    self.status_pending = False
+                    _log.info("model pending timeout reached, resubmitting query")
+                    self.request_cpr_model()
+
+                # keep waiting if timeout has not been reached
+                else:
+                    
+                    _log.info("model still pending, waiting for..."+str(round(time.time() - self.start_time, 2)))
 
 
 def main(argv=sys.argv):
