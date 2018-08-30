@@ -123,7 +123,6 @@ def get_gs_time(gs_start_time, sim_time_corr):
     #gs_aware = gs_start_time.replace(tzinfo=pytz.UTC)
     _log.info("Cur time: " + now.strftime("%Y-%m-%dT%H:%M:%S") + "; gs start time= " + gs_start_time.strftime("%Y-%m-%dT%H:%M:%S"))
 
-    now = now.replace(tzinfo=None)
     # gs_start_time = gs_start_time.replace(tzinfo=now.tzinfo)
     run_time         = (now - gs_start_time).total_seconds() # tells the elapsed real time
     sim_run_time     = timedelta(seconds=SIM_HRS_PER_HR * run_time)  # tells the elapsed "accelerated" time
