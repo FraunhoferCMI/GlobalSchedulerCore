@@ -897,7 +897,7 @@ def reserve_modbus(device, task_id, sitemgr, device_path):
     _log.info("Requesting to reserve modbus, requester: " + device.device_id + "; task " + task_id)
     start = datetime.now().strftime(
 	    "%Y-%m-%d %H:%M:%S")
-    end = (datetime.now() + timedelta(seconds=0.5)).strftime(
+    end = (datetime.now() + timedelta(seconds=1.5)).strftime(
 	    "%Y-%m-%d %H:%M:%S")
 
     try:
@@ -908,7 +908,7 @@ def reserve_modbus(device, task_id, sitemgr, device_path):
             [device_path, start, end]).get()
 
         request_status = res["result"]
-        _log.info("request_status - "+request_status)
+        _log.info("reserve_request_status - "+request_status +res["info")
         if request_status == "FAILURE":
             _log.info("Request failed, reason is " + res["info"])
             #attempt += 1
@@ -929,7 +929,7 @@ def release_modbus(device, task_id, sitemgr):
             "request_cancel_schedule",
             device.device_id, task_id).get()
 
-        _log.info("request_status - "+res["result"])
+        _log.info("release_request_status - "+res["result"])
 
         if res["result"] == "FAILURE":
             _log.info("Release Modbus: Request failed, reason is " + res["info"])
