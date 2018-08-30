@@ -114,8 +114,10 @@ DURATION_1MIN_FORECAST = 5 # hrs
 
 REGULATE_ESS_OUTPUT = True #False
 SEARCH_LOADSHIFT_OPTIONS = False
-
-# For configuring w/simulated data
+# For configuring forecast agent
+CPR_TIMEOUT = 600            #sets the timeout for hourly forecast data requests
+CPR_1M_TIMEOUT = 600         #sets the timeout for minute forecast data requests
+# For configuring w/ simulated data
 USE_SOLAR_SIM  = 1
 USE_DEMAND_SIM = 1
 SIM_SCENARIO   = 1
