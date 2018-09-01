@@ -230,6 +230,7 @@ class SimulatedAnnealer():
         :return: None
         """
         run_optimization = True
+        use_recursive    = False
 
         # get an initial set of commands to seed the ssa process
         # then, set least_cost_soln AND current_soln to initiate the SSA
@@ -339,11 +340,17 @@ class SimulatedAnnealer():
                 # TODO - additional constraints
                 self.ess.state_vars    = self.ess.sundial_resources.check_constraints2(self.ess.state_vars, ind)
 
-                # then: update resources.  This is a shortcut
-                # update overall "system" with new ESS profile - above, subtracted old ESS profile.  next line adds new profile
-                self.system.state_vars["DemandForecast_kW"] = system_net_demand_baseline + \
-                                                              self.ess.state_vars["DemandForecast_kW"]
-                self.system.state_vars["EnergyAvailableForecast_kWh"] = self.ess.state_vars["EnergyAvailableForecast_kWh"][:]
+                # then: update resources.
+                if use_recursive == True:
+                    # slower but generic solution
+                    self.system.update_sundial_resource()
+                else:
+                    # faster but not generalized
+                    # This is a shortcut
+                    # update overall "system" with new ESS profile -subtract old ESS profile.  then add new profile
+                    self.system.state_vars["DemandForecast_kW"] = system_net_demand_baseline + \
+                                                                  self.ess.state_vars["DemandForecast_kW"]
+                    self.system.state_vars["EnergyAvailableForecast_kWh"] = self.ess.state_vars["EnergyAvailableForecast_kWh"][:]
 
                 if (0):
                     # removed for speed up
@@ -499,6 +506,13 @@ if __name__ == '__main__':
 
     ess_resources = sundial_resources.find_resource_type("ESSCtrlNode")[0]
     pv_resources = sundial_resources.find_resource_type("PVCtrlNode")[0]
+
+    try:
+        solarPlusStorage_resources = sundial_resources.find_resource_type("SolarPlusStorageCtrlNode")[0]
+        print("found!")
+    except:
+        solarPlusStorage_resources = []
+
     system_resources = sundial_resources.find_resource_type("System")[0]
     try:
         loadshift_resources = sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
@@ -528,9 +542,9 @@ if __name__ == '__main__':
     #                0.0, 0.0, -136.28581942, -96.68917457,
     #                49.07769182, 97.72753814, 111.3388077, 0.0]
 
-    ess_resources.load_scenario(init_SOE=300.0,
-                                max_soe=1000.0,
-                                min_soe=0.0,
+    ess_resources.load_scenario(init_SOE=200.0,
+                                max_soe=1000.0*ESS_MAX,
+                                min_soe=1000.0*ESS_MIN,
                                 max_chg=500.0,
                                 max_discharge=500.0,
                                 chg_eff=0.9,
@@ -595,10 +609,14 @@ if __name__ == '__main__':
     except:
         pass
 
+
+    #if solarPlusStorage_resources != []:
+    #    solarPlusStorage_resources.load_scenario()
+
     system_resources.load_scenario()
 
 
-    tariffs = {"threshold": 100} #DEMAND_CHARGE_THRESHOLD}
+    tariffs = {"threshold": 0} #DEMAND_CHARGE_THRESHOLD}
 
     #########
 
