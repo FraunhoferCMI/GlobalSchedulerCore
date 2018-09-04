@@ -39,10 +39,14 @@ class IPKeys(object):
 
         # (2) send request
         _log.info("Sending Request from %s" % self.type)
-        self.ws.send(self.request)
+        try:
+            self.ws.send(self.request)
+        except WebSocketTimeoutException:
+            raise
+            # TODO: add a means of handling what to do when a timeout happens
+        # TODO: add a means of confirming that the request was received (200?)
         _log.info("Request set from %s" % self.type)
 
-        # TODO: add a means of confirming that the request was received (200?)
 
         # (3) check for response
         _log.info("Receiving Response from %s" % self.type)
@@ -77,8 +81,7 @@ Dummy Message Loaded""" % self.type)
         else:
             self.response = json.loads(result_json)
             # (4) check for errors
-            assert self.response['type'] == self.type + 'Response', 'msg received is wrong type'
-
+            assert self.response['type'] == self.type + 'Response', 'msg received is wrong type %s' % self.type + 'Response'
 
         return None
 
@@ -138,11 +141,16 @@ class Baseline(IPKeys):
 
 class LoadShift(IPKeys):
 
-    def __init__(self, websocket):
+    def __init__(self, websocket, price_map=None):
         IPKeys.__init__(self, websocket)
 
         self.type = u'LoadOptions'
-        self.request = create_load_request()
+
+        self.price_map = price_map
+
+        self.request = create_load_request(price_map=price_map)
+        _log.info("REQUEST LENGTH!!!")
+        _log.info(len(self.request))
         return None
 
     def __repr__(self):
@@ -320,30 +328,20 @@ def parse_Baseline_response(result):
     forecast_values.index = convert_FLAME_time_to_UTC(forecast_values.index)
     return forecast_values
 
-def create_load_request(duration='PT1H', nLoadOptions=12,
-                        borders=[randint(10, 30) * 10 for i in range(24)]):
-    # # OLD STATIC WAY
-    gs_root_dir = os.environ['GS_ROOT_DIR']
-    flame_path  = "FLAME-v2/flame/"
-    fname       = 'defaultLoadRequest.json'
-    filepath    = os.path.join(gs_root_dir, flame_path, fname)
-    with open(filepath) as f:
-        old_msg = json.load(f)
+def create_load_request(duration='PT1H', nLoadOptions=12, price_map=None):
 
-    # new dynamic way
+    # get set of times
     now = pd.datetime.utcnow()
     nearest_minute = datetime(now.year, now.month, now.day, 0).isoformat()
-    # nearest_minute = now - timedelta(#minutes=now.minute,
-    #     seconds=now.second,
-    #     microseconds=now.microsecond)
     hourlist = pd.date_range(nearest_minute,
                              freq='H',
                              periods=24)
 
-
-
-    priceMaps =[build_priceMap(border) for border in borders]
-    # TODO: get current pricemaps from volttron, use above for testing only
+    if price_map:
+        priceMaps = price_map
+    else:
+        borders=[randint(10, 30) * 10 for i in range(24)]
+        priceMaps =[build_priceMap(border) for border in borders]
 
     marginalCostCurve = [{'dstart': unicode(hourlist[i].isoformat()),
                           'duration': unicode(duration),
@@ -432,7 +430,6 @@ if __name__ == '__main__':
     # sslopt = {"cert_reqs": ssl.CERT_NONE}
     # secure way
     sslopt = {"ca_certs": 'IPKeys_Root.pem'}
-    #sslopt = {"ca_certs": 'eiss2flame.pem'}
 
     ws = create_connection(ws_url, sslopt=sslopt)
 
