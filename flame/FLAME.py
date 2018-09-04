@@ -9,6 +9,7 @@ import pandas as pd
 import os
 import logging
 from random import randint
+import copy
 import ipdb # be sure to comment this out while running in Volttron instance
 
 websocket.setdefaulttimeout(10) # set timeout quicker for testing purposes, normally 60
@@ -243,7 +244,7 @@ class LoadReport(IPKeys):
             _log.info("FACILITIES ARE PRESENT")
             requests =  []
             for facility in self.facilities:
-                request = baseline_request.copy()
+                request = copy.deepcopy(baseline_request) #.copy()
                 request['msg']['facility'] = facility
                 requests.append(request)
         else:
@@ -282,6 +283,7 @@ class LoadReport(IPKeys):
             except KeyError:
                 _log.warn('previous request yielded no response')
             loadSchedules.append(facility_loadSchedule)
+
         self.loadSchedule = pd.concat(loadSchedules)
 
         return None
@@ -352,6 +354,7 @@ def create_load_request(duration='PT1H', nLoadOptions=12, price_map=None):
     payload_request = json.dumps(
         {"type": "LoadRequest",
          "msg": msg
+         # "msg": old_msg
          }
     )
     return payload_request
@@ -436,10 +439,10 @@ if __name__ == '__main__':
     # Baseline
     def test_Baseline():
         print("running Baseline")
-        start =  '2018-07-14T00:00:00'
-        granularity = 24
+        start =  '2018-08-27T00:00:00'
+        granularity = 1
         # granularity =  'PT1H'
-        duration = 'PT48H'
+        duration = 'PT24H'
         bl = Baseline(start, granularity, duration, ws)
         print("processing Baseline")
         bl.process()
@@ -457,6 +460,8 @@ if __name__ == '__main__':
         print("done processing LoadShift")
         return ls
     ls = test_LoadShift()
+    ls.forecast.to_csv("loadshift.csv")
+
     ##
     def test_LoadSelect():
         print("running LoadSelect")
@@ -466,19 +471,20 @@ if __name__ == '__main__':
         print("Here's the LoadSelect status:\n", lsel.status)
         print("done processing LoadSelect")
         return lsel
-    lsel = test_LoadSelect()
+    # Actuates things!!
+    #lsel = test_LoadSelect()
     ##
     def test_LoadReport():
         print("running LoadReport")
         current_time = datetime.now().replace(microsecond=0, second=0, minute=0)
         time_delta = timedelta(hours=24)
-        start_time = current_time - time_delta
+        start_time = datetime.strptime('2018-08-26T15:00:00', "%Y-%m-%dT%H:%M:%S")#current_time - time_delta
         print(start_time)
         loadReport_kwargs = {
             "dstart": start_time.strftime("%Y-%m-%dT%H:%M:%S"), #"2018-07-14T00:00:00",        #start time for report
             "sampleInterval": "PT1H",            #sample interval
-            "duration": "PT1H",           # duration of request
-            "facilities": ["Facility1", "Facility2", "Facility3"]
+            "duration": "PT24H",           # duration of request
+            #"facilities": ["Facility1", "Facility2", "Facility3"]
             # "facilities": ["Mill", "Canner", "School"]
         }
         lr = LoadReport(ws, **loadReport_kwargs)

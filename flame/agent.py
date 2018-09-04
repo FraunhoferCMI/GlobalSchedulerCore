@@ -60,6 +60,7 @@ from volttron.platform.messaging import headers as headers_mod
 import xml.etree.ElementTree as ET
 from gs_identities import *
 from gs_utilities import get_schedule, ForecastObject, Forecast
+from HistorianTools import publish_data
 import csv
 import pandas
 
@@ -178,6 +179,9 @@ class FLAMECommsAgent(Agent):
             _log.info("FLAME comms - gs_start_time not found.  Using current time as gs_start_time")
             # self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
             self.gs_start_time = datetime.now().replace(microsecond=0, tzinfo=pytz.UTC)
+            # self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
+            #self.gs_start_time = self.gs_start_time.replace(tzinfo=None)
+            #self.gs_start_time = datetime.now().replace(microsecond=0)
             _log.info("GS STart time is " + str(self.gs_start_time))
 
         self.initialization_complete = 1
@@ -250,6 +254,28 @@ class FLAMECommsAgent(Agent):
             # message = bl.forecast    # call to demand forecast object class thingie
             # message = self.baseline_msg.process()    # call to demand forecast object class thingie
             comm_status = 1 # were there errors?
+
+            publish_data(self,
+                         "flame/forecast",
+                         forecast.forecast_meta_data["Forecast"]["units"],
+                         "tPlus1",
+                         forecast.forecast_values["Forecast"][1],
+                         TimeStamp_str=forecast.forecast_values["Time"][1])
+
+            publish_data(self,
+                         "flame/forecast",
+                         forecast.forecast_meta_data["Forecast"]["units"],
+                         "tPlus5",
+                         forecast.forecast_values["Forecast"][5],
+                         TimeStamp_str=forecast.forecast_values["Time"][5])
+
+            publish_data(self,
+                         "flame/forecast",
+                         forecast.forecast_meta_data["Forecast"]["units"],
+                         "tPlus23",
+                         forecast.forecast_values["Forecast"][23],
+                         TimeStamp_str=forecast.forecast_values["Time"][23])
+
             self.vip.pubsub.publish(
                 peer="pubsub",
                 topic=self._config['demand_forecast_topic'],
@@ -268,7 +294,7 @@ class FLAMECommsAgent(Agent):
 
 
     ##############################################################################
-    @Core.periodic(period=LOADSHIFT_QUERY_INTERVAL)
+    #@Core.periodic(period=LOADSHIFT_QUERY_INTERVAL)
     def query_loadshift(self):
         """
         queries the FLAME server for baseline message
