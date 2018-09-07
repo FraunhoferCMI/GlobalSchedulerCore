@@ -358,6 +358,14 @@ class ExecutiveAgent(Agent):
                                     "SIM_START_TIME",
                                     SIM_START_TIME.strftime("%Y-%m-%dT%H:%M:%S.%f"))
 
+
+        HistorianTools.publish_data(self,
+                                    "Tariffs",
+                                    default_units["DemandChargeThreshold"],
+                                    "DemandChargeThreshold",
+                                    self.tariffs["threshold"])
+
+
         self.OperatingMode_set = USER_CONTROL
 
 
@@ -433,6 +441,7 @@ class ExecutiveAgent(Agent):
         #self.energy_price_data = pandas.read_excel(fname_fullpath, header=0, index_col=0)
 
         self.tariffs = {"threshold": DEMAND_CHARGE_THRESHOLD}
+
         #self.tariffs = {"energy_price": }
 
         #indices = [numpy.argmin(
@@ -445,14 +454,15 @@ class ExecutiveAgent(Agent):
 
     ##############################################################################
     def update_tariffs(self):
-        if self.system_resources.state_vars["AvgPwr_kW"] > 1.2*self.tariffs["threshold"]:
-            self.tariffs["threshold"] = self.system_resources.state_vars["AvgPwr_kW"]/1.2
-
-            HistorianTools.publish_data(self,
-                                        "Tariffs",
-                                        default_units["DemandChargeThreshold"],
-                                        "DemandChargeThreshold",
-                                        self.tariffs["threshold"])
+	if UPDATE_THRESHOLD == True:
+	        if self.system_resources.state_vars["AvgPwr_kW"] > 1.2*self.tariffs["threshold"]:
+        	    self.tariffs["threshold"] = self.system_resources.state_vars["AvgPwr_kW"]/1.2
+	
+	            HistorianTools.publish_data(self,
+        	                                "Tariffs",
+                	                        default_units["DemandChargeThreshold"],
+                        	                "DemandChargeThreshold",
+                                	        self.tariffs["threshold"])
 
         #self.tariffs["demand_charge_threshold"] = max(self.tariffs["demand_charge_threshold"],self.system_resources.state_vars["Pwr_kW"])
         pass
