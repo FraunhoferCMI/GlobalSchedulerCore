@@ -50,7 +50,7 @@ USE_SIM      = 0
 USE_VOLTTRON = 1
 
 # Configuration File Locations
-SITE_CFG_FILE   = "SiteConfiguration-PlantLevel.json" 
+SITE_CFG_FILE   = "SiteConfiguration-PlantLevel-original.json" 
 #SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json"
 SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
 
@@ -142,6 +142,7 @@ DEMAND_FILE_TIME_RESOLUTION_MIN = DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN #1
 SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0) + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
 
 DEMAND_CHARGE_THRESHOLD = 0 #250
+UPDATE_THRESHOLD = False
 ESS_MAX = 0.95
 ESS_MIN = 0.15
 
