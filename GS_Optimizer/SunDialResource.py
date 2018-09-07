@@ -174,6 +174,27 @@ class SundialResourceProfile():
         self.total_cost = total_cost
         return total_cost
 
+    ##############################################################################
+    def update_sundial_resource(self):
+        """
+        propagates data from children to non-terminal parent nodes in the SundialResource tree
+        :return: None
+        """
+
+        if self.virtual_plants != []: # not a terminal node
+            # initialize all state_vars
+            self.state_vars["DemandForecast_kW"] = numpy.array([0.0] * len(self.state_vars["DemandForecast_kW"]))
+            self.state_vars["EnergyAvailableForecast_kWh"] = numpy.array([0.0] * len(self.state_vars["EnergyAvailableForecast_kWh"]))
+            self.state_vars["DeltaEnergy_kWh"] = numpy.array([0.0] * len(self.state_vars["DemandForecast_kW"]))
+
+            for virtual_plant in self.virtual_plants:
+                # retrieve data from child nodes and sum
+                virtual_plant.update_sundial_resource()
+
+                for k,v in self.state_vars.items():
+                    self.state_vars[k] += virtual_plant.state_vars[k]
+
+
 
 ##############################################################################
 class SundialResource():
@@ -292,6 +313,9 @@ class SundialResource():
                 elif virtual_plant["ResourceType"] == "Load":
                     self.virtual_plants.append(
                         BaselineLoadResource(virtual_plant, gs_start_time))
+                elif virtual_plant["ResourceType"] == "SolarPlusStorageCtrlNode":
+                    self.virtual_plants.append(
+                        SolarPlusStorageResource(virtual_plant, gs_start_time))
                 else:
                     self.virtual_plants.append(
                         SundialResource(virtual_plant, gs_start_time))
@@ -411,10 +435,10 @@ class SundialResource():
             for virtual_plant in self.virtual_plants:
                 # retrieve data from child nodes and sum
                 virtual_plant.update_sundial_resource()
+
                 for k,v in self.state_vars.items():
                     if k not in forecast_keys:
                         self.state_vars[k] += virtual_plant.state_vars[k]
-
 
     ##############################################################################
     def cfg_cost(self, schedule_timestamps, tariffs):
@@ -876,10 +900,10 @@ class SundialSystemResource(SundialResource):
         self.update_required = 1  # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         # set up the specific set of objective functions to apply for the system
-        self.obj_fcns = [#EnergyCostObjectiveFunction(desc="EnergyPrice", fname="energy_price_data.xlsx"),
+        self.obj_fcns = [EnergyCostObjectiveFunction(desc="EnergyPrice", fname="energy_price_data.xlsx"),
                          #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_data_load.xlsx"),
-                         LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_prices.xlsx", vble_price=True),
-                         #DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0),
+                         #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_prices.xlsx", vble_price=True),
+                         DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0, threshold = 0),
                          dkWObjectiveFunction(desc="dkW")]
 
 
@@ -906,6 +930,33 @@ class SundialSystemResource(SundialResource):
         :return: None
         """
         self.update_sundial_resource()
+
+##############################################################################
+class SolarPlusStorageResource(SundialResource):
+    """
+    Inherits from SundialResource.  Defines objective functions, state_vars, etc specific to "Solar + Storage"
+    resource types
+    """
+    ##############################################################################
+    def __init__(self, resource_cfg, gs_start_time):
+        SundialResource.__init__(self, resource_cfg, gs_start_time)
+        self.update_required = 1  # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
+
+        # set up the specific set of objective functions to apply for the this resource type
+        self.obj_fcns = [DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=1000.0, threshold=0.0)]
+
+    ############################
+    def load_scenario(self):
+        """
+        Used to populate with some known values for testing.
+        This (1) intializes data structures, setting to zero; (2) recursively calls the init_test_values routine in
+        children nodes; and then (3) sums data initialized from children into the parent node
+        :param length: length of a schedule
+        :return: None
+        """
+        self.update_sundial_resource()
+
+
 
 ##############################################################################
 class SundialResource_to_SiteManager_lookup_table():

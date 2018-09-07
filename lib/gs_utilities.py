@@ -121,8 +121,10 @@ def get_gs_time(gs_start_time, sim_time_corr):
     else:
         now = datetime.utcnow()
     #gs_aware = gs_start_time.replace(tzinfo=pytz.UTC)
-    _log.info("Cur time: " + now.strftime("%Y-%m-%dT%H:%M:%S") + "; gs start time= " + gs_start_time.strftime("%Y-%m-%dT%H:%M:%S"))
+    _log.info("Cur time: " + now.strftime("%Y-%m-%dT%H:%M:%S") )
+    _log.info("gs start time= " + gs_start_time.strftime("%Y-%m-%dT%H:%M:%S"))
 
+    # now = now.replace(tzinfo=None) # TODO understand what needs timezone and what doesn't
     # gs_start_time = gs_start_time.replace(tzinfo=now.tzinfo)
     run_time         = (now - gs_start_time).total_seconds() # tells the elapsed real time
     sim_run_time     = timedelta(seconds=SIM_HRS_PER_HR * run_time)  # tells the elapsed "accelerated" time
@@ -144,7 +146,7 @@ def get_gs_path(local_path, fname):
     :return: full path name within the GS_ROOT_DIR directory tree for a data file
     """
     gs_root_dir = os.environ['GS_ROOT_DIR']
-    return gs_root_dir + local_path + fname
+    return os.path.join(gs_root_dir , local_path , fname)
 
 
 ##############################################################################
