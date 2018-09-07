@@ -9,6 +9,8 @@ import csv
 from gs_identities import *
 from gs_utilities import get_gs_path
 
+USE_LOCAL_TIME = True
+
 ##############################################################################
 class ObjectiveFunction():
 
@@ -54,7 +56,12 @@ class ObjectiveFunction():
         df = pandas.read_excel(fname_fullpath, header=0, index_col=0)
         #tst = numpy.array([pandas.Timestamp(t).replace(tzinfo=pytz.UTC).to_pydatetime() for t in df.index])
         new_df = df.resample(str(SSA_SCHEDULE_RESOLUTION) + 'T').bfill()
-        new_df.index = [pandas.Timestamp(t).replace(tzinfo=pytz.UTC).to_pydatetime() for t in new_df.index]
+
+	if USE_LOCAL_TIME == True:
+	        new_df.index = [pandas.Timestamp(t).replace(tzinfo=pytz.timezone('US/Eastern')).to_pydatetime() for t in new_df.index]
+        	new_df.index = new_df.index.tz_convert(pytz.timezone('UTC'))
+	else:
+		new_df.index = [pandas.Timestamp(t).replace(tzinfo=pytz.UTC).to_pydatetime() for t in new_df.index]
         return new_df
 
     ##############################################################################
@@ -83,13 +90,12 @@ class ObjectiveFunction():
         ### what am I having problems with?
         # options -
         start_ind = numpy.argmin(numpy.abs(self.obj_fcn_data.index - (schedule_timestamps[0] + sim_offset)))
-
         if self.obj_fcn_data.index[start_ind] > schedule_timestamps[0]:
             start_ind -= 1
 
 
         cur_data = self.obj_fcn_data.iloc[start_ind:start_ind + SSA_PTS_PER_SCHEDULE]
-        cur_data.index = schedule_timestamps
+	cur_data.index = schedule_timestamps
 
         #indices = [numpy.argmin(
         #    numpy.abs(

@@ -274,7 +274,7 @@ class DERDevice():
         self.datagroup_dict_list.update({"OpStatus": self.op_status})
         self.datagroup_dict_list.update({"HealthStatus": self.health_status})
         self.datagroup_dict_list.update({"ModeStatus": self.mode_status})
-        self.datagroup_dict_list.update({"EnvStatus": self.env_status})         
+        self.datagroup_dict_list.update({"EnvStatus": self.env_status})
         self.datagroup_dict_list.update({"ModeControl": self.mode_ctrl})
         self.datagroup_dict_list.update({"RealPwrCtrl": self.pwr_ctrl})
         self.datagroup_dict_list.update({"QModeCtrl": self.q_ctrl})
@@ -335,7 +335,7 @@ class DERDevice():
                 self.data_dict["status"] = 1
             if attribute_name == "ModeStatus":
                 self.data_dict["GSHeartBeat"] = 0
-                self.data_dict["GSHeartBeat_prev"] = 0 
+                self.data_dict["GSHeartBeat_prev"] = 0
 
     ##############################################################################
     def init_data_maps(self, device_id, group_id, int_endpt, ext_endpt, units, topic_index, log_to_db, endpt_units):
@@ -449,7 +449,7 @@ class DERDevice():
             self.isDataValid = 0
             self.isControlAvailable = 0
         for cur_device in self.devices:
-            cur_device.set_read_status(topic_index, read_status)        
+            cur_device.set_read_status(topic_index, read_status)
 
     ##############################################################################
     def print_site_status(self):
@@ -574,15 +574,15 @@ class DERDevice():
     def update_status(self):
         """
         Called after populate end points has completed.  Traverses the site tree to do the following:
-        (1) checks the latest modbus scrape to interpret the current status of the site and all its devices.  
-            It checks for whether device end points have reported any errors, if communications between devices 
+        (1) checks the latest modbus scrape to interpret the current status of the site and all its devices.
+            It checks for whether device end points have reported any errors, if communications between devices
             are functioning, and the mode of devices
             - comms_status: tracks whether the device is communicating with upstream components
             - device_status: tracks whether the device has triggered any alarms
             - mode_status: tracks whether the device is in an interactive (GS control-enabled) state
             - mode_failure: FIXME - to do
- 
-        (2) propagates device properties up or down the device tree: 
+
+        (2) propagates device properties up or down the device tree:
             - op_status properties are propagated "upward" such that the power output and energy available from
               parent devices reflects the sum of associated children.  If device data is invalid (e.g., comms_status=0)
               then op_status data is zero-ed out.
@@ -590,16 +590,16 @@ class DERDevice():
               reported from children.
             - mode_status is propagated "downward" such that if control is disabled for the parent device, it will also
               be disabled for that device's children.
-           
+
         (3) based on status indicators, determines whether:
-            - data stored in the GS's device registers is valid ("isDataValid") - if 0, this indicates that the device is 
+            - data stored in the GS's device registers is valid ("isDataValid") - if 0, this indicates that the device is
               offline, so data is stale
             - GS can control the device - if 0, this could indicate that it is set in a non GS-enabled mode, that the device
               is offline, that there is an error with the device, or that the device is not controllable.
 
         """
 
-        # To start, assume that data is valid and control is available.  
+        # To start, assume that data is valid and control is available.
         # then check for whether there is anything to indicate that this assumption is invalid
         self.isDataValid = 1
         self.isControlAvailable = self.isControllable
@@ -623,7 +623,7 @@ class DERDevice():
         # FIXME: check reg_mismatch - (either check specific registers associated with a derDevice, or
         # make a descriptor that links ctrl --> status registers in the datamap file)
         # check meter mismatch - should happen inside the op_status routine?
-        
+
         if self.comms_status == 0:
             # read data from a device is invalid
             self.isDataValid = 0
@@ -822,7 +822,7 @@ class DERDevice():
         """
         This method publishes DERDevice data to a specific topic
         it traverses the site tree
-        and for each var, it would write the site/attribute/value.     
+        and for each var, it would write the site/attribute/value.
         """
 
         device_path_str = self.device_id.replace('-', '/')
@@ -908,7 +908,7 @@ def reserve_modbus(device, task_id, sitemgr, device_path):
             [device_path, start, end]).get()
 
         request_status = res["result"]
-        _log.info("reserve_request_status - "+request_status +res["info")
+        _log.info("reserve_request_status - "+request_status +res["info"])
         if request_status == "FAILURE":
             _log.info("Request failed, reason is " + res["info"])
             #attempt += 1
@@ -922,7 +922,7 @@ def reserve_modbus(device, task_id, sitemgr, device_path):
 
 ##############################################################################
 def release_modbus(device, task_id, sitemgr):
-    
+
     try:
         res = sitemgr.vip.rpc.call(
             "platform.actuator",
@@ -1054,6 +1054,7 @@ class DERModbusDevice(DERDevice):
         device_prefix = "devices/"  # was /devices/
         task_id = sitemgr.site.device_id  # "ShirleySouth" #FIXME need to automatically query from sitemgr #"set_point"
 
+        _log.debug("DATAGROUP_DICT_LIST" + str(self.datagroup_dict_list.keys()))
         _log.debug("SetPt: Cmd - " + str(cmd) + "; attribute - " + str(attribute) + "; topic # = " + str(
             self.datagroup_dict_list[attribute].topic_map[cmd]))
         _log.debug("SetPt: topic = " + sitemgr.topics[self.datagroup_dict_list[attribute].topic_map[cmd]]["TopicPath"])

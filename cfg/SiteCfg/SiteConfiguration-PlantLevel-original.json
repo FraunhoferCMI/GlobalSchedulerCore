@@ -5,25 +5,9 @@
       "Topics":[
          {
             "TopicName":"Modbus",
-            "TopicPath":"devices/Site1low",
+            "TopicPath":"devices/Site1",
             "TopicAgent":"platform.driver",
-            "TopicRegistry": "registry_configs/site1low_registry.csv",
-            "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3",
-            "TopicDataMapFile": "ShirleySouthPlantLevel-Modbus-data-map.csv"
-         },
-         {
-            "TopicName":"Modbus",
-            "TopicPath":"devices/Site1mid",
-            "TopicAgent":"platform.driver",
-            "TopicRegistry": "registry_configs/site1mid_registry.csv",
-            "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3",
-            "TopicDataMapFile": "ShirleySouthPlantLevel-Modbus-data-map.csv"
-         },
-         {
-            "TopicName":"Modbus",
-            "TopicPath":"devices/Site1high",
-            "TopicAgent":"platform.driver",
-            "TopicRegistry": "registry_configs/site1high_registry.csv",
+            "TopicRegistry": "registry_configs/site1_registry.csv",
             "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3",
             "TopicDataMapFile": "ShirleySouthPlantLevel-Modbus-data-map.csv"
          },

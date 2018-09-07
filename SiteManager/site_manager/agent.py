@@ -460,7 +460,7 @@ class SiteManagerAgent(Agent):
         """
         changes site's mode from "AUTO" to "INTERACTIVE"
         """
-        _log.info("updating op mode!!")
+        _log.info("updating op mode from AUTO to INTERACTIVE!!")
         self.mode = INTERACTIVE
         self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
         val = self.site.set_interactive_mode(self)
@@ -469,9 +469,9 @@ class SiteManagerAgent(Agent):
     @RPC.export
     def set_auto_mode(self):
         """
-        changes site's mode from "AUTO" to "INTERACTIVE"
+        changes site's mode from "INTERACTIVE" to "AUTO"
         """
-        _log.info("updating op mode!!")
+        _log.info("updating op mode from INTERACTIVE to AUTO!!")
         self.mode = AUTO
         self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
         val = self.site.set_auto_mode(self)
