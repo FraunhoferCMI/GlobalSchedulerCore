@@ -9,7 +9,7 @@
     "campus": "",
     "building": "",
     "unit": "",
-    "interval": 5,
+    "interval": 1,
     "driver_type": "modbus",
     "registry_config": "config://registry_configs/site1_registry.csv",
     "timezone": "UTC",

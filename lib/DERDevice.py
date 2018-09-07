@@ -908,7 +908,7 @@ def reserve_modbus(device, task_id, sitemgr, device_path):
             [device_path, start, end]).get()
 
         request_status = res["result"]
-        _log.info("reserve_request_status - "+request_status +res["info")
+        _log.info("reserve_request_status - "+request_status +res["info"])
         if request_status == "FAILURE":
             _log.info("Request failed, reason is " + res["info"])
             #attempt += 1
