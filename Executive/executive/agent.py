@@ -131,7 +131,7 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     charge_energy_available = max_SOE_kWh - SOE_kWh
 
     if energy_required < discharge_energy_available:
-        # (discharge) set point needs to be adjusted to meet a min_SOE_kWh constraint 
+        # (discharge) set point needs to be adjusted to meet a min_SOE_kWh constraint
         setpoint = discharge_energy_available / (float(setpoint_cmd_interval) / float(sec_per_hr))
     elif energy_required > charge_energy_available:
         # (charge) set point needs to be adjusted to meet a max_SOE_kWh constraint
@@ -184,9 +184,11 @@ class ExecutiveAgent(Agent):
         self.volttron_root = os.getcwd()
         self.volttron_root = self.volttron_root+"/../../../../"
 
-        SiteCfgFile        = GS_ROOT_DIR+CFG_PATH+"SiteCfg/"+SITE_CFG_FILE
-        SundialCfgFile     = GS_ROOT_DIR+CFG_PATH+"SystemCfg/"+SYSTEM_CFG_FILE
-        self.packaged_site_manager_fname = self.volttron_root + "packaged/site_manageragent-1.0-py2-none-any.whl"
+        # SiteCfgFile        = GS_ROOT_DIR+CFG_PATH+"SiteCfg/"+SITE_CFG_FILE
+        SiteCfgFile        = os.path.join(GS_ROOT_DIR,CFG_PATH,"SiteCfg/",SITE_CFG_FILE)
+        # SundialCfgFile     = GS_ROOT_DIR+CFG_PATH+"SystemCfg/"+SYSTEM_CFG_FILE
+        SundialCfgFile     = os.path.join(GS_ROOT_DIR,CFG_PATH,"SystemCfg/",SYSTEM_CFG_FILE)
+        self.packaged_site_manager_fname = os.path.join(self.volttron_root, "packaged/site_manageragent-1.0-py2-none-any.whl")
         self.SiteCfgList   = json.load(open(SiteCfgFile, 'r'))
         self.sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
         _log.info("SiteConfig is "+SiteCfgFile)
@@ -223,13 +225,13 @@ class ExecutiveAgent(Agent):
             self._logfn = _log.debug
         else:
             self._logfn = _log.info
-        
+
         # make sure config variables are valid
         try:
             pass
         except ValueError as e:
             _log.error("ERROR PROCESSING CONFIGURATION: {}".format(e))
-    
+
     ##############################################################################
     @Core.receiver('onsetup')
     def onsetup(self, sender, **kwargs):
@@ -245,10 +247,10 @@ class ExecutiveAgent(Agent):
             self.vip.health.set_status(STATUS_GOOD, self._message)
 
         # publish OperatingMode on start up to the historian
-        HistorianTools.publish_data(self, 
-                                    "Executive", 
-                                    "", 
-                                    "OperatingMode", 
+        HistorianTools.publish_data(self,
+                                    "Executive",
+                                    "",
+                                    "OperatingMode",
                                     self.OperatingMode)
 
 
@@ -260,6 +262,7 @@ class ExecutiveAgent(Agent):
         _log.info("SiteMgrConfig: **********INSTANTIATING NEW SITES*******************")
         self.sitemgr_list = []
         for site in self.SiteCfgList:
+            _log.info("INSTANTIATING NEW SITE: %s" % site)
             if site["Use"] == "Y":
                 _log.info("SiteMgr Config: "+str(site["ID"]))
                 _log.info("SiteMgr Config: "+str(site))
@@ -317,6 +320,7 @@ class ExecutiveAgent(Agent):
         self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
         _log.info("Setup: GS Start time is "+str(self.gs_start_time))
         self.sundial_resources = SundialSystemResource(self.sundial_resource_cfg_list, self.get_gs_start_time())
+        _log.info("sundial_resources assigned")
         self.sdr_to_sm_lookup_table = build_SundialResource_to_SiteManager_lookup_table(self.sundial_resource_cfg_list,
                                                                                         self.sundial_resources,
                                                                                         sitemgr_list=self.sitemgr_list,
@@ -835,10 +839,10 @@ class ExecutiveAgent(Agent):
         for k,v in self.optimizer_info.items():
             _log.info("ExecutiveStatus: " + k + "=" + str(v))
             units = default_units[k]
-            HistorianTools.publish_data(self, 
-                                        "Executive", 
+            HistorianTools.publish_data(self,
+                                        "Executive",
                                         units,
-                                        k, 
+                                        k,
                                         v)
 
         for obj_fcn in self.system_resources.obj_fcns:
@@ -903,10 +907,10 @@ class ExecutiveAgent(Agent):
 
             self.OperatingMode = self.OperatingMode_set
 
-            HistorianTools.publish_data(self, 
-                                        "Executive", 
-                                        "", 
-                                        "OperatingMode", 
+            HistorianTools.publish_data(self,
+                                        "Executive",
+                                        "",
+                                        "OperatingMode",
                                         self.OperatingMode)
 
             if self.OperatingMode == IDLE:
@@ -962,7 +966,7 @@ def main(argv=sys.argv):
     except Exception as e:
         _log.exception('unhandled exception')
 
-        
+
 if __name__ == '__main__':
-    # Entry point for script 
+    # Entry point for script
     sys.exit(main())

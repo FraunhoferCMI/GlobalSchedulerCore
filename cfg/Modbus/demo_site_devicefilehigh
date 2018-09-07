@@ -11,7 +11,7 @@
     "unit": "",
     "interval": 1,
     "driver_type": "modbus",
-    "registry_config": "config://registry_configs/site1_registry.csv",
+    "registry_config": "config://registry_configs/site1high_registry.csv",
     "timezone": "UTC",
     "publish_breadth_first_all":false,
     "publish_depth_first":false,
