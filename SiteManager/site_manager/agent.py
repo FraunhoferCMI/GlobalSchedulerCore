@@ -190,7 +190,33 @@ class SiteManagerAgent(Agent):
             _log.info(v["interval"])
             v["interval"] = 10
             s = json.dumps(v)
-            _log.info(s)
+            #_log.info(s)
+
+            self.vip.rpc.call("platform.driver",
+                              "set_config",
+                              "devices/Site1",
+                              v)
+
+            _log.info("finished!!")
+            e = self.vip.rpc.call(CONFIGURATION_STORE,
+                                  "manage_get",
+                                  "platform.driver", "devices/Site1").get(timeout=5)
+            f = ""
+            for line in e.splitlines():
+                if line.lstrip()[0] != "#":
+                    f = f+line
+                    #print(line)
+
+            #_log.info(e)
+            v = json.loads(f)
+            _log.info(v["interval"])
+            v["interval"] = 10
+            s = json.dumps(v)
+
+
+
+
+
 
             #self.vip.rpc.call(CONFIGURATION_STORE,
             #                      "set_config",
