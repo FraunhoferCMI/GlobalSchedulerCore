@@ -9,7 +9,7 @@
             "TopicAgent":"platform.driver",
             "TopicRegistry": "registry_configs/site1low_registry.csv",
             "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3",
-            "TopicDataMapFile": "ShirleySouthPlantLevel-Modbus-data-map.csv"
+            "TopicDataMapFile": "ShirleySouthPlantLevel-Modbus-data-map-low.csv"
          },
          {
             "TopicName":"Modbus",
@@ -17,7 +17,7 @@
             "TopicAgent":"platform.driver",
             "TopicRegistry": "registry_configs/site1mid_registry.csv",
             "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3",
-            "TopicDataMapFile": "ShirleySouthPlantLevel-Modbus-data-map.csv"
+            "TopicDataMapFile": "ShirleySouthPlantLevel-Modbus-data-map-mid.csv"
          },
          {
             "TopicName":"Modbus",
@@ -25,7 +25,7 @@
             "TopicAgent":"platform.driver",
             "TopicRegistry": "registry_configs/site1high_registry.csv",
             "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3",
-            "TopicDataMapFile": "ShirleySouthPlantLevel-Modbus-data-map.csv"
+            "TopicDataMapFile": "ShirleySouthPlantLevel-Modbus-data-map-high.csv"
          },
          {
             "TopicName":"Forecast",
