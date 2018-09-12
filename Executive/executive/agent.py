@@ -398,7 +398,7 @@ class ExecutiveAgent(Agent):
         :return:
         """
         for site in self.sitemgr_list:
-            _log.info("Updating status for site "+site["identity"])
+            #_log.info("Updating status for site "+site["identity"])
             site_status = self.vip.rpc.call(site["identity"], "update_site_status").get() #timeout=10)
             #for k,v in site_status: #site_errors.items():
             #    _log.info("SiteStatus: ")

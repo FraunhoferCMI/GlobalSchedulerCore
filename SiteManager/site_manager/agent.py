@@ -122,7 +122,7 @@ class SiteManagerAgent(Agent):
         self.dirtyFlag = 1 
         self.updating  = 0
         self.write_error_count = 0
-        self.devices_to_display = ["ShirleySouth-ESSPlant-ESS1"]
+        self.devices_to_display = []
 
 
     ##############################################################################
@@ -266,7 +266,7 @@ class SiteManagerAgent(Agent):
         parses message on IEB published to the SiteManager's specified path, and 
         populates endpts (populate_endpts) based on message contents
         """
-        _log.info("SiteManagerStatus: Topic found - "+str(topic))
+        _log.debug("SiteManagerStatus: Topic found - "+str(topic))
         if sender == 'pubsub.compat':
             message = compat.unpack_legacy_message(headers, message)
 
@@ -291,12 +291,12 @@ class SiteManagerAgent(Agent):
             if cur_topic_str == topic:
                 topic_obj["last_read_time"] = utils.get_aware_utc_now()
                 cur_topic_name = topic_obj["TopicName"]
-                _log.info("SiteManagerStatus: Topic "+topic+" read at "+datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
+                _log.debug("SiteManagerStatus: Topic "+topic+" read at "+datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
                 break
 
         try:
             self.updating = 1  # indicates that data is updating - do not trust until populate end pts is complete
-            self.site.populate_endpts(data, self, meta_data, cur_topic_name)
+            self.site.populate_endpts(data, self, meta_data, cur_topic_name, topic)
             self.dirtyFlag = 0 # clear dirtyFlag on new read
             self.updating = 0
         except:
