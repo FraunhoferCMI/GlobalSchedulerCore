@@ -57,4 +57,3 @@ weatherStation.temp.TmpBOM,ShirleySouth,EnvStatus,Tmp_BOM1,,
 weatherStation.temp.TmpBOM,ShirleySouth,EnvStatus,Tmp_BOM2,,
 ess.tesla_meter.RealEnergyExported,ShirleySouth-ESSPlant-ESS1,OpStatus,kWhExp,,kWh
 ess.tesla_meter.RealEnergyImported,ShirleySouth-ESSPlant-ESS1,OpStatus,kWhImp,,kWh
-

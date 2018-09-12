@@ -48,4 +48,3 @@ ess.tesla_meter.ACFrequency,ShirleySouth-ESSPlant-ESS1,OpStatus,frequency_intern
 ess.tesla_meter.ACVoltage,ShirleySouth-ESSPlant-ESS1,OpStatus,V_internal,,V
 ess.tesla_meter.Apparent_3Ph,ShirleySouth-ESSPlant-ESS1,OpStatus,ApparentPwr_kVA_internal,,kVA
 ess.tesla_meter.Var_3Ph,ShirleySouth-ESSPlant-ESS1,OpStatus,VAr_kVAr_internal,,kVAr
-

@@ -1,3 +1,4 @@
+IBS.real_pwr_ctrl.W_SetPoint,ShirleySouth-ESSPlant,RealPwrCtrl,SetPoint,Y,kW
 ess.tesla_real_pwr_ctrl.DirectReal_Power,ShirleySouth-ESSPlant-ESS1,RealPwrCtrl,SetPoint,Y,kW
 ess.tesla_status.Status_BatteryTargetP,ShirleySouth-ESSPlant-ESS1,OpStatus,SetPt_kW,Y,kW
 ess.tesla_status.Status_BatteryTargetQ,ShirleySouth-ESSPlant-ESS1,OpStatus,QSetPt_kVAr,Y,kVAr
@@ -19,4 +20,3 @@ pcc_meter.meter.PPV,ShirleySouth,OpStatus,Voltage_kV,Y,kV
 pcc_meter.meter.VA,ShirleySouth,OpStatus,VA_kVA,Y,kVA
 pcc_meter.meter.VAR,ShirleySouth,OpStatus,VAr_kVAr,Y,kVAr
 pcc_meter.meter.W,ShirleySouth,OpStatus,Pwr_kW,Y,kW
-
