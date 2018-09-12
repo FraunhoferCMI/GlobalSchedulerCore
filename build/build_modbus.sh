@@ -8,6 +8,9 @@ volttron-ctl config delete platform.driver --all
 
 #volttron-ctl config store platform.driver devices/Site1 ../cfg/Modbus/demo_site_devicefile
 
+volttron-ctl config store platform.driver config ../cfg/Modbus/config
+
+
 volttron-ctl config store platform.driver devices/Site1low ../cfg/Modbus/demo_site_devicefilelow
 volttron-ctl config store platform.driver devices/Site1mid ../cfg/Modbus/demo_site_devicefilemid
 volttron-ctl config store platform.driver devices/Site1 ../cfg/Modbus/demo_site_devicefilehigh
