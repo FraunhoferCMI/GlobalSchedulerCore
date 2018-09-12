@@ -50,7 +50,8 @@ USE_SIM      = 0
 USE_VOLTTRON = 1
 
 # Configuration File Locations
-SITE_CFG_FILE   = "SiteConfiguration-PlantLevel-original.json" 
+#SITE_CFG_FILE   = "SiteConfiguration-PlantLevel-original.json" 
+SITE_CFG_FILE   = "SiteConfiguration-PlantLevel.json" 
 #SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json"
 SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
 
