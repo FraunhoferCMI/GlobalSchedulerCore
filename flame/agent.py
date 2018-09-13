@@ -178,7 +178,8 @@ class FLAMECommsAgent(Agent):
         except:
             _log.info("FLAME comms - gs_start_time not found.  Using current time as gs_start_time")
             # self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
-            self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
+            self.gs_start_time = datetime.now().replace(microsecond=0, tzinfo=pytz.UTC)
+            # self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
             #self.gs_start_time = self.gs_start_time.replace(tzinfo=None)
             #self.gs_start_time = datetime.now().replace(microsecond=0)
             _log.info("GS STart time is " + str(self.gs_start_time))
@@ -308,9 +309,15 @@ class FLAMECommsAgent(Agent):
         if self.initialization_complete == 1:
             _log.info("querying loadshift")
 
+            gcm_kwargs = {'n_time_steps': 24,
+                          'search_resolution': 25}
+            price_map = self.vip.rpc.call('executiveagent-1.0_1',
+                                         'generate_cost_map'
+                                         # **gcm_kwargs
+                                         ).get(timeout=5)
 
             # ws = create_connection(WEBSOCKET_URL, timeout=None)
-            ls = LoadShift(websocket=self.websocket)
+            ls = LoadShift(websocket=self.websocket, price_map=price_map)
             ls.process()
             # message = ls.fo.forecast_values    # call to demand forecast object class thingie
             # ws.close()
