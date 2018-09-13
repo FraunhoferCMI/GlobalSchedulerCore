@@ -8,7 +8,7 @@
             "TopicPath":"devices/Site1low",
             "TopicAgent":"platform.driver",
             "TopicRegistry": "registry_configs/site1low_registry.csv",
-            "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3",
+            "TopicScrapeTimeout":"360",
             "TopicDataMapFile": "ShirleySouthPlantLevel-Modbus-data-map-low.csv"
          },
          {
@@ -16,7 +16,7 @@
             "TopicPath":"devices/Site1mid",
             "TopicAgent":"platform.driver",
             "TopicRegistry": "registry_configs/site1mid_registry.csv",
-            "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3",
+            "TopicScrapeTimeout":"45",
             "TopicDataMapFile": "ShirleySouthPlantLevel-Modbus-data-map-mid.csv"
          },
          {

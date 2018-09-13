@@ -703,11 +703,12 @@ class DERDevice():
         return converted_val
 
     ##############################################################################
-    def populate_endpts(self, incoming_msg, SiteMgr, meta_data = None, cur_topic_name=None):
+    def populate_endpts(self, incoming_msg, SiteMgr, meta_data = None, cur_topic_name=None, topic=None):
         """
         This populates DERDevice variables based on the topic list
         """
-        _log.info("PopEndpts: New scrape found")
+	cnt = 0
+	skip_cnt = 0
         for k in incoming_msg:
             try:
                 cur_device = self.extpt_to_device_dict[cur_topic_name+"_"+k].device_id
@@ -727,9 +728,10 @@ class DERDevice():
                     cur_attribute.endpt_units.update({k: meta_data[k]["units"]})
                 else:
                     _log.info("PopEndpts: No Meta data found!")
-
+		cnt += 1
             except KeyError as e:
                 _log.debug("Warning: Key "+k+" not found")
+		skip_cnt += 1
                 pass
 
         for k in incoming_msg:
@@ -753,6 +755,7 @@ class DERDevice():
             except KeyError:
                 pass
 
+        _log.info("PopEndpts: Topic "+topic+" read "+str(cnt)+" data pts; skipped: "+str(skip_cnt))
         self.update_status()
 
     ##############################################################################
