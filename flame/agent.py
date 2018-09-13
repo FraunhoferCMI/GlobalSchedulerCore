@@ -355,7 +355,7 @@ class FLAMECommsAgent(Agent):
         if self.initialization_complete == 1:
 
             current_time = datetime.now().replace(microsecond=0, second=0, minute=0)
-            time_delta = timedelta(hours=DEMAND_REPORT_DURATION)
+            time_delta = timedelta(minutes=DEMAND_REPORT_DURATION)
             start_time = current_time - time_delta
             dstart = start_time.strftime("%Y-%m-%dT%H:%M:%S")
             duration = format_timeperiod(DEMAND_REPORT_DURATION)
