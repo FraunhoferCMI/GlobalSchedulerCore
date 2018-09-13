@@ -567,7 +567,8 @@ class ExecutiveAgent(Agent):
             schedule_timestamps = self.generate_schedule_timestamps()
 
         self.sundial_resources.interpolate_forecast(schedule_timestamps)
-        self.sundial_resources.cfg_cost(schedule_timestamps, self.tariffs)
+        self.sundial_resources.cfg_cost(schedule_timestamps,
+                                        system_tariff=self.tariffs)
 
 
         return GeneratePriceMap.generate_cost_map(self.sundial_resources,
@@ -759,7 +760,7 @@ class ExecutiveAgent(Agent):
 
             ## queue up time-differentiated cost data
             self.sundial_resources.cfg_cost(schedule_timestamps,
-                                            self.tariffs)
+                                            system_tariff = self.tariffs)
 
             ## generate a cost map - for testing
             #tiers = self.generate_cost_map()

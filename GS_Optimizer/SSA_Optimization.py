@@ -616,7 +616,8 @@ if __name__ == '__main__':
     system_resources.load_scenario()
 
 
-    tariffs = {"threshold": 0} #DEMAND_CHARGE_THRESHOLD}
+    system_tariff = {"threshold": 500} #DEMAND_CHARGE_THRESHOLD}
+    solarPlusStorage_tariff = {"threshold": 150}
 
     #########
 
@@ -643,7 +644,9 @@ if __name__ == '__main__':
         #    sundial_resources.interpolate_forecast(schedule_timestamps)
         #    optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps, tariffs)
         sundial_resources.interpolate_forecast(schedule_timestamps)
-        sundial_resources.cfg_cost(schedule_timestamps, tariffs)
+        sundial_resources.cfg_cost(schedule_timestamps,
+                                   system_tariff = system_tariff,
+                                   solarPlusStorage_tariff = solarPlusStorage_tariff)
         #optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
         optimizer.search_single_option(sundial_resources, schedule_timestamps)
         #optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps)

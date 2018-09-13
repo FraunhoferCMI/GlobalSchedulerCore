@@ -441,7 +441,7 @@ class SundialResource():
                         self.state_vars[k] += virtual_plant.state_vars[k]
 
     ##############################################################################
-    def cfg_cost(self, schedule_timestamps, tariffs):
+    def cfg_cost(self, schedule_timestamps, **kwargs):
         """
         configures cost information for all applicable cost functions in preparation for an optimization pass
         :param schedule_timestamps: list of timestamps (lengh = SSA_PTS_PER_SCHEDULE) for which to retrieve objective
@@ -449,12 +449,18 @@ class SundialResource():
         :return: None
         """
         for virtual_plant in self.virtual_plants:
-            virtual_plant.cfg_cost(schedule_timestamps, tariffs)
+            virtual_plant.cfg_cost(schedule_timestamps, **kwargs)
         for obj_fcn in self.obj_fcns:
-            obj_fcn.obj_fcn_cfg(schedule_timestamps=schedule_timestamps,
-                                tariffs=tariffs,
-                                sim_offset=self.sim_offset,
-                                forecast = self.state_vars)
+            try:
+                obj_fcn.obj_fcn_cfg(schedule_timestamps=schedule_timestamps,
+                                    tariffs=kwargs[obj_fcn.init_params['tariff_key']],
+                                    sim_offset=self.sim_offset,
+                                    forecast=self.state_vars)
+            except:
+                obj_fcn.obj_fcn_cfg(schedule_timestamps=schedule_timestamps,
+                                    tariffs=None,
+                                    sim_offset=self.sim_offset,
+                                    forecast = self.state_vars)
 
 
 
@@ -903,7 +909,7 @@ class SundialSystemResource(SundialResource):
         self.obj_fcns = [EnergyCostObjectiveFunction(desc="EnergyPrice", fname="energy_price_data.xlsx"),
                          #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_data_load.xlsx"),
                          #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_prices.xlsx", vble_price=True),
-                         DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0, threshold = 0),
+                         DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0, threshold = 0, tariff_key='system_tariff'),
                          dkWObjectiveFunction(desc="dkW")]
 
 
@@ -943,7 +949,7 @@ class SolarPlusStorageResource(SundialResource):
         self.update_required = 1  # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         # set up the specific set of objective functions to apply for the this resource type
-        self.obj_fcns = [DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=1000.0, threshold=0.0)]
+        self.obj_fcns = [DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=1000.0, threshold=0.0, tariff_key="solarPlusStorage_tariff")]
 
     ############################
     def load_scenario(self):

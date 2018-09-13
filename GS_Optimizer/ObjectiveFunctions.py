@@ -26,8 +26,7 @@ class ObjectiveFunction():
         """
         print(desc)
         self.desc   = desc
-        self.init_params = {}
-        self.cfg_params  = ""
+        self.init_params = {'tariff_key': None}
 
         for k, v in init_params.iteritems():
             try:
@@ -131,14 +130,10 @@ class EnergyCostObjectiveFunction(ObjectiveFunction):
         # duration --> 'time_step': isodate.parse_duration('PT60M')
 
 
-        #cfg_params  = {'schedule_timestamps': [0],
-        #               'sim_offset': timedelta(0)}
-
         ObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
         #fname = kwargs["fname"]
         #schedule_timestamps = kwargs["schedule_timestamps"]
         self.obj_fcn_data = self.load_data_file(self.init_params["fname"]) #, self.init_params["schedule_timestamps"])
-        self.cfg_params = ["schedule_timestamps", "self.sim_offset"]
         #"schedule_timestamps=schedule_timestamps, sim_offset=self.sim_offset"
 
     ##############################################################################
@@ -195,31 +190,18 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
     ##############################################################################
     def __init__(self, desc="", init_params=None, **kwargs):
         init_params = {'threshold': 250,
-                       'cost_per_kW': 10}
+                       'cost_per_kW': 10,
+                       'tariff_key': 'tariffs'}
 
         ObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
 
-        self.cfg_params = "cost_per_kW=10.0, threshold=tariffs['demand_charge_threshold']"
-
-        #try:
-        #    self.params.update({'threshold': kwargs["threshold"]})
-        #except:
-        #    print("ERROR in DemandChargeObjectiveFunction __init__ - invalid threshold undefined - using default value")
-        #    self.params.update({'threshold': 250})
-
-        #try:
-        #    self.params.update({'cost_per_kW': kwargs["cost_per_kW"]})
-        #except:
-        #    print("ERROR in DemandChargeObjectiveFunction __init__ - invalid threshold undefined - using default value")
-        #    self.params.update({'cost_per_kW': 10})
-
-
     ##############################################################################
     def obj_fcn_cfg(self, **kwargs):
+
         for k, v in self.init_params.iteritems():
-            print("k="+str(k)+"; v="+str(v))
             try:
-                self.init_params.update({k: kwargs["tariffs"][k]})
+                self.init_params.update({k: kwargs['tariffs'][k]})
+                #print(str(k)+": "+str(kwargs[self.init_params['tariff_key'][k]]))
             except:
                 pass
 
