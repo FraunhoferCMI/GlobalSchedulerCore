@@ -186,8 +186,8 @@ class FLAMECommsAgent(Agent):
         self.initialization_complete = 1
         self.get_load_report()
         self.query_baseline()
-        self.query_loadshift()
-        self.request_status()
+        #self.query_loadshift()
+        #self.request_status()
 
     ##############################################################################
     @RPC.export
@@ -230,9 +230,16 @@ class FLAMECommsAgent(Agent):
             _log.info("querying baseline")
             # Baseline
 
-            start_time = get_schedule(self.gs_start_time,
-                                      resolution=SSA_SCHEDULE_RESOLUTION) #.strftime("%Y-%m-%dT%H:%M:%S")
+            ###  convert GS time to local time #####
+            start_time = datetime.strptime(get_schedule(self.gs_start_time,
+                                                        resolution=SSA_SCHEDULE_RESOLUTION),
+                                           "%Y-%m-%dT%H:%M:%S.%f")
+
             # websocket = create_connection( WEBSOCKET_URL, timeout=None)
+            start_time = start_time.replace(minute=0, second=0, microsecond=0)
+            start_time = start_time.replace(tzinfo=pytz.UTC)
+            start_time = start_time.astimezone(pytz.timezone('US/Eastern')).strftime("%Y-%m-%dT%H:%M:%S")
+
             baseline_kwargs = dict(
                 start =  start_time,
                 granularity = DEMAND_FORECAST_RESOLUTION,
@@ -353,6 +360,7 @@ class FLAMECommsAgent(Agent):
                 "duration": duration, # "PT" + str(DEMAND_REPORT_DURATION) + "H"            # duration of request
                 "facilities": self._config['facilities']
             }
+
             # ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
             lr = LoadReport(websocket=self.websocket, **loadReport_kwargs)
             lr.process()

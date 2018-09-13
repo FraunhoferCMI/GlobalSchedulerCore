@@ -11,6 +11,7 @@ import logging
 from random import randint
 import copy
 import ipdb # be sure to comment this out while running in Volttron instance
+from functools import reduce
 
 websocket.setdefaulttimeout(10) # set timeout quicker for testing purposes, normally 60
 
@@ -102,7 +103,6 @@ class Baseline(IPKeys):
 
 
         full_time_string = format_timeperiod(granularity)
-
         self.request = json.dumps({'type': 'BaselineRequest',
                                    'msg': {'dstart': start,
                                            'granularity': full_time_string,
@@ -158,7 +158,10 @@ class LoadShift(IPKeys):
         self._send_receive()
         try:
             absolute_forecast, costs = parse_LoadShift_response(self.response)
-            forecast = absolute_forecast.sub(absolute_forecast[0], axis=0)
+            ### FIXME - just have hard coded column name - needs to be fixed. ###
+            print(absolute_forecast["2018-09-06--ZERO"])
+            print(list(absolute_forecast.columns.values))
+            forecast = absolute_forecast.sub(absolute_forecast["2018-09-06--ZERO"], axis=0)
         except ValueError:
             print(self.response['msg']['error'])
             costs = {}
@@ -276,8 +279,8 @@ class LoadReport(IPKeys):
                 _log.warn('previous request yielded no response')
             loadSchedules.append(facility_loadSchedule)
 
-        self.loadSchedule = pd.concat(loadSchedules)
-
+        self.loadSchedule = reduce(lambda x, y: x.add(y, fill_value=0), loadSchedules)
+        self.loadSchedule["dstart"] = loadSchedules[0]["dstart"]
         return None
 
 class Status(IPKeys):
@@ -303,6 +306,7 @@ class Status(IPKeys):
 
         self._send_receive()
         # self.loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
+        print(self.response['msg'])
         self.alertStatus = self.response['msg']['alertStatus']
         self.currentProfile = self.response['msg']['currentProfile']
 
@@ -400,8 +404,8 @@ def parse_LoadShift_response(response):
 def convert_FLAME_time_to_UTC(FLAME_time):
     datetime_aware = pd.to_datetime(FLAME_time)
     timezone_aware = datetime_aware.tz_localize('US/Eastern')
-    converted_timezone = timezone_aware.tz_convert('UTC')
-    stringified = converted_timezone.to_native_types() # .tz_localize(None) # use for removing timezone info
+    converted_timezone = timezone_aware.tz_convert('UTC').to_datetime()
+    stringified = converted_timezone.strftime("%Y-%m-%dT%H:%M:%S")#converted_timezone.to_native_types() # use for removing timezone info .tz_localize(None)
     return stringified
 
 def format_timeperiod(granularity):
@@ -480,7 +484,7 @@ if __name__ == '__main__':
         print("running LoadReport")
         current_time = datetime.now().replace(microsecond=0, second=0, minute=0)
         time_delta = timedelta(hours=24)
-        start_time = datetime.strptime('2018-08-26T15:00:00', "%Y-%m-%dT%H:%M:%S")#current_time - time_delta
+        start_time = datetime.strptime('2018-09-03T15:00:00', "%Y-%m-%dT%H:%M:%S")#current_time - time_delta
         print(start_time)
         loadReport_kwargs = {
             "dstart": start_time.strftime("%Y-%m-%dT%H:%M:%S"), #"2018-07-14T00:00:00",        #start time for report
