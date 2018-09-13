@@ -57,11 +57,11 @@ class ObjectiveFunction():
         #tst = numpy.array([pandas.Timestamp(t).replace(tzinfo=pytz.UTC).to_pydatetime() for t in df.index])
         new_df = df.resample(str(SSA_SCHEDULE_RESOLUTION) + 'T').bfill()
 
-	if USE_LOCAL_TIME == True:
-	        new_df.index = [pandas.Timestamp(t).replace(tzinfo=pytz.timezone('US/Eastern')).to_pydatetime() for t in new_df.index]
-        	new_df.index = new_df.index.tz_convert(pytz.timezone('UTC'))
-	else:
-		new_df.index = [pandas.Timestamp(t).replace(tzinfo=pytz.UTC).to_pydatetime() for t in new_df.index]
+        if USE_LOCAL_TIME == True:
+            new_df.index = [pandas.Timestamp(t).replace(tzinfo=pytz.timezone('US/Eastern')).to_pydatetime() for t in new_df.index]
+            new_df.index = new_df.index.tz_convert(pytz.timezone('UTC'))
+        else:
+            new_df.index = [pandas.Timestamp(t).replace(tzinfo=pytz.UTC).to_pydatetime() for t in new_df.index]
         return new_df
 
     ##############################################################################
@@ -95,7 +95,7 @@ class ObjectiveFunction():
 
 
         cur_data = self.obj_fcn_data.iloc[start_ind:start_ind + SSA_PTS_PER_SCHEDULE]
-	cur_data.index = schedule_timestamps
+        cur_data.index = schedule_timestamps
 
         #indices = [numpy.argmin(
         #    numpy.abs(

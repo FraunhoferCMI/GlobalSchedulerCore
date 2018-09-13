@@ -454,11 +454,11 @@ class ExecutiveAgent(Agent):
 
     ##############################################################################
     def update_tariffs(self):
-	if UPDATE_THRESHOLD == True:
-	        if self.system_resources.state_vars["AvgPwr_kW"] > 1.2*self.tariffs["threshold"]:
-        	    self.tariffs["threshold"] = self.system_resources.state_vars["AvgPwr_kW"]/1.2
-	
-	            HistorianTools.publish_data(self,
+        if UPDATE_THRESHOLD == True:
+            if self.system_resources.state_vars["AvgPwr_kW"] > 1.2*self.tariffs["threshold"]:
+                self.tariffs["threshold"] = self.system_resources.state_vars["AvgPwr_kW"]/1.2
+
+                HistorianTools.publish_data(self,
         	                                "Tariffs",
                 	                        default_units["DemandChargeThreshold"],
                         	                "DemandChargeThreshold",
@@ -597,37 +597,37 @@ class ExecutiveAgent(Agent):
             netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
             netDemandAvg_kW = self.system_resources.state_vars["AvgPwr_kW"]
 
-	    ii = 0
+            ii = 0
             if USE_FORECAST_VALUE == True:
-	            # retrieve the current scheduled value:
-        	    cur_gs_time = get_gs_time(self.gs_start_time, timedelta(0))
-        	    _log.info(str(cur_gs_time))
-	            for t in self.system_resources.schedule_vars["timestamp"]:
-        	        _log.debug(str(t))
-                	if cur_gs_time < t:
-	                    break
-        	        ii += 1
-	            ii -= 1
+                # retrieve the current scheduled value:
+                cur_gs_time = get_gs_time(self.gs_start_time, timedelta(0))
+                _log.info(str(cur_gs_time))
+                for t in self.system_resources.schedule_vars["timestamp"]:
+                    _log.debug(str(t))
+                    if cur_gs_time < t:
+                        break
+                    ii += 1
+                ii -= 1
 
-	            _log.debug("Generating dispatch: ii = "+str(ii))
-	            if (ii < 0): # shouldn't ever happen
-	                ii = 0
+                _log.debug("Generating dispatch: ii = "+str(ii))
+                if (ii < 0): # shouldn't ever happen
+                    ii = 0
 
-	            targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ii]
-                    expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][ii]
-	    else:
-                    cur_gs_time = get_gs_time(self.gs_start_time, timedelta(0))
-                    if ((cur_gs_time.hour > 7) & (cur_gs_time.hour < 19)):
-                    	acc_load = 0
-			_log.info("in the right time window")
-                    else:
-                    	acc_load = 0
-                    _log.info(self.pv_resources.state_vars["AvgPwr_kW"])
-                    _log.info(self.pv_resources.state_vars["Pwr_kW"])
-		    _log.info(acc_load)
-		    _log.info(cur_gs_time.hour)
-	    	    targetPwr_kW = self.pv_resources.state_vars["AvgPwr_kW"] + acc_load
-                    expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][0]
+                targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ii]
+                expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][ii]
+            else:
+                cur_gs_time = get_gs_time(self.gs_start_time, timedelta(0))
+                if ((cur_gs_time.hour > 7) & (cur_gs_time.hour < 19)):
+                    acc_load = 0
+                    _log.info("in the right time window")
+                else:
+                    acc_load = 0
+                _log.info(self.pv_resources.state_vars["AvgPwr_kW"])
+                _log.info(self.pv_resources.state_vars["Pwr_kW"])
+                _log.info(acc_load)
+                _log.info(cur_gs_time.hour)
+                targetPwr_kW = self.pv_resources.state_vars["AvgPwr_kW"] + acc_load
+                expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][0]
 
             _log.info("Expected power is " + str(expectedPwr_kW))
             _log.info("Target power is " + str(targetPwr_kW))
@@ -694,7 +694,7 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["netDemand_kW"]   = netDemand_kW
             self.optimizer_info["netDemandAvg_kW"] = netDemandAvg_kW
 
-	    self.publish_ess_cmds(ii)
+            self.publish_ess_cmds(ii)
 
     ##############################################################################
     def generate_schedule_timestamps(self, sim_time_corr = timedelta(seconds=0)):
