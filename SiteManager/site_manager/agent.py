@@ -122,7 +122,7 @@ class SiteManagerAgent(Agent):
         self.dirtyFlag = 1 
         self.updating  = 0
         self.write_error_count = 0
-        self.devices_to_display = ["ShirleySouth-ESSPlant-ESS1"]
+        self.devices_to_display = []#"ShirleySouth-ESSPlant-ESS1"]
 
 
     ##############################################################################
@@ -412,6 +412,7 @@ class SiteManagerAgent(Agent):
         # TODO: links it to a topic so that you can mark individual data points as dirty
         cnt = 0
         read_status = 1
+
         for topic_obj in self.topics:
             TimeStamp = utils.get_aware_utc_now() # datetime.now() 
 
@@ -441,7 +442,8 @@ class SiteManagerAgent(Agent):
 
         for dev_str in self.devices_to_display:
             device = self.site.find_device(dev_str)
-            self.log_device_status(device)
+            if device != None:
+                self.log_device_status(device)
 
         self.SiteStatus.update({"ReadStatus": self.site.read_status})
         #self.SiteStatus.update({"WriteError": WriteError})
