@@ -1,0 +1,78 @@
+  {
+    "ID": "SunDialSystem",
+    "ResourceType": "System",
+    "Use": "Y",
+    "VirtualPlantList": [
+      {
+        "ID": "SystemLoadShift",
+        "ResourceType": "LoadShiftCtrlNode",
+        "Use": "N",
+        "VirtualPlantList": [],
+        "DeviceList": [
+          {
+            "AgentID": "FLAME",
+            "DeviceID": "FLAME-LoadShift",
+            "Use": "N"
+          }
+        ]
+      },
+      {
+        "ID": "SystemLoad",
+        "ResourceType": "Load",
+        "Use": "Y",
+        "VirtualPlantList": [],
+        "DeviceList": [
+          {
+            "AgentID": "FLAME",
+            "DeviceID": "FLAME-Baseline",
+            "Use": "Y"
+          }
+        ]
+      },
+      {
+        "ID": "SolarPlusStorage",
+        "ResourceType": "SolarPlusStorageCtrlNode",
+        "Use": "Y",
+        "VirtualPlantList": [
+          {
+            "ID": "SystemPV",
+            "ResourceType": "PVCtrlNode",
+            "Use": "Y",
+            "VirtualPlantList": [],
+            "DeviceList": [
+              {
+                "AgentID": "ShirleySouth",
+                "DeviceID": "ShirleySouth-PVPlant",
+                "Use": "Y"
+              },
+              {
+                "AgentID": "ShirleyNorth",
+                "DeviceID": "ShirleyNorth-PVPlant",
+                "Use": "N"
+              }
+            ]
+          },
+          {
+            "ID": "SystemESS",
+            "ResourceType": "ESSCtrlNode",
+            "Use": "Y",
+            "VirtualPlantList": [],
+            "DeviceList": [
+              {
+                "AgentID": "ShirleySouth",
+                "DeviceID": "ShirleySouth-ESSPlant",
+                "Use": "Y"
+              },
+              {
+                "AgentID": "ShirleyNorth",
+                "DeviceID": "ShirleyNorth-ESSPlant",
+                "Use": "N"
+              }
+            ]
+          }
+        ],
+        "DeviceList": []
+      }
+    ],
+    "DeviceList": []
+  }
