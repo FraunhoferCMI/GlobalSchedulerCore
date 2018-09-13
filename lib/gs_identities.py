@@ -156,7 +156,7 @@ if USE_SIM == 1:   # schedules for simulated testing
     LOADSHIFT_QUERY_INTERVAL = 10 # seconds
     DEMAND_REPORT_SCHEDULE = 10 # SECONDS
     DEMAND_REPORT_RESOLUTION = 60 # minutes Time resolution of load request report - ONLY SUPPORTS 60 MIN
-    DEMAND_REPORT_DURATION   = 15 # Hours - (or minutes?) FIXME! - duration of load report.
+    DEMAND_REPORT_DURATION   = 24*60 # minutes for load request
     N_LOADSHIFT_PROFILES   = 5
     STATUS_REPORT_SCHEDULE = 60 # in seconds # Time interval at which the GS should poll the FLAME to check for status
 
@@ -168,6 +168,6 @@ else:   # schedules associated with live testing
     LOADSHIFT_QUERY_INTERVAL = 60*60 # seconds
     DEMAND_REPORT_SCHEDULE = 60*60 # SECONDS
     DEMAND_REPORT_RESOLUTION = 60 # minutes Time resolution of load request report - ONLY SUPPORTS 60 MIN
-    DEMAND_REPORT_DURATION =  24 # hours Duration of load request reports in hours
+    DEMAND_REPORT_DURATION =  24*60 # Duration of load request reports in minutes
     N_LOADSHIFT_PROFILES   = 5
     STATUS_REPORT_SCHEDULE = 60*60 # in seconds # Time interval at which the GS should poll the FLAME to check for status
