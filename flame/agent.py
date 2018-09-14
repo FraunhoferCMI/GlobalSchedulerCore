@@ -118,6 +118,7 @@ class FLAMECommsAgent(Agent):
             "loadshift_forecast_topic": "devices/flame/loadshift_forecast/all",     #FIXME - doublecheck naming
             "load_option_select_topic": "devices/flame/load_shift_select/all",
             "load_report_topic": "datalogger/flame/load_report",
+            "current_load_topic": "devices/flame/load_report/all",
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "DEFAULT_MESSAGE": 'FLAME_COMMS_MSG',
             "DEFAULT_AGENTID": "FLAME_COMMS_AGENT",
@@ -387,6 +388,19 @@ class FLAMECommsAgent(Agent):
                         topic=self._config['load_report_topic'],
                         headers={},
                         message=msg)
+
+                msg = [{'load': float(lr.loadSchedule['value'][len(lr.loadSchedule['value'])-1])},
+                       {'load': {"units": 'kW',
+                                 "tz": "UTC",
+                                 "data_type": "float"}}]
+                _log.info(msg)
+                self.vip.pubsub.publish(
+                    peer="pubsub",
+                    topic=self._config["current_load_topic"],
+                    headers={},
+                    message=msg)
+
+
             except AttributeError:
                 _log.warn('Response requested not available')
 
