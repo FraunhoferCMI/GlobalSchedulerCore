@@ -53,55 +53,42 @@ class BatterySim(ESSResource):
         and changes the Pwr_kW to the requested/adjusted level.
         '''
 
-        # convert percent to kW
-        if power_request < 0:
+        if (-1 <= power_request) & (power_request < 0):
             _log.info("DISCHARGING")
             # convert percent to kW
             kw_request = self.MaxDischargePwr_kW * power_request
-
-            soe_preliminary_request = self.SOE_kWh + pwr / self.DischgEff
-            # need to adjust pwr to a level that won't exceed SOE constraint
-            soe_request = min(soe_preliminary_request, self.MinSOE_kWh)
+            _log.info("Request of %s is %s kW",
+                      str(power_request*100) + "%",
+                      kw_request)
+            soe_preliminary_request = self.SOE_kWh + kw_request / self.DischgEff
+            # need to adjust kw_request to a level that won't exceed SOE constraint
+            soe_request = max(soe_preliminary_request, self.MinSOE_kWh)
             if soe_request == self.MinSOE_kWh:
                 _log.info("Insufficient capacity for discharge of: %s//%s",
                           power_request,
-                          pwr)
-                pwr = (self.MinSOE_kWh - soe_request) * self.DischgEff
-        elif power_request >= 0:
+                          kw_request)
+                soe_request = (self.MinSOE_kWh - soe_request) * self.DischgEff
+        elif (0 <= power_request) & (power_request <= 1):
             _log.info("CHARGING")
             kw_request = self.MaxChargePwr_kW * power_request
             _log.info("Request of %s is %s kW",
                       str(power_request*100) + "%",
                       kw_request)
-
-        # don't exceed max power request
-        pwr = min(max(self.MaxChargePwr_kW, kw_request), self.MaxDischargePwr_kW)
-
-        # discharge
-        if pwr < 0 :
-            soe_preliminary_request = self.SOE_kWh + pwr / self.DischgEff
-            # need to adjust pwr to a level that won't exceed SOE constraint
-            soe_request = min(soe_preliminary_request, self.MinSOE_kWh)
-            if soe_request == self.MinSOE_kWh:
-                _log.info("Insufficient capacity for discharge of: %s//%s",
-                          power_request,
-                          pwr)
-                pwr = (self.MinSOE_kWh - soe_request) * self.DischgEff
-
-        # charge
-        elif pwr >= 0:
-            soe_preliminary_request = self.SOE_kWh + pwr * self.ChgEff
+            soe_preliminary_request = self.SOE_kWh + kw_request * self.ChgEff
             # don't exceed max SOE
-            soe_request = max(soe_preliminary_request, self.MaxSOE_kWh)
+            soe_request = min(soe_preliminary_request, self.MaxSOE_kWh)
             # need to adjust pwr to a level that won't exceed SOE contraint
             if soe_request == self.MaxSOE_kWh:
                 _log.info("Insufficient capacity for charge of: %s/%s kW",
                           str(power_request*100) + "%",
-                          pwr)
-                pwr = (self.MaxSOE_kWh - soe_request) / self.ChgEff
+                          kw_request)
+                soe_request = (self.MaxSOE_kWh - soe_request) / self.ChgEff
+        else:
+            _log.warn("Battery has been asked to (dis)charge with a higher power than is possible.")
+            pwr = self.Pwr_kW
 
-        self.Pwr_kW = pwr
-        _log.info("New power level: %s", pwr)
+        _log.info("Power level changed from %s to %s", self.Pwr_kW, soe_request)
+        self.Pwr_kW = soe_request
 
         return None
 
