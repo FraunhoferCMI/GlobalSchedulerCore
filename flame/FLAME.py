@@ -12,6 +12,7 @@ from random import randint
 import copy
 import ipdb # be sure to comment this out while running in Volttron instance
 from functools import reduce
+import pytz
 
 websocket.setdefaulttimeout(10) # set timeout quicker for testing purposes, normally 60
 
@@ -167,9 +168,9 @@ class LoadShift(IPKeys):
         try:
             absolute_forecast, costs = parse_LoadShift_response(self.response)
             ### FIXME - just have hard coded column name - needs to be fixed. ###
-            print(absolute_forecast["2018-09-06--ZERO"])
+            print(absolute_forecast["2018-09-13--ZERO"])
             print(list(absolute_forecast.columns.values))
-            forecast = absolute_forecast.sub(absolute_forecast["2018-09-06--ZERO"], axis=0)
+            forecast = absolute_forecast.sub(absolute_forecast["2018-09-13--ZERO"], axis=0)
         except ValueError:
             print(self.response['msg']['error'])
             costs = {}
@@ -288,7 +289,9 @@ class LoadReport(IPKeys):
             loadSchedules.append(facility_loadSchedule)
 
         self.loadSchedule = reduce(lambda x, y: x.add(y, fill_value=0), loadSchedules)
-        self.loadSchedule["dstart"] = loadSchedules[0]["dstart"]
+        self.loadSchedule.index = loadSchedules[0]["dstart"]
+        self.loadSchedule.index = convert_FLAME_time_to_UTC(self.loadSchedule.index)
+        #print(self.loadSchedule)
         return None
 
 class Status(IPKeys):

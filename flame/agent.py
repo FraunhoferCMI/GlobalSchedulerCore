@@ -356,6 +356,7 @@ class FLAMECommsAgent(Agent):
         if self.initialization_complete == 1:
 
             current_time = datetime.now().replace(microsecond=0, second=0, minute=0)
+            current_time_str = current_time.strftime("%Y-%m-%dT%H:%M:%S")
             time_delta = timedelta(minutes=DEMAND_REPORT_DURATION)
             start_time = current_time - time_delta
             dstart = start_time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -366,7 +367,7 @@ class FLAMECommsAgent(Agent):
                 "dstart": dstart, # start time for report
                 "sampleInterval": sampleInterval, # sample interval
                 "duration": duration, # "PT" + str(DEMAND_REPORT_DURATION) + "H"            # duration of request
-                "facilities": self._config['facilities']
+                #"facilities": self._config['facilities']
             }
 
             # ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
@@ -375,12 +376,17 @@ class FLAMECommsAgent(Agent):
 
             #print(lr.loadSchedule)
             try:
+                ind = -1
                 for xx in range(0, len(lr.loadSchedule)):
-                    msg = {"Load": {"Readings": [lr.loadSchedule["dstart"][xx],
+                    msg = {"Load": {"Readings": [lr.loadSchedule.index[xx],
                                                  float(lr.loadSchedule["value"][xx])],
                                     "Units": "kW",
                                     "tz": "UTC",
                                     "data_type": "float"}}
+                    if current_time_str == lr.loadSchedule["dstart"][xx]:
+                        ind = xx
+                        while (lr.loadSchedule["value"][ind] == -1) & (ind>-2):
+                            ind -= 1
 
                     _log.info(msg)
                     self.vip.pubsub.publish(
@@ -388,8 +394,13 @@ class FLAMECommsAgent(Agent):
                         topic=self._config['load_report_topic'],
                         headers={},
                         message=msg)
-
-                msg = [{'load': float(lr.loadSchedule['value'][len(lr.loadSchedule['value'])-1])},
+                # FIXME - temporary fix - need to figure out what to do if valid reading isn't found.
+                if ind == -1:
+                    _log.info('warning - index not found.  Current time = '+ current_time_str)
+                    ind = len(lr.loadSchedule['value'])-1
+                if ind == -2:
+                    _log.info("warning - no valid readings found")
+                msg = [{'load': float(lr.loadSchedule['value'][ind])},
                        {'load': {"units": 'kW',
                                  "tz": "UTC",
                                  "data_type": "float"}}]
