@@ -637,7 +637,12 @@ class ExecutiveAgent(Agent):
             SOE_kWh = self.ess_resources.state_vars["SOE_kWh"]
             min_SOE_kWh = self.ess_resources.state_vars["MinSOE_kWh"]
             max_SOE_kWh = self.ess_resources.state_vars["MaxSOE_kWh"]
-            max_charge_kW = self.ess_resources.state_vars["MaxChargePwr_kW"]
+
+            if IMPORT_CONSTRAINT == True:
+                max_charge_kW = min(-1*self.pv_resources.state_vars["Pwr_kW"],
+                                    self.ess_resources.state_vars["MaxChargePwr_kW"])
+            else:
+                max_charge_kW = self.ess_resources.state_vars["MaxChargePwr_kW"]
             max_discharge_kW = self.ess_resources.state_vars["MaxDischargePwr_kW"]
 
             if REGULATE_ESS_OUTPUT == True:

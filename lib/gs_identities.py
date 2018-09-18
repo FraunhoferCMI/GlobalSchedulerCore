@@ -115,6 +115,7 @@ DURATION_1MIN_FORECAST = 5 # hrs
 
 REGULATE_ESS_OUTPUT = True #False
 USE_FORECAST_VALUE = True
+IMPORT_CONSTRAINT = True    # fail safe to ensure that storage does not charge from the grid
 SEARCH_LOADSHIFT_OPTIONS = False
 # For configuring forecast agent
 CPR_TIMEOUT = 600            #sets the timeout for hourly forecast data requests
