@@ -1035,7 +1035,7 @@ def build_SundialResource_to_SiteManager_lookup_table(sundial_resource_cfg,
 
 
 ##############################################################################
-def export_schedule(profile, timestamps):
+def export_schedule(profile, timestamps, update=True):
     """
     This routine copies a profile from a SundialResourceProfile data structure to the SundialResource data structure
     It is called at the completion of optimization, once the least_cost_soln has been found.  The least_cost_soln then
@@ -1049,24 +1049,22 @@ def export_schedule(profile, timestamps):
     for virtual_plant in profile.virtual_plants:
         export_schedule(virtual_plant, timestamps)
 
-    profile.sundial_resources.schedule_vars["DemandForecast_kW"] = profile.state_vars["DemandForecast_kW"]
-    profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"] = profile.state_vars["EnergyAvailableForecast_kWh"]
-    profile.sundial_resources.schedule_vars["DeltaEnergy_kWh"] = profile.state_vars["DeltaEnergy_kWh"]
-    profile.sundial_resources.schedule_vars["timestamp"] = copy.deepcopy(timestamps)
-    profile.sundial_resources.schedule_vars["total_cost"] = profile.total_cost
+    if update == True:
+	    profile.sundial_resources.schedule_vars["DemandForecast_kW"] = profile.state_vars["DemandForecast_kW"]
+	    profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"] = profile.state_vars["EnergyAvailableForecast_kWh"]
+	    profile.sundial_resources.schedule_vars["DeltaEnergy_kWh"] = profile.state_vars["DeltaEnergy_kWh"]
+	    profile.sundial_resources.schedule_vars["timestamp"] = copy.deepcopy(timestamps)
+	    profile.sundial_resources.schedule_vars["total_cost"] = profile.total_cost
 
-    for obj_fcn in profile.sundial_resources.obj_fcns:
-        profile.sundial_resources.schedule_vars[obj_fcn.desc] = obj_fcn.get_obj_fcn_data()
-
-    pandas.options.display.float_format = '{:,.1f}'.format
+	    for obj_fcn in profile.sundial_resources.obj_fcns:
+        	profile.sundial_resources.schedule_vars[obj_fcn.desc] = obj_fcn.get_obj_fcn_data()
 
     demand_df = pandas.DataFrame(data=[profile.sundial_resources.schedule_vars["DemandForecast_kW"],
                                        profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"]]).transpose()
     demand_df.columns = ["Demand-"+profile.sundial_resources.resource_id, "Energy-"+profile.sundial_resources.resource_id]
     demand_df.index = pandas.Series(profile.sundial_resources.schedule_vars["timestamp"])
-
+    pandas.options.display.float_format = '{:,.1f}'.format
     print(demand_df)
-
     pass
 
 if __name__ == "__main__":

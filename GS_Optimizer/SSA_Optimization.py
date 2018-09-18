@@ -430,6 +430,7 @@ class SimulatedAnnealer():
             export_schedule(least_cost_soln, timestamps)
         else:
             _log.info("SSA: Lower cost solution not found - using previous solution")
+            export_schedule(least_cost_soln, timestamps, update=False)
 
 
     def search_load_shift_options(self, sundial_resources, loadshift_resources, timestamps):
