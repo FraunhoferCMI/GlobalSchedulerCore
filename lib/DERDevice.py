@@ -676,9 +676,9 @@ class DERDevice():
 
         except KeyError:
             _log.debug(k + ': No unit conversion required - skipping: ' + conversionKey)
+            cur_attribute.data_dict[keyval] = raw_val
 
-
-    ##############################################################################
+            ##############################################################################
     def convert_units_to_endpt2(self, attribute, cmd, site):
 
         ext_endpt = self.datagroup_dict_list[attribute].map_int_to_ext_endpt[cmd]
@@ -740,7 +740,7 @@ class DERDevice():
                 self.convert_units_from_endpt2(k, meta_data[k]["units"], cur_topic_name, raw_val)
             except KeyError as e:
                 cur_attribute.data_dict[keyval] = raw_val
-                _log.debug("Skipping: Key "+k+" not found")
+                _log.debug("Skipping: Key "+k+" not found.  Vals are "+str(raw_val))
 
             try:
                 cur_attribute = self.extpt_to_device_dict[cur_topic_name + "_" + k].datagroup_dict[k]
