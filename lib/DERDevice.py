@@ -551,11 +551,13 @@ class DERDevice():
 
         :return:
         """
+        epsilon = 0.01
         self.write_status = 1
         for reg in self.chkReg:
             if self.writePending[reg] == 1:
                 # there is a command pending - check to see if corresponding register has updated
-                if self.writeRegAttributes[reg].data_dict[self.writeReg[reg]] == self.expectedValue[reg]:
+                if ((self.writeRegAttributes[reg].data_dict[self.writeReg[reg]] >= float(self.expectedValue[reg]) - epsilon) &
+                    (self.writeRegAttributes[reg].data_dict[self.writeReg[reg]] <= float(self.expectedValue[reg]) + epsilon)):
                     # write completed successfully - clear all the write pending registers:
                     self.nTries[reg]       = 0
                     self.writePending[reg] = 0
@@ -646,7 +648,7 @@ class DERDevice():
 
 
     ##############################################################################
-    def convert_units_from_endpt2(self, k, endpt_units, cur_topic_name):
+    def convert_units_from_endpt2(self, k, endpt_units, cur_topic_name, raw_val):
         """
         """
         cur_device = self.extpt_to_device_dict[cur_topic_name+"_"+k]
@@ -657,14 +659,14 @@ class DERDevice():
         nameplate     = cur_device.get_nameplate()
 
         try:
-            if type(cur_attribute.data_dict[keyval]) is list:
-                tmplist = [eval(self.unit_conversion_table[conversionKey]) for val in cur_attribute.data_dict[keyval]]
+            if type(raw_val) is list:
+                tmplist = [eval(self.unit_conversion_table[conversionKey]) for val in raw_val]
                 del cur_attribute.data_dict[keyval][:]
                 cur_attribute.data_dict[keyval] = tmplist[:]
                 _log.debug("PopEndpts: converted " + k + "from " + endpt_units +
                            " to " + cur_attribute.units[keyval] + ". New val = " + str(cur_attribute.data_dict[keyval]))
             else:
-                val = cur_attribute.data_dict[keyval]
+                val = raw_val
                 cur_attribute.data_dict[keyval] = eval(self.unit_conversion_table[conversionKey])
                 _log.debug("PopEndpts: converted " + k + "from " + endpt_units +
                            " to " + cur_attribute.units[keyval] + ". New val = " + str(cur_attribute.data_dict[keyval]))
@@ -707,37 +709,37 @@ class DERDevice():
         """
         This populates DERDevice variables based on the topic list
         """
-	cnt = 0
-	skip_cnt = 0
+        cnt = 0
+        skip_cnt = 0
         for k in incoming_msg:
             try:
                 cur_device = self.extpt_to_device_dict[cur_topic_name+"_"+k].device_id
                 cur_attribute = self.extpt_to_device_dict[cur_topic_name+"_"+k].datagroup_dict[k]
                 cur_attribute_name = cur_attribute.name
                 keyval = cur_attribute.data_mapping_dict[k]
-                cur_attribute.data_dict[keyval] = incoming_msg[k]
+                raw_val = incoming_msg[k]
 
                 # TODO  correct for units!!!
                 # if cur_attribute.units_dict[k] != incoming_msg[k] units then call convert_units....
 
                 _log.debug("PopEndpts: "+cur_device + "." + cur_attribute_name + "." + keyval + "= " + str(
-                    cur_attribute.data_dict[keyval]))
+                    raw_val))
 
                 if meta_data != None:
                     #_log.info("PopEndpts: Units - "+meta_data[k]["units"])
                     cur_attribute.endpt_units.update({k: meta_data[k]["units"]})
                 else:
                     _log.info("PopEndpts: No Meta data found!")
-		cnt += 1
+                cnt += 1
             except KeyError as e:
                 _log.debug("Warning: Key "+k+" not found")
-		skip_cnt += 1
+                skip_cnt += 1
                 pass
 
-        for k in incoming_msg:
             try:
-                self.convert_units_from_endpt2(k, meta_data[k]["units"], cur_topic_name)
+                self.convert_units_from_endpt2(k, meta_data[k]["units"], cur_topic_name, raw_val)
             except KeyError as e:
+                cur_attribute.data_dict[keyval] = raw_val
                 _log.debug("Skipping: Key "+k+" not found")
 
             try:
