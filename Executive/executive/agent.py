@@ -113,16 +113,16 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     sec_per_hr = 60.0 * 60.0
 
     setpoint = targetPwr_kW-curPwr_kW
-    _log.info("Optimizer: target Setpoint ="+str(setpoint))
 
     # check that we are within power limits of the storage system
     if setpoint < -1 * max_discharge_kW:
         setpoint = -1 * max_discharge_kW
+	_log.info("Optimizer: Power-limited Setpoint =" + str(setpoint))
     if setpoint > max_charge_kW:
         setpoint = max_charge_kW
-
+	_log.info("Optimizer: Power-limited Setpoint =" + str(setpoint))
+	
     # now check that the target setpoint is within the energy limits
-    _log.info("Optimizer: Power-limited Setpoint =" + str(setpoint))
 
     # calculate what the remaining charge will be at the end of the next period
     # TODO - still need to correct for losses!!
@@ -630,9 +630,9 @@ class ExecutiveAgent(Agent):
                 targetPwr_kW = self.pv_resources.state_vars["AvgPwr_kW"] + acc_load
                 expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][0]
 
-            _log.info("Expected power is " + str(expectedPwr_kW))
-            _log.info("Target power is " + str(targetPwr_kW))
-            _log.info("Current power is "+str(curPwr_kW))
+            _log.debug("Regulator: Forecast solar power is " + str(expectedPwr_kW))
+            _log.debug("Regulator: Scheduled power output is " + str(targetPwr_kW))
+            _log.debug("Regulator: Current PV+Load is "+str(curPwr_kW))
 
             SOE_kWh = self.ess_resources.state_vars["SOE_kWh"]
             min_SOE_kWh = self.ess_resources.state_vars["MinSOE_kWh"]
@@ -656,7 +656,7 @@ class ExecutiveAgent(Agent):
                 setpoint = self.ess_resources.schedule_vars["DemandForecast_kW"][0]
 
 
-            _log.info("Optimizer: setpoint = " + str(setpoint))
+            _log.debug("Regulator: setpoint = " + str(setpoint))
 
             # figure out how to divide set point command between and propagate commands to end point devices
             for entries in self.sdr_to_sm_lookup_table:
@@ -680,7 +680,7 @@ class ExecutiveAgent(Agent):
                             else: # discharging
                                 pro_rata_share = float(device_state_vars["MaxSOE_kWh"] - device_state_vars["SOE_kWh"]+0.001) /\
                                                  (max_SOE_kWh - float(SOE_kWh)+0.001) * float(setpoint)
-                            _log.info("Optimizer: Sending request for " + str(pro_rata_share) + "to " + devices["AgentID"])
+                            _log.debug("Optimizer: Sending request for " + str(pro_rata_share) + "to " + devices["AgentID"])
                             # send command
                             self.vip.rpc.call(str(devices["AgentID"]),
                                               "set_real_pwr_cmd",
