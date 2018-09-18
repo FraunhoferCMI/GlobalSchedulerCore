@@ -1,0 +1,4 @@
+Session.vim
+*.pyc
+.*.sw*
+UI_cmd.json
