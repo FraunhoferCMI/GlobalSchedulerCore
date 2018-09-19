@@ -890,7 +890,7 @@ class ExecutiveAgent(Agent):
         if self.OperatingMode != EXEC_STARTING:
 
             if self.data_log_cnt == DATA_LOG_SCHEDULE:
-                self.data_log_cnt = 0
+                self.data_log_cnt = 1
                 self.check_site_statuses()
             else:
                 self.data_log_cnt += 1
@@ -898,20 +898,20 @@ class ExecutiveAgent(Agent):
             if ((self.update_endpt_cnt == ENDPT_UPDATE_SCHEDULE) or
                     (self.run_optimizer_cnt == GS_SCHEDULE) or
                     (self.send_ess_commands_cnt == ESS_SCHEDULE)):
-                self.update_endpt_cnt = 0
+                self.update_endpt_cnt = 1
                 # update sundial_resources instance with the most recent data from end-point devices
                 self.update_sundial_resources(self.sdr_to_sm_lookup_table)
             else:
                 self.update_endpt_cnt += 1
 
             if self.send_ess_commands_cnt == ESS_SCHEDULE:
-                self.send_ess_commands_cnt = 0
+                self.send_ess_commands_cnt = 1
                 self.send_ess_commands()
             else:
                 self.send_ess_commands_cnt += 1
 
             if self.run_optimizer_cnt == GS_SCHEDULE:
-                self.run_optimizer_cnt = 0
+                self.run_optimizer_cnt = 1
                 self.run_optimizer()
             else:
                 self.run_optimizer_cnt += 1

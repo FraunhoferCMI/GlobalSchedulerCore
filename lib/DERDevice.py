@@ -100,6 +100,66 @@ ess_update_list = ["MaxSOE_kWh", "SOE_kWh", "MaxChargePwr_kW", "MaxDischargePwr_
 
 device_update_list = ["Nameplate_kW", "Pwr_kW", "AvgPwr_kW"]
 
+state_vars_update_rate = {"CommStatus": 10,
+                          "DeviceStatus": 10,
+                          "ReadStatus": 10,
+                          "WriteStatus": 10,
+                          "ControlMode": 10,
+                          "Pwr_kW": 1,
+                          "AvgPwr_kW": 1,
+                          "OrigDemandForecast_kW": 10,
+                          "OrigDemandForecast_t_str": 10,
+                          "OrigLoadShiftOptions_kW": None,
+                          "OrigLoadShiftOptions_t_str": None,
+                          "Nameplate_kW": 100,
+                          "SetPt": 1,
+                          "SetPtCmd": 1}
+
+
+flame_load_state_vars_update_rate = {"CommStatus": 100,
+                                     "DeviceStatus": 100,
+                                     "ReadStatus": 100,
+                                     "WriteStatus": 100,
+                                     "ControlMode": 100,
+                                     "Pwr_kW": 10,
+                                     "AvgPwr_kW": 10,
+                                     "OrigDemandForecast_kW": 100,
+                                     "OrigDemandForecast_t_str": 100,
+                                     "OrigLoadShiftOptions_kW": 500,
+                                     "OrigLoadShiftOptions_t_str": 500,
+                                     "Nameplate_kW": 100,
+                                     "SetPt": 10,
+                                     "SetPtCmd": 10}
+
+
+flame_site_state_vars_update_rate = {"CommStatus": None,
+                                     "DeviceStatus": None,
+                                     "ReadStatus": None,
+                                     "WriteStatus": None,
+                                     "ControlMode": None,
+                                     "Pwr_kW": None,
+                                     "AvgPwr_kW": None,
+                                     "OrigDemandForecast_kW": None,
+                                     "OrigDemandForecast_t_str": None,
+                                     "OrigLoadShiftOptions_kW": None,
+                                     "OrigLoadShiftOptions_t_str": None,
+                                     "Nameplate_kW": None,
+                                     "SetPt": None,
+                                     "SetPtCmd": None}
+
+
+
+ess_state_vars_update_rate = {"MaxSOE_kWh": 100,
+                              "SOE_kWh": 1,
+                              "MaxChargePwr_kW": 100,
+                              "MaxDischargePwr_kW": 100,
+                              "MinSOE_kWh": 100,
+                              "Nameplate_kW": 100,
+                              "ChgEff": 1000,
+                              "DischgEff": 1000,
+                              "OrigDemandForecast_kW": None,
+                              "OrigDemandForecast_t_str": None}
+
 site_lookup = {"Shirley":"ShirleySite(site_info, None, data_map_dir)",
                "ShirleyDeviceLevelCtrl":"ShirleySiteDeviceLevelCtrl(site_info, None, data_map_dir)",
                "ShirleyEmulator": "ShirleySiteEmulator(site_info, None, data_map_dir)",
@@ -115,7 +175,8 @@ device_keys = {"ESS": "ESSDevice(device, parent_device=self)",
                "TeslaCtrlNode": "TeslaCtrlNode(device, parent_device=self)",
                "SolectriaPVCtrlNode": "SolectriaPVCtrlNode(device, parent_device=self)",
                "PVCtrlNode": "PVCtrlNode(device, parent_device=self)",
-               "LoadShiftCtrlNode": "LoadShiftCtrlNode(device, parent_device=self)"}
+               "LoadShiftCtrlNode": "LoadShiftCtrlNode(device, parent_device=self)",
+               "Load": "LoadNode(device, parent_device=self)"}
 
 # bit maps for Solectria status, control, and trigger registers per Modbus 9 spec
 SOLECTRIA_RAMP_BITMAP = {"Q_RAMP": 0x0008,
@@ -206,6 +267,8 @@ class DERDevice():
                            "OrigDemandForecast_t_str": None,
                            "Nameplate_kW": 0.0}
 
+        self.state_vars_update_rate = state_vars_update_rate
+
         self.avg_pwr_buffer = []
 
         # initialize data table for tracking pending commands
@@ -218,6 +281,7 @@ class DERDevice():
         self.nTries = {}
         self.writeError = {}
 
+        self.publish_cnt = 0
         _log.info(self.device_id+" Init complete")
 
     ##############################################################################
@@ -730,6 +794,7 @@ class DERDevice():
                     cur_attribute.endpt_units.update({k: meta_data[k]["units"]})
                 else:
                     _log.info("PopEndpts: No Meta data found!")
+
                 cnt += 1
             except KeyError as e:
                 _log.debug("Warning: Key "+k+" not found")
@@ -838,13 +903,17 @@ class DERDevice():
             # so it cannot be universally defined.  Another approach (which lets one keep using default_units) woudl be
             # to make the units of SetPtCmd internally defined and do the unit conversion subsequent to writing to the
             # SetPtCmd end point.
-            units = default_units[k]
 
-            HistorianTools.publish_data(SiteMgr,
-                                        device_path_str,
-                                        units,
-                                        k,
-                                        v)
+            _log.debug("device - "+ self.device_id+"; k= "+k+"; pub cnt = "+str(self.publish_cnt)+"; update=" +str(self.state_vars_update_rate[k]))
+            if self.state_vars_update_rate[k] != None:
+                if self.publish_cnt % self.state_vars_update_rate[k] == 0:
+                    units = default_units[k]
+
+                    HistorianTools.publish_data(SiteMgr,
+                                                device_path_str,
+                                                units,
+                                                k,
+                                                v)
 
         if (0):
             for attribute in self.datagroup_dict_list:
@@ -863,7 +932,7 @@ class DERDevice():
                                                 units,
                                                 k,
                                                 v)
-
+        self.publish_cnt += 1
         # now recursively call for each child device:
         for cur_device in self.devices:
             cur_device.publish_device_data(SiteMgr)
@@ -1115,8 +1184,12 @@ class DERModbusDevice(DERDevice):
 
 ##############################################################################
 class FLAMESite(DERSite):
-    pass
-
+    ##############################################################################
+    def __init__(self, site_info, parent_device, data_map_dir):
+        DERSite.__init__(self, site_info, parent_device, data_map_dir)
+        self.state_vars_update_rate = flame_site_state_vars_update_rate
+        _log.info(self.device_id)
+        _log.info(self.state_vars_update_rate)
 
 ##############################################################################
 class ShirleySite(DERSite, DERModbusDevice):
@@ -1505,6 +1578,17 @@ class DERCtrlNode(DERDevice):
 
 
 ##############################################################################
+class LoadNode(DERDevice):
+
+    ##############################################################################
+    def __init__(self, device_info, parent_device=None):
+        DERDevice.__init__(self, device_info, parent_device)  # device_id, device_type, parent_device)
+        _log.info(self.device_id)
+        self.state_vars_update_rate = flame_load_state_vars_update_rate
+        _log.info(self.state_vars_update_rate)
+
+
+##############################################################################
 class LoadShiftCtrlNode(DERDevice):
 
     ##############################################################################
@@ -1515,6 +1599,9 @@ class LoadShiftCtrlNode(DERDevice):
                                 "SetPt": 0,
                                 "SetPtCmd": 0})
         self.state_vars_update_list = device_update_list
+        self.state_vars_update_rate = flame_load_state_vars_update_rate
+        _log.info(self.device_id)
+        _log.info(self.state_vars_update_rate)
 
         self.chkReg = ["SetPoint"]
         self.chkRegAttributes = {"SetPoint": self.pwr_ctrl}
@@ -1610,6 +1697,11 @@ class ESSCtrlNode(DERModbusCtrlNode):
 
         _log.info("In ESSCtrlNode init - Device is:"+self.device_id)
         _log.info(str(self.state_vars_update_list))
+
+        self.state_vars_update_rate.update(ess_state_vars_update_rate)
+        _log.info(self.state_vars_update_rate)
+
+
         self.update_state_vars()
 
     ##############################################################################
@@ -1786,6 +1878,10 @@ class ESSDevice(DERDevice):
                                 "DischgEff": float(device_info["dischg_eff"]) if("dischg_eff" in device_info) else 1.0,
                                 "MinSOE_kWh": ESS_MIN*float(device_info["max_soe"]) if("max_soe" in device_info) else 0.0,
                                 "Nameplate_kW": float(device_info["max_dischg_pwr"]) if("max_dischg_pwr" in device_info) else 0.0})
+
+        self.state_vars_update_rate.update(ess_state_vars_update_rate)
+        _log.info(self.state_vars_update_rate)
+
         _log.info("ESS Device init - state vars: "+str(self.state_vars))
 
 
