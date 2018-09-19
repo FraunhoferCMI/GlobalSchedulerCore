@@ -1,11 +1,11 @@
 # Global-Scheduler-Core
-This is the top-level repository for the core Global Scheduler code.  It is is intended to be installed in the services/contrib directory of a valid volttron instance.  
+This is the top-level repository for the core Global Scheduler code.  It is is intended to be installed in the services/contrib directory of a valid volttron instance.
 
-Detailed information about the code base can be found in the Software Design Document. 
+Detailed information about the code base can be found in the Software Design Document.
 
-Overview of GlobalSchedulerCore Repository - 
+Overview of GlobalSchedulerCore Repository -
 
-	cfg / Modbus -- Modbus device and registry configuration files 
+	cfg / Modbus -- Modbus device and registry configuration files
 	cfg / SiteCfg -- SiteConfiguration json files
 	cfg / DataMap -- Data Map file repository
 	cfg / SystemCfg -- SystemConfiguration repository
@@ -20,7 +20,7 @@ Overview of GlobalSchedulerCore Repository -
 
 INSTRUCTIONS for BUILDING & USING
 
-1.	Configure linux environment per instructions on VOLTTRON website.  
+1.	Configure linux environment per instructions on VOLTTRON website.
 2.	Set up appropriate credentials with the CSE GitHub account
 3.	Clone a valid VOLTTRON fork from git
 4.	Set up VOLTTRON development environment by running bootstrap from the newly created volttron/ directory
@@ -40,8 +40,8 @@ IF ~/.volttron is not a valid path, modify the above gs_cfg location accordingly
 
 9.	Build / package agents.
 The build process is not currently automated, and do not have paths, etc properly set up.
-Some of the build scripts copy files to a known location - 
--	Various configuration files are copied to ~/.volttron/gs_cfg 
+Some of the build scripts copy files to a known location -
+-	Various configuration files are copied to ~/.volttron/gs_cfg
 -	Some shared modules from the lib directory are copied to volttron/env/lib/python/site-packages
 
 
@@ -60,7 +60,7 @@ e.	Build UI - run recompile.sh in UI/
 f.	Build ForecastSim
 The irradiance data file it reads requires pandas version 0.19.2  (data files using an older version of pickle)
 			(pip install pandas==0.19.2)
-	
+
 	Then run recompile.sh in ForecastSim/
 
 
