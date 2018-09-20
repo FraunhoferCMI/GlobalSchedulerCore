@@ -105,14 +105,14 @@ state_vars_update_rate = {"CommStatus": 10,
                           "ReadStatus": 10,
                           "WriteStatus": 10,
                           "ControlMode": 10,
-                          "Pwr_kW": 1,
+                          "Pwr_kW": None,
                           "AvgPwr_kW": 1,
-                          "OrigDemandForecast_kW": 10,
-                          "OrigDemandForecast_t_str": 10,
+                          "OrigDemandForecast_kW": 60,
+                          "OrigDemandForecast_t_str": 60,
                           "OrigLoadShiftOptions_kW": None,
                           "OrigLoadShiftOptions_t_str": None,
                           "Nameplate_kW": 100,
-                          "SetPt": 1,
+                          "SetPt": None,
                           "SetPtCmd": 1}
 
 
@@ -149,8 +149,17 @@ flame_site_state_vars_update_rate = {"CommStatus": None,
 
 
 
-ess_state_vars_update_rate = {"MaxSOE_kWh": 100,
-                              "SOE_kWh": 1,
+ess_state_vars_update_rate = {"CommStatus": 10,
+                              "DeviceStatus": 10,
+                              "ReadStatus": 10,
+                              "WriteStatus": 10,
+                              "ControlMode": 10,
+                              "Pwr_kW": None,
+                              "AvgPwr_kW": 1,
+                              "SetPt": None,
+                              "SetPtCmd": 1,
+                              "MaxSOE_kWh": 100,
+                              "SOE_kWh": None,
                               "MaxChargePwr_kW": 100,
                               "MaxDischargePwr_kW": 100,
                               "MinSOE_kWh": 100,
@@ -159,6 +168,7 @@ ess_state_vars_update_rate = {"MaxSOE_kWh": 100,
                               "DischgEff": 1000,
                               "OrigDemandForecast_kW": None,
                               "OrigDemandForecast_t_str": None}
+
 
 site_lookup = {"Shirley":"ShirleySite(site_info, None, data_map_dir)",
                "ShirleyDeviceLevelCtrl":"ShirleySiteDeviceLevelCtrl(site_info, None, data_map_dir)",
@@ -1698,7 +1708,7 @@ class ESSCtrlNode(DERModbusCtrlNode):
         _log.info("In ESSCtrlNode init - Device is:"+self.device_id)
         _log.info(str(self.state_vars_update_list))
 
-        self.state_vars_update_rate.update(ess_state_vars_update_rate)
+        self.state_vars_update_rate = ess_state_vars_update_rate
         _log.info(self.state_vars_update_rate)
 
 
@@ -1879,7 +1889,7 @@ class ESSDevice(DERDevice):
                                 "MinSOE_kWh": ESS_MIN*float(device_info["max_soe"]) if("max_soe" in device_info) else 0.0,
                                 "Nameplate_kW": float(device_info["max_dischg_pwr"]) if("max_dischg_pwr" in device_info) else 0.0})
 
-        self.state_vars_update_rate.update(ess_state_vars_update_rate)
+        self.state_vars_update_rate = ess_state_vars_update_rate
         _log.info(self.state_vars_update_rate)
 
         _log.info("ESS Device init - state vars: "+str(self.state_vars))
@@ -1899,10 +1909,11 @@ class TeslaPowerPack(ESSDevice):
                                 "MinSOE_kWh": self.op_status.data_dict["FullChargeEnergy_kWh"] * ESS_MIN,
                                 "SOE_kWh": self.op_status.data_dict["Energy_kWh"],
                                 "MaxChargePwr_kW": self.op_status.data_dict["MaxChargePwr_kW"],
-                                "MaxDischargePwr_kW": self.op_status.data_dict["MaxDischargePwr_kW"],
-                                "Nameplate_kW": self.op_status.data_dict["MaxDischargePwr_kW"]})
+                                "MaxDischargePwr_kW": self.op_status.data_dict["MaxDischargePwr_kW"]})
+                                #"Nameplate_kW": self.op_status.data_dict["MaxDischargePwr_kW"]})
 
-    ##############################################################################
+
+        ##############################################################################
     def check_comm_status(self):
 
         """
