@@ -156,7 +156,10 @@ class FLAMECommsAgent(Agent):
         self.websocket = ws
         _log.info("Web Socket INITIALIZED")
 
-    ##############################################################################
+        self.cur_load = {"Load": -1,
+                         "Time": None}
+
+        ##############################################################################
     def configure(self, config_name, action, contents):
         self._config.update(contents)
         # make sure config variables are valid
@@ -186,7 +189,7 @@ class FLAMECommsAgent(Agent):
             _log.info("GS STart time is " + str(self.gs_start_time))
 
         self.initialization_complete = 1
-        self.get_load_report()
+        self.get_load_report()   # do this first - pre-load with values for other fcns to reference
         self.query_baseline()
         #self.query_loadshift()
         #self.request_status()
@@ -262,6 +265,13 @@ class FLAMECommsAgent(Agent):
             # message = bl.forecast    # call to demand forecast object class thingie
             # message = self.baseline_msg.process()    # call to demand forecast object class thingie
             comm_status = 1 # were there errors?
+
+            _log.info(self.cur_load["Time"])
+            _log.info(forecast.forecast_values["Time"][0])
+
+            if self.cur_load["Time"] == forecast.forecast_values["Time"][0]:
+                _log.info("Replacing forecast load = "+str(forecast.forecast_values["Forecast"][0])+" with "+ str(self.cur_load["Load"]))
+                forecast.forecast_values["Forecast"][0] = self.cur_load["Load"]
 
             publish_data(self,
                          "flame/forecast",
@@ -354,9 +364,8 @@ class FLAMECommsAgent(Agent):
         #FIXME - should use get_schedule()
 
         if self.initialization_complete == 1:
-
-            current_time = datetime.now().replace(microsecond=0, second=0, minute=0)
-            current_time_str = current_time.strftime("%Y-%m-%dT%H:%M:%S")
+            current_time = datetime.now(pytz.timezone('US/Eastern')).replace(microsecond=0, second=0, minute=0)
+            utc_now_str = current_time.astimezone(pytz.timezone('UTC')).strftime("%Y-%m-%dT%H:%M:%S")
             time_delta = timedelta(minutes=DEMAND_REPORT_DURATION)
             start_time = current_time - time_delta
             dstart = start_time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -367,7 +376,7 @@ class FLAMECommsAgent(Agent):
                 "dstart": dstart, # start time for report
                 "sampleInterval": sampleInterval, # sample interval
                 "duration": duration, # "PT" + str(DEMAND_REPORT_DURATION) + "H"            # duration of request
-                #"facilities": self._config['facilities']
+                "facilities": self._config['facilities']
             }
 
             # ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
@@ -383,7 +392,7 @@ class FLAMECommsAgent(Agent):
                                     "Units": "kW",
                                     "tz": "UTC",
                                     "data_type": "float"}}
-                    if current_time_str == lr.loadSchedule["dstart"][xx]:
+                    if utc_now_str == lr.loadSchedule.index[xx]:
                         ind = xx
                         while (lr.loadSchedule["value"][ind] == -1) & (ind>-2):
                             ind -= 1
@@ -394,9 +403,25 @@ class FLAMECommsAgent(Agent):
                         topic=self._config['load_report_topic'],
                         headers={},
                         message=msg)
+
+                for xx in range(0, len(lr.loadSchedule_scaled)):
+                    msg = {"ScaledLoad": {"Readings": [lr.loadSchedule_scaled.index[xx],
+                                                       float(lr.loadSchedule_scaled["value"][xx])],
+                                    "Units": "kW",
+                                    "tz": "UTC",
+                                    "data_type": "float"}}
+
+                    _log.info(msg)
+                    self.vip.pubsub.publish(
+                        peer="pubsub",
+                        topic=self._config['load_report_topic'],
+                        headers={},
+                        message=msg)
+
+
                 # FIXME - temporary fix - need to figure out what to do if valid reading isn't found.
                 if ind == -1:
-                    _log.info('warning - index not found.  Current time = '+ current_time_str)
+                    _log.info('warning - index not found.  Current time = '+ utc_now_str)
                     ind = len(lr.loadSchedule['value'])-1
                 if ind == -2:
                     _log.info("warning - no valid readings found")
@@ -405,6 +430,26 @@ class FLAMECommsAgent(Agent):
                                  "tz": "UTC",
                                  "data_type": "float"}}]
                 _log.info(msg)
+                self.vip.pubsub.publish(
+                    peer="pubsub",
+                    topic=self._config["current_load_topic"],
+                    headers={},
+                    message=msg)
+
+
+                msg = [{'scaled_load': float(lr.loadSchedule_scaled['value'][ind])},
+                       {'scaled_load': {"units": 'kW',
+                                 "tz": "UTC",
+                                 "data_type": "float"}}]
+                _log.info(msg)
+
+                if USE_SCALED_LOAD == True:
+                    self.cur_load.update({"Load": float(lr.loadSchedule_scaled['value'][ind]),
+                                          "Time": lr.loadSchedule_scaled.index[ind]})
+                else:
+                    self.cur_load.update({"Load": float(lr.loadSchedule['value'][ind]),
+                                          "Time": lr.loadSchedule.index[ind]})
+
                 self.vip.pubsub.publish(
                     peer="pubsub",
                     topic=self._config["current_load_topic"],

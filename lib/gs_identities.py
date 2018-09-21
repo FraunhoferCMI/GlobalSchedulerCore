@@ -51,9 +51,9 @@ USE_VOLTTRON = 1
 
 # Configuration File Locations
 #SITE_CFG_FILE   = "SiteConfiguration-PlantLevel-original.json" 
-SITE_CFG_FILE   = "SiteConfiguration-PlantLevel.json" 
+SITE_CFG_FILE   = "SiteConfiguration-PlantLevel.json"
 #SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json"
-SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
+SYSTEM_CFG_FILE = "SundialSystemConfiguration2.json"
 
 # Site Operating Modes
 SITE_IDLE    = 0
@@ -96,7 +96,7 @@ APPLICATION_CONTROL = 2
 EXEC_STARTING = 3
 
 EXECUTIVE_CLKTIME = 2 # period, in seconds, at which the executive polls system state
-DATA_LOG_SCHEDULE = 2  # period at which state vars are logged, in executive clock cycles
+DATA_LOG_SCHEDULE = 1  # period at which state vars are logged, in executive clock cycles
 ENDPT_UPDATE_SCHEDULE  = DATA_LOG_SCHEDULE # period at which sundial system resource objects are updated
 GS_SCHEDULE       = 60  # GS optimizer period, in executive clock cycles
 ESS_SCHEDULE      = 2 # ess regulation period, in executive clock cycles
@@ -123,6 +123,8 @@ CPR_1M_TIMEOUT = 600         #sets the timeout for minute forecast data requests
 # For configuring w/ simulated data
 USE_SOLAR_SIM  = 1
 USE_DEMAND_SIM = 1
+USE_SCALED_LOAD = False
+
 SIM_SCENARIO   = 1
 SIM_HRS_PER_HR = 1 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
 if SIM_SCENARIO == 1:
