@@ -20,6 +20,10 @@ test_start_time  = datetime.utcnow()
 
 _log = logging.getLogger(__name__)
 
+scale_factors = {"School": 1.0,
+                 "Canner": 0.2,
+                 "Mill": 0.1}
+
 # Classes
 class IPKeys(object):
     """Parent class for request & response interactions with IPKeys"""
@@ -168,9 +172,10 @@ class LoadShift(IPKeys):
         try:
             absolute_forecast, costs = parse_LoadShift_response(self.response)
             ### FIXME - just have hard coded column name - needs to be fixed. ###
-            print(absolute_forecast["2018-09-13--ZERO"])
+            print(absolute_forecast)
+            print(absolute_forecast["2018-09-17--ZERO"])
             print(list(absolute_forecast.columns.values))
-            forecast = absolute_forecast.sub(absolute_forecast["2018-09-13--ZERO"], axis=0)
+            forecast = absolute_forecast.sub(absolute_forecast["2018-09-17--ZERO"], axis=0)
         except ValueError:
             print(self.response['msg']['error'])
             costs = {}
@@ -272,6 +277,8 @@ class LoadReport(IPKeys):
 
         _log.info("Processing %s" % self.type)
         loadSchedules = []
+        loadSchedules_scaled = []
+        missing_vals = []
         for request in self.requests:
             if 'facility' in request['msg'].keys():
                 facility = request['msg']['facility']
@@ -281,16 +288,44 @@ class LoadReport(IPKeys):
             self._send_receive()
             # assert facility is self.response['msg']['facility'],\
             #     'facility response does not match requested facility'
+
+            try:
+                sf = scale_factors[self.response['msg']["facility"]]
+            except KeyError:
+                sf = 1.0
+
+            _log.info(sf)
             try:
                 facility_loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
+                scaled_facility_loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
+                scaled_facility_loadSchedule["value"] = scaled_facility_loadSchedule["value"] * sf
+                #_log.info(facility_loadSchedule)
                 _log.debug("loadSchedule:\n" + str(facility_loadSchedule))
             except KeyError:
                 _log.warn('previous request yielded no response')
-            loadSchedules.append(facility_loadSchedule)
 
+            for ii in range(0, len(facility_loadSchedule)):
+                if facility_loadSchedule["value"][ii] == -1:
+                    missing_vals.append(ii)
+
+            loadSchedules.append(facility_loadSchedule)
+            loadSchedules_scaled.append(scaled_facility_loadSchedule)
+
+
+        # sum facility schedules
         self.loadSchedule = reduce(lambda x, y: x.add(y, fill_value=0), loadSchedules)
+        self.loadSchedule_scaled = reduce(lambda x, y: x.add(y, fill_value=0), loadSchedules_scaled)
+
+        # mark any indices with missing values as -1
+        self.loadSchedule.loc[missing_vals,"value"] = -1
+        self.loadSchedule_scaled.loc[missing_vals, "value"] = -1
+
+        # set the index to the time stamp
         self.loadSchedule.index = loadSchedules[0]["dstart"]
+        self.loadSchedule_scaled.index = loadSchedules_scaled[0]["dstart"]
         self.loadSchedule.index = convert_FLAME_time_to_UTC(self.loadSchedule.index)
+        self.loadSchedule_scaled.index = convert_FLAME_time_to_UTC(self.loadSchedule_scaled.index)
+
         #print(self.loadSchedule)
         return None
 

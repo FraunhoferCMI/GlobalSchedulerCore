@@ -806,16 +806,20 @@ class DERDevice():
                     _log.info("PopEndpts: No Meta data found!")
 
                 cnt += 1
+
+                try:
+                    self.convert_units_from_endpt2(k, meta_data[k]["units"], cur_topic_name, raw_val)
+                except TypeError:
+                    self.convert_units_from_endpt2(k, cur_attribute.endpt_units[k], cur_topic_name, raw_val)
+                    # endpt_units.update({row[1]: row[2]}
+                except KeyError as e:
+                    cur_attribute.data_dict[keyval] = raw_val
+                    _log.info("Skipping: Key " + k + " not found.  Vals are " + str(raw_val))
+
             except KeyError as e:
                 _log.debug("Warning: Key "+k+" not found")
                 skip_cnt += 1
                 pass
-
-            try:
-                self.convert_units_from_endpt2(k, meta_data[k]["units"], cur_topic_name, raw_val)
-            except KeyError as e:
-                cur_attribute.data_dict[keyval] = raw_val
-                _log.debug("Skipping: Key "+k+" not found.  Vals are "+str(raw_val))
 
             try:
                 cur_attribute = self.extpt_to_device_dict[cur_topic_name + "_" + k].datagroup_dict[k]
