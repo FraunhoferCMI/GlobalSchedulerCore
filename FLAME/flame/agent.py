@@ -241,7 +241,10 @@ class FLAMECommsAgent(Agent):
                                            "%Y-%m-%dT%H:%M:%S.%f")
 
             # websocket = create_connection( WEBSOCKET_URL, timeout=None)
-            start_time = start_time.replace(minute=0, second=0, microsecond=0)
+            if USE_SCALED_LOAD == True:
+                start_time = start_time.replace(minute=0, second=3, microsecond=0)
+            else:
+                start_time = start_time.replace(minute=0, second=0, microsecond=0)
             start_time = start_time.replace(tzinfo=pytz.UTC)
             start_time = start_time.astimezone(pytz.timezone('US/Eastern')).strftime("%Y-%m-%dT%H:%M:%S")
 
