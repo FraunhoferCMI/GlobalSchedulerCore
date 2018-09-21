@@ -843,6 +843,22 @@ class ExecutiveAgent(Agent):
             pass
 
 
+        for obj_fcn in self.system_resources.obj_fcns:
+            try:
+                HistorianTools.publish_data(self,
+                                            "System/Cost",
+                                            "",
+                                            obj_fcn.desc,
+                                            self.system_resources.schedule_vars[obj_fcn.desc][ii])
+            except:
+                HistorianTools.publish_data(self,
+                                            "System/Cost",
+                                            "",
+                                            obj_fcn.desc,
+                                            self.system_resources.schedule_vars[obj_fcn.desc])
+
+
+
     ##############################################################################
     def publish_ess_cmds(self, ii):
         """
@@ -860,21 +876,6 @@ class ExecutiveAgent(Agent):
                                         units,
                                         k,
                                         v)
-
-        for obj_fcn in self.system_resources.obj_fcns:
-            try:
-                HistorianTools.publish_data(self,
-                                            "System/Cost",
-                                            "",
-                                            obj_fcn.desc,
-                                            self.system_resources.schedule_vars[obj_fcn.desc][ii])
-            except:
-                HistorianTools.publish_data(self,
-                                            "System/Cost",
-                                            "",
-                                            obj_fcn.desc,
-                                            self.system_resources.schedule_vars[obj_fcn.desc])
-
 
 ##############################################################################
     @Core.periodic(EXECUTIVE_CLKTIME)
