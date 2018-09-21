@@ -794,6 +794,28 @@ class ExecutiveAgent(Agent):
                                     self.system_resources.schedule_vars["DemandForecast_kW"].tolist())
         HistorianTools.publish_data(self,
                                     "SystemResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_tPlus1_kW",
+                                    self.system_resources.schedule_vars["DemandForecast_kW"][1],
+                                    TimeStamp_str=self.system_resources.schedule_vars["timestamp"][1].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
+        HistorianTools.publish_data(self,
+                                    "SystemResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_tPlus5_kW",
+                                    self.system_resources.schedule_vars["DemandForecast_kW"][5],
+                                    TimeStamp_str=self.system_resources.schedule_vars["timestamp"][5].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
+        HistorianTools.publish_data(self,
+                                    "SystemResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_tPlus23_kW",
+                                    self.system_resources.schedule_vars["DemandForecast_kW"][23],
+                                    TimeStamp_str=self.system_resources.schedule_vars["timestamp"][23].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
+
+        HistorianTools.publish_data(self,
+                                    "SystemResource/Schedule",
                                     default_units["timestamp"],
                                     "timestamp",
                                     [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.system_resources.schedule_vars["timestamp"]])
@@ -817,6 +839,51 @@ class ExecutiveAgent(Agent):
                                     default_units["timestamp"],
                                     "timestamp",
                                     [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.ess_resources.schedule_vars["timestamp"]])
+
+        HistorianTools.publish_data(self,
+                                    "ESSResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_tPlus1_kW",
+                                    self.ess_resources.schedule_vars["DemandForecast_kW"][1],
+                                    TimeStamp_str=self.ess_resources.schedule_vars["timestamp"][1].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
+        HistorianTools.publish_data(self,
+                                    "ESSResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_tPlus5_kW",
+                                    self.ess_resources.schedule_vars["DemandForecast_kW"][5],
+                                    TimeStamp_str=self.ess_resources.schedule_vars["timestamp"][5].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
+        HistorianTools.publish_data(self,
+                                    "ESSResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_tPlus23_kW",
+                                    self.ess_resources.schedule_vars["DemandForecast_kW"][23],
+                                    TimeStamp_str=self.ess_resources.schedule_vars["timestamp"][23].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
+        HistorianTools.publish_data(self,
+                                    "ESSResource/Schedule",
+                                    default_units["EnergyAvailableForecast_kWh"],
+                                    "EnergyAvailableForecast_tPlus1_kWh",
+                                    self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][1],
+                                    TimeStamp_str=self.ess_resources.schedule_vars["timestamp"][1].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
+        HistorianTools.publish_data(self,
+                                    "ESSResource/Schedule",
+                                    default_units["EnergyAvailableForecast_kWh"],
+                                    "EnergyAvailableForecast_tPlus5_kWh",
+                                    self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][5],
+                                    TimeStamp_str=self.ess_resources.schedule_vars["timestamp"][5].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
+        HistorianTools.publish_data(self,
+                                    "ESSResource/Schedule",
+                                    default_units["EnergyAvailableForecast_kWh"],
+                                    "EnergyAvailableForecast_tPlus23_kWh",
+                                    self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][23],
+                                    TimeStamp_str=self.ess_resources.schedule_vars["timestamp"][23].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
+
+
         HistorianTools.publish_data(self,
                                     "PVResource/Schedule",
                                     default_units["DemandForecast_kW"],
