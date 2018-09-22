@@ -577,6 +577,24 @@ class ExecutiveAgent(Agent):
                                                   search_resolution)
 
     ##############################################################################
+    def find_current_timestamp_index(self):
+        ii = 0
+        # retrieve the current scheduled value:
+        cur_gs_time = get_gs_time(self.gs_start_time, timedelta(0))
+        _log.info(str(cur_gs_time))
+        for t in self.system_resources.schedule_vars["timestamp"]:
+            _log.debug(str(t))
+            if cur_gs_time < t:
+                break
+            ii += 1
+        ii -= 1
+
+        _log.debug("Generating dispatch: ii = " + str(ii))
+        if (ii < 0):  # shouldn't ever happen
+            ii = 0
+        return ii
+
+    ##############################################################################
     #@Core.periodic(ESS_SCHEDULE)
     def send_ess_commands(self):
         """
@@ -598,25 +616,12 @@ class ExecutiveAgent(Agent):
             netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
             netDemandAvg_kW = self.system_resources.state_vars["AvgPwr_kW"]
 
-            ii = 0
             if USE_FORECAST_VALUE == True:
-                # retrieve the current scheduled value:
-                cur_gs_time = get_gs_time(self.gs_start_time, timedelta(0))
-                _log.info(str(cur_gs_time))
-                for t in self.system_resources.schedule_vars["timestamp"]:
-                    _log.debug(str(t))
-                    if cur_gs_time < t:
-                        break
-                    ii += 1
-                ii -= 1
-
-                _log.debug("Generating dispatch: ii = "+str(ii))
-                if (ii < 0): # shouldn't ever happen
-                    ii = 0
-
+                ii = self.find_current_timestamp_index()
                 targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ii]
                 expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][ii]
             else:
+                ii = 0
                 cur_gs_time = get_gs_time(self.gs_start_time, timedelta(0))
                 if ((cur_gs_time.hour > 7) & (cur_gs_time.hour < 19)):
                     acc_load = 0
@@ -643,6 +648,7 @@ class ExecutiveAgent(Agent):
                                     self.ess_resources.state_vars["MaxChargePwr_kW"])
             else:
                 max_charge_kW = self.ess_resources.state_vars["MaxChargePwr_kW"]
+
             max_discharge_kW = self.ess_resources.state_vars["MaxDischargePwr_kW"]
 
             if REGULATE_ESS_OUTPUT == True:
@@ -909,6 +915,7 @@ class ExecutiveAgent(Agent):
         except:  # assume demand module is not implemented
             pass
 
+        ii = self.find_current_timestamp_index()
 
         for obj_fcn in self.system_resources.obj_fcns:
             try:
