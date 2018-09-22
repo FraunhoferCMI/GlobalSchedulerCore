@@ -1601,6 +1601,16 @@ class LoadNode(DERDevice):
         self.state_vars_update_rate = flame_load_state_vars_update_rate
         _log.info(self.state_vars_update_rate)
 
+    ##############################################################################
+    def calc_avg_pwr(self, val):
+        """
+        low rate data capture - power reading is already an average
+        TODO - Note - does not currently address missed readings.  Not sure if this matters.
+        :param val: most recent power reading
+        :return: average power over the last MODBUS_PTS_PER_WINDOW duration
+        """
+        return val
+
 
 ##############################################################################
 class LoadShiftCtrlNode(DERDevice):
@@ -1626,7 +1636,15 @@ class LoadShiftCtrlNode(DERDevice):
         self.nTries = {"SetPoint": 0}
         self.writeError = {"SetPoint": 0}
 
-
+    ##############################################################################
+    def calc_avg_pwr(self, val):
+        """
+        low rate data capture - power reading is already an average
+        TODO - Note - does not currently address missed readings.  Not sure if this matters.
+        :param val: most recent power reading
+        :return: average power over the last MODBUS_PTS_PER_WINDOW duration
+        """
+        return val
 
 
     ##############################################################################
