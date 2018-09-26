@@ -209,7 +209,10 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
         v = kwargs["forecast"]["DemandForecast_kW"]-self.init_params["threshold"]
         energy_above_threshold = v[numpy.where(v > 0)].sum()
         cost = self.obj_fcn_cost(kwargs["forecast"])
-        self.imputed_cost_per_kWh = energy_above_threshold / cost
+        if cost == 0:
+            self.imputed_cost_per_kWh = 0
+        else:
+            self.imputed_cost_per_kWh = energy_above_threshold / cost
         print(self.imputed_cost_per_kWh)
         print(self.init_params)
         #self.init_params["threshold"] = kwargs["threshold"]
