@@ -113,7 +113,6 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     sec_per_hr = 60.0 * 60.0
 
     setpoint = targetPwr_kW-curPwr_kW
-
     # check that we are within power limits of the storage system
     if setpoint < -1 * max_discharge_kW:
         setpoint = -1 * max_discharge_kW
@@ -127,15 +126,19 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     # calculate what the remaining charge will be at the end of the next period
     # TODO - still need to correct for losses!!
     energy_required = setpoint * setpoint_cmd_interval / sec_per_hr
-    discharge_energy_available = min_SOE_kWh - SOE_kWh
-    charge_energy_available = max_SOE_kWh - SOE_kWh
+    discharge_energy_available = min(min_SOE_kWh - SOE_kWh,0)
+    charge_energy_available = max(max_SOE_kWh - SOE_kWh,0)
 
     if energy_required < discharge_energy_available:
         # (discharge) set point needs to be adjusted to meet a min_SOE_kWh constraint
+        _log.info("energy-limited set point on discharge - old value:  "+str(setpoint))
         setpoint = discharge_energy_available / (float(setpoint_cmd_interval) / float(sec_per_hr))
+	_log.info("New value: "+str(setpoint))
     elif energy_required > charge_energy_available:
         # (charge) set point needs to be adjusted to meet a max_SOE_kWh constraint
+        _log.info("energy-limited set point on charge - old value: "+str(setpoint))
         setpoint = charge_energy_available / (float(setpoint_cmd_interval) / float(sec_per_hr))
+	_log.info("New Value "+str(setpoint))
 
     return setpoint
 
