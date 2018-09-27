@@ -116,10 +116,10 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     # check that we are within power limits of the storage system
     if setpoint < -1 * max_discharge_kW:
         setpoint = -1 * max_discharge_kW
-	_log.info("Optimizer: Power-limited Setpoint =" + str(setpoint))
+        _log.info("Optimizer: Power-limited Setpoint =" + str(setpoint))
     if setpoint > max_charge_kW:
         setpoint = max_charge_kW
-	_log.info("Optimizer: Power-limited Setpoint =" + str(setpoint))
+        _log.info("Optimizer: Power-limited Setpoint =" + str(setpoint))
 	
     # now check that the target setpoint is within the energy limits
 
@@ -133,12 +133,12 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
         # (discharge) set point needs to be adjusted to meet a min_SOE_kWh constraint
         _log.info("energy-limited set point on discharge - old value:  "+str(setpoint))
         setpoint = discharge_energy_available / (float(setpoint_cmd_interval) / float(sec_per_hr))
-	_log.info("New value: "+str(setpoint))
+        _log.info("New value: "+str(setpoint))
     elif energy_required > charge_energy_available:
         # (charge) set point needs to be adjusted to meet a max_SOE_kWh constraint
         _log.info("energy-limited set point on charge - old value: "+str(setpoint))
         setpoint = charge_energy_available / (float(setpoint_cmd_interval) / float(sec_per_hr))
-	_log.info("New Value "+str(setpoint))
+        _log.info("New Value "+str(setpoint))
 
     return setpoint
 
@@ -756,39 +756,42 @@ class ExecutiveAgent(Agent):
                                           update_forecasts=True)
             self.sundial_resources.interpolate_forecast(schedule_timestamps)
 
-            # work around to indicate to optimizer to use previous solution if cost was lower
-            # same time window as previously
-            # todo - looks only at solar forecast to determine whether new forecast has arrived...should this
-            # todo - look at other forecasts also?
-            # fixme - this work around does not account for contingency if forecast or system state changes unexpectedly
-            forecast_start = datetime.strptime(self.pv_resources.state_vars["OrigDemandForecast_t_str"][0],
-                                               "%Y-%m-%dT%H:%M:%S")
-
-            if forecast_start == self.last_forecast_start:
-                self.optimizer.persist_lowest_cost = 1
+            if self.sundial_resources.state_vars["DemandForecast_kW"][0] == None:
+                _log.info("Forecast(s) unavailable - Skipping optimization")
             else:
-                self.optimizer.persist_lowest_cost = 0
-            _log.info("persist lower cost = "+str(self.optimizer.persist_lowest_cost)+"; old time = "+self.last_forecast_start.strftime("%Y-%m-%dT%H:%M:%S")+"; new time = "+forecast_start.strftime("%Y-%m-%dT%H:%M:%S"))
+                # work around to indicate to optimizer to use previous solution if cost was lower
+                # same time window as previously
+                # todo - looks only at solar forecast to determine whether new forecast has arrived...should this
+                # todo - look at other forecasts also?
+                # fixme - this work around does not account for contingency if forecast or system state changes unexpectedly
+                forecast_start = datetime.strptime(self.pv_resources.state_vars["OrigDemandForecast_t_str"][0],
+                                                   "%Y-%m-%dT%H:%M:%S")
 
-            self.last_forecast_start = forecast_start
+                if forecast_start == self.last_forecast_start:
+                    self.optimizer.persist_lowest_cost = 1
+                else:
+                    self.optimizer.persist_lowest_cost = 0
+                _log.info("persist lower cost = "+str(self.optimizer.persist_lowest_cost)+"; old time = "+self.last_forecast_start.strftime("%Y-%m-%dT%H:%M:%S")+"; new time = "+forecast_start.strftime("%Y-%m-%dT%H:%M:%S"))
 
-            ## queue up time-differentiated cost data
-            self.sundial_resources.cfg_cost(schedule_timestamps,
-                                            system_tariff = self.tariffs)
+                self.last_forecast_start = forecast_start
 
-            ## generate a cost map - for testing
-            #tiers = self.generate_cost_map()
-            #_log.info(json.dumps(tiers))
+                ## queue up time-differentiated cost data
+                self.sundial_resources.cfg_cost(schedule_timestamps,
+                                                system_tariff = self.tariffs)
 
-            if SEARCH_LOADSHIFT_OPTIONS == True:
-                self.optimizer.search_load_shift_options(self.sundial_resources,
-                                                         self.loadshift_resources,
-                                                         schedule_timestamps) # SSA optimization - search load shift space
-            else:
-                self.optimizer.search_single_option(self.sundial_resources,
-                                                    schedule_timestamps)  # SSA optimization - single pass
-            self.publish_schedules()
-            self.send_ess_commands()
+                ## generate a cost map - for testing
+                #tiers = self.generate_cost_map()
+                #_log.info(json.dumps(tiers))
+
+                if SEARCH_LOADSHIFT_OPTIONS == True:
+                    self.optimizer.search_load_shift_options(self.sundial_resources,
+                                                             self.loadshift_resources,
+                                                             schedule_timestamps) # SSA optimization - search load shift space
+                else:
+                    self.optimizer.search_single_option(self.sundial_resources,
+                                                        schedule_timestamps)  # SSA optimization - single pass
+                self.publish_schedules()
+                self.send_ess_commands()
 
     ##############################################################################
     def publish_schedules(self):
