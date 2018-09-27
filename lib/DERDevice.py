@@ -421,7 +421,7 @@ class DERDevice():
             #FIXME - what happens if a name is duplicated (esp between different devices/topics?)
             self.datagroup_dict_list[group_id].data_mapping_dict.update({ext_endpt: int_endpt})
             self.datagroup_dict_list[group_id].map_int_to_ext_endpt.update({int_endpt: ext_endpt})
-            self.datagroup_dict_list[group_id].data_dict.update({int_endpt: 0})
+            self.datagroup_dict_list[group_id].data_dict.update({int_endpt: None})
             self.datagroup_dict_list[group_id].units.update({int_endpt: units})
 
             try:
@@ -587,8 +587,9 @@ class DERDevice():
         #    self.state_vars.update({k: self.op_status.data_dict[k]})
 
         try:
-            self.state_vars.update({"Pwr_kW": self.op_status.data_dict["Pwr_kW"]})
-            self.state_vars.update({"AvgPwr_kW": self.calc_avg_pwr(self.op_status.data_dict["Pwr_kW"])})
+            if self.op_status.data_dict["Pwr_kW"] != None:
+                self.state_vars.update({"Pwr_kW": self.op_status.data_dict["Pwr_kW"]})
+                self.state_vars.update({"AvgPwr_kW": self.calc_avg_pwr(self.op_status.data_dict["Pwr_kW"])})
         except KeyError:
             pass
 
@@ -605,8 +606,11 @@ class DERDevice():
             pass
 
         try:
-            self.state_vars.update({"SetPt": self.pwr_ctrl.data_dict["SetPoint"],
-                                    "SetPtCmd": self.pwr_ctrl_cmd.data_dict["SetPoint_cmd"]})
+            if self.pwr_ctrl.data_dict["SetPt"] != None:
+                self.state_vars.update({"SetPt": self.pwr_ctrl.data_dict["SetPoint"]}),
+
+            if self.pwr_ctrl_cmd.data_dict["SetPoint_cmd"] != None:
+                self.state_vars.update({"SetPtCmd": self.pwr_ctrl_cmd.data_dict["SetPoint_cmd"]})
         except KeyError:
             pass
 
@@ -1736,9 +1740,22 @@ class ESSCtrlNode(DERModbusCtrlNode):
 
         self.update_state_vars()
 
+        self.state_vars["OrigDemandForecast_t_str"] = [0.0]*SSA_PTS_PER_SCHEDULE
+
+
     ##############################################################################
     def update_state_vars(self):
         DERCtrlNode.update_state_vars(self)
+
+        #fixme - should use get_gs_time
+        now = utils.get_aware_utc_now()
+        self.state_vars["OrigDemandForecast_t_str"] = [(now.replace(minute=0, second=0)  +
+                                                        timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%S")
+                                                       for t in range(0,
+                                                                      SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                                      SSA_SCHEDULE_RESOLUTION)]
+
+
 
 
 ##############################################################################
@@ -1902,7 +1919,7 @@ class ESSDevice(DERDevice):
 
         _log.info("Device info is ="+str(device_info))
 
-        self.state_vars.update({"MaxSOE_kWh": float(device_info["max_soe"]) if("max_soe" in device_info) else 0.0,
+        self.state_vars.update({"MaxSOE_kWh": ESS_MAX*float(device_info["max_soe"]) if("max_soe" in device_info) else 0.0,
                                 "SOE_kWh": float(device_info["soe_init"]) if("soe_init" in device_info) else 0.0,
                                 "MaxChargePwr_kW": float(device_info["max_chg_pwr"]) if("max_chg_pwr" in device_info) else 0.0,
                                 "MaxDischargePwr_kW": float(device_info["max_dischg_pwr"]) if("max_dischg_pwr" in device_info) else 0.0,
@@ -1927,12 +1944,20 @@ class TeslaPowerPack(ESSDevice):
         :return:
         """
         DERDevice.update_state_vars(self)
-        self.state_vars.update({"MaxSOE_kWh": self.op_status.data_dict["FullChargeEnergy_kWh"]*ESS_MAX,
-                                "MinSOE_kWh": self.op_status.data_dict["FullChargeEnergy_kWh"] * ESS_MIN,
-                                "SOE_kWh": self.op_status.data_dict["Energy_kWh"],
-                                "MaxChargePwr_kW": self.op_status.data_dict["MaxChargePwr_kW"],
-                                "MaxDischargePwr_kW": self.op_status.data_dict["MaxDischargePwr_kW"]})
-                                #"Nameplate_kW": self.op_status.data_dict["MaxDischargePwr_kW"]})
+
+        if self.op_status.data_dict["FullChargeEnergy_kWh"] != None:
+            self.state_vars.update({"MaxSOE_kWh": self.op_status.data_dict["FullChargeEnergy_kWh"] * ESS_MAX,
+                                    "MinSOE_kWh": self.op_status.data_dict["FullChargeEnergy_kWh"] * ESS_MIN})
+
+        if self.op_status.data_dict["Energy_kWh"] != None:
+            self.state_vars.update({"SOE_kWh": self.op_status.data_dict["Energy_kWh"]})
+
+        if self.op_status.data_dict["MaxChargePwr_kW"] != None:
+            self.state_vars.update({"MaxChargePwr_kW": self.op_status.data_dict["MaxChargePwr_kW"]})
+
+        if self.op_status.data_dict["MaxDischargePwr_kW"] != None:
+            self.state_vars.update({"MaxDischargePwr_kW": self.op_status.data_dict["MaxDischargePwr_kW"]}) #,
+                                    #"Nameplate_kW": self.op_status.data_dict["MaxDischargePwr_kW"]})
 
 
         ##############################################################################
