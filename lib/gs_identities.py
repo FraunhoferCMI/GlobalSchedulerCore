@@ -51,7 +51,7 @@ USE_VOLTTRON = 1
 
 # Configuration File Locations
 #SITE_CFG_FILE   = "SiteConfiguration-PlantLevel-original.json" 
-SITE_CFG_FILE   = "SiteConfiguration-PlantLevel.json"
+SITE_CFG_FILE   = "SiteConfiguration-PlantLevel.json" 
 #SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json"
 SYSTEM_CFG_FILE = "SundialSystemConfiguration2.json"
 
@@ -103,7 +103,7 @@ ESS_SCHEDULE      = 2 # ess regulation period, in executive clock cycles
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
 
 #FIXME - Placeholder!
-MODBUS_SCRAPE_INTERVAL  = 5 # period in seconds for modbus device to post on the IEB bus
+MODBUS_SCRAPE_INTERVAL  = 1 # period in seconds for modbus device to post on the IEB bus
 MODBUS_AVERAGING_WINDOW = 180 # period in seconds over which to average instantaneous readings
 MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
 MODBUS_WRITE_ATTEMPTS  = 5  # number of modbus reads before a write error is thrown
@@ -115,7 +115,7 @@ DURATION_1MIN_FORECAST = 5 # hrs
 
 REGULATE_ESS_OUTPUT = True # True = Match system's output in real time to scheduled output using ESS; False = use scheduled ESS value regardless of divergence from forecast
 USE_FORECAST_VALUE = True
-IMPORT_CONSTRAINT = True    # fail safe to ensure that storage does not charge from the grid
+IMPORT_CONSTRAINT = False    # fail safe to ensure that storage does not charge from the grid
 SEARCH_LOADSHIFT_OPTIONS = False
 # For configuring forecast agent
 CPR_TIMEOUT = 600            #sets the timeout for hourly forecast data requests
@@ -123,8 +123,7 @@ CPR_1M_TIMEOUT = 600         #sets the timeout for minute forecast data requests
 # For configuring w/ simulated data
 USE_SOLAR_SIM  = 1
 USE_DEMAND_SIM = 1
-USE_SCALED_LOAD = False
-
+USE_SCALED_LOAD = True #False
 SIM_SCENARIO   = 1
 SIM_HRS_PER_HR = 1 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
 if SIM_SCENARIO == 1:
@@ -145,7 +144,7 @@ DEMAND_FILE_TIME_RESOLUTION_MIN = DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN #1
 
 SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0) + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
 
-DEMAND_CHARGE_THRESHOLD = 0 #250
+DEMAND_CHARGE_THRESHOLD = 500 #250
 UPDATE_THRESHOLD = False
 ESS_MAX = 0.95
 ESS_MIN = 0.15
@@ -166,10 +165,10 @@ if USE_SIM == 1:   # schedules for simulated testing
 else:   # schedules associated with live testing
     CPR_QUERY_INTERVAL = 20*60 # period in seconds for forecasts to arrive
     CPR_1MIN_QUERY_INTERVAL = 300
-    DEMAND_FORECAST_QUERY_INTERVAL = 60*60 # seconds
+    DEMAND_FORECAST_QUERY_INTERVAL = 20*60 # seconds
     DEMAND_FORECAST_RESOLUTION = SSA_SCHEDULE_RESOLUTION # 60 minutes # MATT - "PT1H"
     LOADSHIFT_QUERY_INTERVAL = 60*60 # seconds
-    DEMAND_REPORT_SCHEDULE = 60*60 # SECONDS
+    DEMAND_REPORT_SCHEDULE = 15*60 # SECONDS
     DEMAND_REPORT_RESOLUTION = 60 # minutes Time resolution of load request report - ONLY SUPPORTS 60 MIN
     DEMAND_REPORT_DURATION =  24*60 # Duration of load request reports in minutes
     N_LOADSHIFT_PROFILES   = 5
