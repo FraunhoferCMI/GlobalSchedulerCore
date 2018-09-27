@@ -230,7 +230,7 @@ class SimulatedAnnealer():
         :return: None
         """
         run_optimization = True
-        use_recursive    = False
+        use_recursive    = True
 
         # get an initial set of commands to seed the ssa process
         # then, set least_cost_soln AND current_soln to initiate the SSA
@@ -492,7 +492,7 @@ if __name__ == '__main__':
     #msgs.setLevel(logging.INFO)
     #_log.addHandler(msgs)
 
-    SundialCfgFile = "../cfg/SystemCfg/SundialSystemConfiguration.json"#"SundialSystemConfiguration2.json"
+    SundialCfgFile = "../cfg/SystemCfg/SundialSystemConfiguration2.json"#"SundialSystemConfiguration2.json"
     sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
 
     gs_start_time = datetime.utcnow().replace(microsecond=0)
