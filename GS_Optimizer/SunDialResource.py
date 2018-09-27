@@ -949,7 +949,7 @@ class SolarPlusStorageResource(SundialResource):
         self.update_required = 1  # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         # set up the specific set of objective functions to apply for the this resource type
-        self.obj_fcns = [DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=1000.0, threshold=0.0, tariff_key="solarPlusStorage_tariff")]
+        self.obj_fcns = [] #[DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=1000.0, threshold=0.0, tariff_key="solarPlusStorage_tariff")]
 
     ############################
     def load_scenario(self):
