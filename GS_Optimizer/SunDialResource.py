@@ -904,6 +904,19 @@ class PVResource(SundialResource):
     Inherits from SundialResource.  Defines objective functions, state_vars, etc specific to PVCtrlNodes
     """
 
+    ##############################################################################
+    def interpolate_values(self, schedule_timestamps, init_demand):
+        """
+        :param schedule_start_time: start time for schedule, in GS frame of reference
+        override method that replaces the current time step's forecast with the average actual power output
+        :return:
+        """
+        interpolated_demand = SundialResource.interpolate_values(self, schedule_timestamps, init_demand)
+        if interpolated_demand[0] != None:
+            interpolated_demand[0] = self.state_vars["AvgPwr_kW"]
+        return interpolated_demand
+
+
 ##############################################################################
 class LoadShiftResource(SundialResource):
     """
