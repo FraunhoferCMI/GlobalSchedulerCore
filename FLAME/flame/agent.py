@@ -241,16 +241,20 @@ class FLAMECommsAgent(Agent):
             start_time = datetime.strptime(get_schedule(self.gs_start_time,
                                                         resolution=SSA_SCHEDULE_RESOLUTION),
                                            "%Y-%m-%dT%H:%M:%S.%f")
-
+            ### Setting seconds = 3 in the forecast request scales the resulting forecast to a 750kW baseline
+            #   Setting seconds = 7 scales to a 1,500kW baseline
+            #   Any other value (typically 0) uses raw (unscaled) facility data
             if USE_SCALED_LOAD == True:
                 start_time = start_time.replace(minute=0, second=3, microsecond=0)
             else:
                 start_time = start_time.replace(minute=0, second=0, microsecond=0)
-            ws = create_connection(ws_url, sslopt=sslopt)
-            start_time = start_time.replace(minute=0, second=0, microsecond=0)
-            # start_time = start_time.replace(tzinfo=pytz.UTC)
-            # start_time = start_time.astimezone(pytz.timezone('US/Eastern')).strftime("%Y-%m-%dT%H:%M:%S")
 
+            ## need to convert the start time request to local time.  get_schedule returns a time stamp in UTC, but
+            ## as a string, so it is time naive.  It needs to be recast as UTC and then changed to local time.
+            start_time = start_time.replace(tzinfo=pytz.UTC)
+            start_time = start_time.astimezone(pytz.timezone('US/Eastern')).strftime("%Y-%m-%dT%H:%M:%S")
+
+            ws = create_connection(ws_url, sslopt=sslopt)
             baseline_kwargs = dict(
                 start =  start_time,
                 granularity = DEMAND_FORECAST_RESOLUTION,
