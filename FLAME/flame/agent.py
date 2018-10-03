@@ -81,6 +81,15 @@ MINUTES_PER_HR = 60
 MINUTES_PER_DAY = 24 * MINUTES_PER_HR
 MINUTES_PER_YR = 365 * MINUTES_PER_DAY
 
+### WEBSOCKET ###
+ws_url = "wss://flame.ipkeys.com:9443/socket/msg"
+# old way
+# ws = create_connection(url, timeout=None)
+# insecure way, use this if certificate is giving problems
+sslopt = {"cert_reqs": ssl.CERT_NONE}
+# secure way
+# sslopt = {"ca_certs": 'IPKeys_Root.pem'}
+
 # TODO migrate constants that gs_identities
 
 # Time interval at which real-time load data should be retrieved from FLAME server and published to IEB
@@ -142,18 +151,7 @@ class FLAMECommsAgent(Agent):
         # baseline_msg = new_baseline_constructor
         # loadshift_msg = new_loadshift_constructor
 
-        ### CREATE WEBSOCKET ###
-        ws_url = "wss://flame.ipkeys.com:9443/socket/msg"
-        # old way
-        # ws = create_connection(url, timeout=None)
-        # insecure way, use this if certificate is giving problems
-        sslopt = {"cert_reqs": ssl.CERT_NONE}
-        # secure way
-        # sslopt = {"ca_certs": 'IPKeys_Root.pem'}
 
-        ws = create_connection(ws_url, sslopt=sslopt)
-
-        self.websocket = ws
         _log.info("Web Socket INITIALIZED")
 
         self.cur_load = {"Load": -1,
@@ -203,8 +201,9 @@ class FLAMECommsAgent(Agent):
         """
 
         _log.info("selecting load option")
-        # ws = create_connection(WEBSOCKET_URL, timeout=None)
-        lsel = LoadSelect(websocket=self.websocket, optionID=optionID)
+        ws = create_connection(ws_url, sslopt=sslopt)
+        lsel = LoadSelect(websocket=ws,
+                          optionID=optionID)
         lsel.process()
 
         _log.info("LoadSelect status: " + lsel.status) # TODO setup self.comm_status check based on status
@@ -214,17 +213,20 @@ class FLAMECommsAgent(Agent):
             headers={},
             message=optionID) # CHECK if this is what's wanted
             # message=lsel.status) # CHECK if this is what's wanted
+        ws.close()
         return None
 
     @Core.periodic(period=STATUS_REPORT_SCHEDULE)
     def request_status(self):
         # ws = create_connection(WEBSOCKET_URL, timeout=None)
         if self.initialization_complete == 1:
-            status = Status(websocket=self.websocket)
+            ws = create_connection(ws_url, sslopt=sslopt)
+            status = Status(websocket=ws)
             status.process()
             _log.info("LoadSelect alertStatus: " + str(status.alertStatus))
             _log.info("LoadSelect currentProfile: " + str(status.currentProfile))
 
+            ws.close()
         return None
 
     ##############################################################################
@@ -239,20 +241,25 @@ class FLAMECommsAgent(Agent):
             start_time = datetime.strptime(get_schedule(self.gs_start_time,
                                                         resolution=SSA_SCHEDULE_RESOLUTION),
                                            "%Y-%m-%dT%H:%M:%S.%f")
-
-            # websocket = create_connection( WEBSOCKET_URL, timeout=None)
+            ### Setting seconds = 3 in the forecast request scales the resulting forecast to a 750kW baseline
+            #   Setting seconds = 7 scales to a 1,500kW baseline
+            #   Any other value (typically 0) uses raw (unscaled) facility data
             if USE_SCALED_LOAD == True:
                 start_time = start_time.replace(minute=0, second=3, microsecond=0)
             else:
                 start_time = start_time.replace(minute=0, second=0, microsecond=0)
+
+            ## need to convert the start time request to local time.  get_schedule returns a time stamp in UTC, but
+            ## as a string, so it is time naive.  It needs to be recast as UTC and then changed to local time.
             start_time = start_time.replace(tzinfo=pytz.UTC)
             start_time = start_time.astimezone(pytz.timezone('US/Eastern')).strftime("%Y-%m-%dT%H:%M:%S")
 
+            ws = create_connection(ws_url, sslopt=sslopt)
             baseline_kwargs = dict(
                 start =  start_time,
                 granularity = DEMAND_FORECAST_RESOLUTION,
                 duration = 'PT24H',
-                websocket = self.websocket
+                websocket = ws
             )
             _log.debug('setup baseline')
             bl = Baseline(**baseline_kwargs)
@@ -310,6 +317,7 @@ class FLAMECommsAgent(Agent):
             #    headers={},
             #    message=[{"comm_status": 1}, {"comm_status": {'type': 'int', 'units': 'none'}}])
 
+            ws.close()
         else:
             _log.info("initialization incomplete!!")
 
@@ -330,8 +338,8 @@ class FLAMECommsAgent(Agent):
                                          # **gcm_kwargs
                                          ).get(timeout=5)
 
-            # ws = create_connection(WEBSOCKET_URL, timeout=None)
-            ls = LoadShift(websocket=self.websocket, price_map=price_map)
+            ws = create_connection(ws_url, sslopt=sslopt)
+            ls = LoadShift(websocket=ws,  price_map=price_map)
             ls.process()
             # message = ls.fo.forecast_values    # call to demand forecast object class thingie
             # ws.close()
@@ -353,6 +361,7 @@ class FLAMECommsAgent(Agent):
             #     topic=self._config['loadshift_forecast_topic'],
             #     headers={},
             #     message=[{"comm_status": 1}, {"comm_status": {'type': 'int', 'units': 'none'}}])
+            ws.close()
 
         else:
             _log.info("initialization incomplete!!")
@@ -382,8 +391,8 @@ class FLAMECommsAgent(Agent):
                 "facilities": self._config['facilities']
             }
 
-            # ws = create_connection("ws://flame.ipkeys.com:8888/socket/msg", timeout=None)
-            lr = LoadReport(websocket=self.websocket, **loadReport_kwargs)
+            ws = create_connection(ws_url, sslopt=sslopt)
+            lr = LoadReport(websocket=ws, **loadReport_kwargs)
             lr.process()
 
             #print(lr.loadSchedule)
@@ -462,6 +471,7 @@ class FLAMECommsAgent(Agent):
 
             except AttributeError:
                 _log.warn('Response requested not available')
+            ws.close()
 
         return None
 

@@ -24,6 +24,8 @@ scale_factors = {"School": 1.0,
                  "Canner": 0.2,
                  "Mill": 0.1}
 
+USE_STATIC = True
+
 # Classes
 class IPKeys(object):
     """Parent class for request & response interactions with IPKeys"""
@@ -48,8 +50,8 @@ class IPKeys(object):
         _log.info("Sending Request from %s" % self.type)
         try:
             self.ws.send(self.request)
-        except WebSocketTimeoutException:
-            raise
+        except websocket.WebSocketTimeoutException:
+            return "WEB_SOCKET_TIMEOUT" #raise
             # TODO: add a means of handling what to do when a timeout happens
         # TODO: add a means of confirming that the request was received (200?)
         _log.info("Request set from %s" % self.type)
@@ -109,7 +111,6 @@ class Baseline(IPKeys):
         self.granularity = granularity
         self.duration = duration
 
-
         full_time_string = format_timeperiod(granularity)
         self.request = json.dumps({'type': 'BaselineRequest',
                                    'msg': {'dstart': start,
@@ -155,6 +156,7 @@ class LoadShift(IPKeys):
         self.price_map = price_map
 
         self.request = create_load_request(price_map=price_map)
+
         _log.info("REQUEST LENGTH!!!")
         _log.info(len(self.request))
         return None
@@ -170,12 +172,14 @@ class LoadShift(IPKeys):
 
         self._send_receive()
         try:
+
             absolute_forecast, costs = parse_LoadShift_response(self.response)
             ### FIXME - just have hard coded column name - needs to be fixed. ###
+            absolute_forecast.loc[:,"2018-09-26--ZERO"] = bl.forecast #[:,"value"]
             print(absolute_forecast)
-            print(absolute_forecast["2018-09-17--ZERO"])
+            print(absolute_forecast["2018-09-26--ZERO"])
             print(list(absolute_forecast.columns.values))
-            forecast = absolute_forecast.sub(absolute_forecast["2018-09-17--ZERO"], axis=0)
+            forecast = absolute_forecast.sub(absolute_forecast["2018-09-26--ZERO"], axis=0)
         except ValueError:
             print(self.response['msg']['error'])
             costs = {}
@@ -374,6 +378,15 @@ def parse_Baseline_response(result):
 
 def create_load_request(duration='PT1H', nLoadOptions=12, price_map=None):
 
+    # # OLD STATIC WAY
+    gs_root_dir = os.environ['GS_ROOT_DIR']
+    flame_path  = "FLAME/flame/"
+    fname       = 'Example4A.json' #''defaultLoadRequest.json'
+    filepath    = os.path.join(gs_root_dir, flame_path, fname)
+    with open(filepath) as f:
+        old_msg = json.load(f)
+
+
     # get set of times
     now = pd.datetime.utcnow()
     nearest_minute = datetime(now.year, now.month, now.day, 0).isoformat()
@@ -393,10 +406,14 @@ def create_load_request(duration='PT1H', nLoadOptions=12, price_map=None):
     msg = {'nLoadOptions': unicode(nLoadOptions),
            'marginalCostCurve': marginalCostCurve}
 
+    if USE_STATIC == True:
+        msg_to_use = old_msg
+    else:
+        msg_to_use = msg
+
     payload_request = json.dumps(
         {"type": "LoadRequest",
-         "msg": msg
-         # "msg": old_msg
+         "msg": msg_to_use
          }
     )
     return payload_request
@@ -481,7 +498,7 @@ if __name__ == '__main__':
     # Baseline
     def test_Baseline():
         print("running Baseline")
-        start =  '2018-08-27T00:00:00'
+        start =  '2018-09-29T00:00:00'
         granularity = 1
         # granularity =  'PT1H'
         duration = 'PT24H'
@@ -520,12 +537,12 @@ if __name__ == '__main__':
         print("running LoadReport")
         current_time = datetime.now().replace(microsecond=0, second=0, minute=0)
         time_delta = timedelta(hours=24)
-        start_time = datetime.strptime('2018-09-03T15:00:00', "%Y-%m-%dT%H:%M:%S")#current_time - time_delta
+        start_time = datetime.strptime('2018-09-29T15:00:00', "%Y-%m-%dT%H:%M:%S")#current_time - time_delta
         print(start_time)
         loadReport_kwargs = {
             "dstart": start_time.strftime("%Y-%m-%dT%H:%M:%S"), #"2018-07-14T00:00:00",        #start time for report
-            "sampleInterval": "PT1H",            #sample interval
-            "duration": "PT24H",           # duration of request
+            "sampleInterval": "PT1M",            #sample interval
+            "duration": "PT1H",           # duration of request
             #"facilities": ["Facility1", "Facility2", "Facility3"]
             # "facilities": ["Mill", "Canner", "School"]
         }
