@@ -714,7 +714,8 @@ class ESSResource(SundialResource):
                                         "Nameplate"])
 
         # set up the specific set of objective functions to apply for the system
-        self.obj_fcns = [StoredEnergyValueObjectiveFunction(desc="StorageValue")]
+        self.obj_fcns = [StoredEnergyValueObjectiveFunction(desc="StorageValue")]#,
+                         #BatteryLossModelObjectiveFunction(desc="LossModel")]
 
     ##############################################################################
     def init_state_vars(self):
@@ -751,7 +752,7 @@ class ESSResource(SundialResource):
         #    print(k+": "+str(v))
 
     ##############################################################################
-    def update_soe(self, pwr_request, current_soe):
+    def update_soe(self, pwr_request, current_soe, max_soe, min_soe):
         """
         Given a power request and current state of energy, it checks ess constraints and adjusts the command
         accordingly.
@@ -767,14 +768,14 @@ class ESSResource(SundialResource):
 
         if pwr_request > 0: # charge
             # maximum energy that can be input to the battery before reaching upper constraint
-            max_energy = (self.state_vars["MaxSOE_kWh"] - current_soe) / self.state_vars["ChgEff"]
+            max_energy = (max_soe - current_soe) / self.state_vars["ChgEff"]
             pwr_cmd    = min(pwr_request, self.state_vars["MaxChargePwr_kW"])
             pwr_cmd    = min(max_energy/tResolution_hr, pwr_cmd)
             delta_energy = pwr_cmd * tResolution_hr * self.state_vars["ChgEff"]
 
         else: # discharge
             # maximum energy that can be output from the battery before reaching lower constraint
-            max_energy = (current_soe - self.state_vars["MinSOE_kWh"]) * self.state_vars["DischgEff"]
+            max_energy = (current_soe - min_soe) * self.state_vars["DischgEff"]
             pwr_cmd    = max(pwr_request, -1*self.state_vars["MaxDischargePwr_kW"])
             pwr_cmd    = max(-1 * max_energy / tResolution_hr, pwr_cmd)
             delta_energy = pwr_cmd * tResolution_hr / self.state_vars["DischgEff"]
@@ -809,6 +810,8 @@ class ESSResource(SundialResource):
         :return: profile - modified SundialResourceProfile.state_vars that does not violate any constraints
         """
         ind = int(ind)
+        max_soe = self.state_vars["MaxSOE_kWh"]*ESS_RESERVE_HIGH
+        min_soe = self.state_vars["MinSOE_kWh"]*ESS_RESERVE_LOW
 
         if profile["DemandForecast_kW"][ind] >= 0.0: # charge
             eff_factor = self.state_vars["ChgEff"]
@@ -821,9 +824,9 @@ class ESSResource(SundialResource):
             profile["DeltaEnergy_kWh"])
 
         cnt = 0
-        if max(energy) > float(self.state_vars["MaxSOE_kWh"])+0.001: # new command has violated an upper constraint
+        if max(energy) > float(max_soe)+0.001: # new command has violated an upper constraint
             # adjust power command downward by an amount equivalent to the SOE violation, after correcting for losses
-            test_val = profile["DemandForecast_kW"][ind]-(max(energy) - self.state_vars["MaxSOE_kWh"])/eff_factor
+            test_val = profile["DemandForecast_kW"][ind]-(max(energy) - max_soe)/eff_factor
             if (profile["DemandForecast_kW"][ind] > 0.0) & (test_val < 0.0):
                 # implies modified command will go from chg to discharge, so we need to update the impact on
                 # efficiency
@@ -833,9 +836,9 @@ class ESSResource(SundialResource):
             profile["DeltaEnergy_kWh"][ind] = profile["DemandForecast_kW"][ind] * eff_factor
             energy = numpy.cumsum(profile["DeltaEnergy_kWh"]) + [self.state_vars["SOE_kWh"]] * len(profile["DeltaEnergy_kWh"])
             cnt += 1
-        elif min(energy) < float(self.state_vars["MinSOE_kWh"])-0.001: # new command has violated a lower constraint
+        elif min(energy) < float(min_soe)-0.001: # new command has violated a lower constraint
             # adjust power command upward by amount equivalent to SOE violation, after correcting for losses
-            test_val = profile["DemandForecast_kW"][ind] + (self.state_vars["MinSOE_kWh"]-min(energy))/eff_factor
+            test_val = profile["DemandForecast_kW"][ind] + (min_soe-min(energy))/eff_factor
             if (profile["DemandForecast_kW"][ind] < 0.0) & (test_val > 0.0):
                 # implies modified command will go from dicharge to charge
                 test_val   = test_val*(eff_factor**2.0)
@@ -868,6 +871,9 @@ class ESSResource(SundialResource):
         :param profile: SundialResourceProfile.state_vars - a profile for which a constraint needs to be checked.
         :return: profile - modified SundialResourceProfile.state_vars that does not violate any constraints
         """
+        max_soe = self.state_vars["MaxSOE_kWh"]*ESS_RESERVE_HIGH
+        min_soe = self.state_vars["MinSOE_kWh"]*ESS_RESERVE_LOW
+
 
         if profile["DemandForecast_kW"][ind] >= 0.0: # charge
             eff_factor = self.state_vars["ChgEff"]
@@ -881,7 +887,7 @@ class ESSResource(SundialResource):
 
         #energy = numpy.cumsum(profile["DemandForecast_kW"])+[self.state_vars["SOE_kWh"]]*len(profile["DemandForecast_kW"])
 
-        if (max(energy) > self.state_vars["MaxSOE_kWh"]) | (min(energy)<self.state_vars["MinSOE_kWh"]):
+        if (max(energy) > max_soe) | (min(energy)<min_soe):
             for ii in range(len(profile["DemandForecast_kW"])):
                 if ii == 0:
                     prev_soe = self.state_vars["SOE_kWh"]
@@ -889,7 +895,7 @@ class ESSResource(SundialResource):
                     prev_soe = profile["EnergyAvailableForecast_kWh"][ii - 1]
                 profile["EnergyAvailableForecast_kWh"][ii],\
                 profile["DemandForecast_kW"][ii], \
-                profile["DeltaEnergy_kWh"][ii]    = self.update_soe(profile["DemandForecast_kW"][ii],prev_soe)
+                profile["DeltaEnergy_kWh"][ii]    = self.update_soe(profile["DemandForecast_kW"][ii],prev_soe, max_soe, min_soe)
         else:
             profile["EnergyAvailableForecast_kWh"] = energy
 
@@ -1028,7 +1034,7 @@ class SolarPlusStorageResource(SundialResource):
         self.update_required = 1  # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         # set up the specific set of objective functions to apply for the this resource type
-        self.obj_fcns = [DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=1000.0, threshold=0.0, tariff_key="solarPlusStorage_tariff")]
+        self.obj_fcns = [] #DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=1000.0, threshold=0.0, tariff_key="solarPlusStorage_tariff")]
 
     ############################
     def load_scenario(self):
@@ -1126,7 +1132,7 @@ def export_schedule(profile, timestamps, update=True):
     #    self.virtual_plants.append(SundialResourceProfile(virtual_plant))
 
     for virtual_plant in profile.virtual_plants:
-        export_schedule(virtual_plant, timestamps)
+        export_schedule(virtual_plant, timestamps, update=update)
 
     if update == True:
 	    profile.sundial_resources.schedule_vars["DemandForecast_kW"] = profile.state_vars["DemandForecast_kW"]
