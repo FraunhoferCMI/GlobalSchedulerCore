@@ -113,6 +113,7 @@ SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
 SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
 DURATION_1MIN_FORECAST = 5 # hrs
 
+ALIGN_SCHEDULES = True
 REGULATE_ESS_OUTPUT = True # True = Match system's output in real time to scheduled output using ESS; False = use scheduled ESS value regardless of divergence from forecast
 USE_FORECAST_VALUE = True
 IMPORT_CONSTRAINT = True    # fail safe to ensure that storage does not charge from the grid

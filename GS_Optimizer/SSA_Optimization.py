@@ -524,7 +524,7 @@ if __name__ == '__main__':
     except:
         load_resources = []
 
-    forecast_timestamps = [(gs_start_time +
+    forecast_timestamps = [(gs_start_time.replace(minute=0, second=0) +
                            timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%S") for t in range(0,
                                                                                               SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
                                                                                               SSA_SCHEDULE_RESOLUTION)]
@@ -595,6 +595,7 @@ if __name__ == '__main__':
     pv_resources.load_scenario(demand_forecast = pv_forecast,
                                pk_capacity = 1000.0,
                                t=forecast_timestamps)
+    print(pv_forecast)
 
     if load_resources != []:
         load_resources.load_scenario(demand_forecast = demand_forecast,
@@ -629,13 +630,25 @@ if __name__ == '__main__':
     toffset = 0
     nIterations = 1
     optimizer = SimulatedAnnealer()
+    last_forecast_start = datetime(1900, 1, 1, tzinfo=pytz.UTC)
 
     for ii in range(0,nIterations):
-        schedule_timestamps = [gs_start_time.replace(tzinfo=pytz.UTC) +
-                               timedelta(minutes=t+toffset) for t in range(0,
+        cur_time = gs_start_time.replace(tzinfo=pytz.UTC)+timedelta(minutes=toffset)
+        if ALIGN_SCHEDULES == True:
+            if sundial_resources.schedule_vars["schedule_kW"] == {}:
+                schedule_start_time = cur_time.replace(minute=0, second=0)
+            else:
+                schedule_start_time = cur_time.replace(minute=0, second=0) + timedelta(hours=1)
+
+        else:
+            schedule_start_time = cur_time
+        schedule_timestamps = [schedule_start_time +
+                               timedelta(minutes=t) for t in range(0,
                                                                    SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
                                                                    SSA_SCHEDULE_RESOLUTION)]
 
+        #pv_resources.state_vars["Pwr_kW"] = pv_forecast[0]
+        #pv_resources.state_vars["AvgPwr_kW"] = pv_forecast[0]
 
         #for ii in range(0,13):
         #    loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii]
@@ -648,8 +661,21 @@ if __name__ == '__main__':
         #    sundial_resources.interpolate_forecast(schedule_timestamps)
         #    optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps, tariffs)
         sundial_resources.interpolate_forecast(schedule_timestamps)
+        sundial_resources.interpolate_soe(schedule_timestamps, cur_time)
 
         if sundial_resources.state_vars["DemandForecast_kW"][0] != None:
+            if ALIGN_SCHEDULES == True:
+                forecast_start = schedule_timestamps[0]
+            else:
+                forecast_start = datetime.strptime(pv_resources.state_vars["OrigDemandForecast_t_str"][0],
+                                                   "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)
+
+            if forecast_start == last_forecast_start:
+                optimizer.persist_lowest_cost = 1
+            else:
+                optimizer.persist_lowest_cost = 0
+            last_forecast_start = forecast_start
+
             sundial_resources.cfg_cost(schedule_timestamps,
                                        system_tariff = system_tariff,
                                        solarPlusStorage_tariff = solarPlusStorage_tariff)
@@ -658,6 +684,6 @@ if __name__ == '__main__':
             #optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps)
         else:
             _log.info("No valid forecasts found - skipping")
-        optimizer.persist_lowest_cost = 1
 
-        toffset += 10
+
+        toffset += 45
