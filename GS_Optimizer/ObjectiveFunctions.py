@@ -191,6 +191,7 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
     def __init__(self, desc="", init_params=None, **kwargs):
         init_params = {'threshold': 250,
                        'cost_per_kW': 10,
+                       'safety_buffer': 0.0,
                        'tariff_key': 'tariffs'}
 
         ObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
@@ -227,7 +228,7 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
         #demand = numpy.array(profile)
 
         max_demand = max(profile["DemandForecast_kW"])
-        if max_demand > self.init_params["threshold"]: #self.threshold:
+        if max_demand > self.init_params["threshold"]*(1-self.init_params["safety_buffer"]): #self.threshold:
             cost = self.init_params["cost_per_kW"] * (max_demand - self.init_params["threshold"])
         else:
             cost = 0.0
@@ -336,3 +337,43 @@ class LoadShapeObjectiveFunction(ObjectiveFunction):
     ##############################################################################
     def get_obj_fcn_data(self):
         return self.init_params["cur_cost"][0].tolist()
+
+
+
+##############################################################################
+class BatteryLossModelObjectiveFunction(ObjectiveFunction):
+    ## place holder that corrects for efficiency as a function of battery chg / discharge rate
+    ## this might not make sense - it's more correct to address by actually calculating losses
+    ## but might have a speed impact. Numbers are made up at this point.
+
+    ##############################################################################
+    def __init__(self, desc="", init_params=None, **kwargs):
+        ObjectiveFunction.__init__(self, desc=desc, init_params={}, **kwargs)
+
+    ##############################################################################
+    def obj_fcn_cfg(self, **kwargs):
+        pass
+
+    ##############################################################################
+    def obj_fcn_cost(self, profile):
+        cost = 0.0
+
+        for ii in (0,len(profile["DemandForecast_kW"])-1):
+            if profile["DemandForecast_kW"][ii] > 0.0:
+                if profile["DemandForecast_kW"][ii] < 20.0:
+                    cost += profile["DemandForecast_kW"][ii] * 0.1
+                elif profile["DemandForecast_kW"][ii] < 50.0:
+                    cost += profile["DemandForecast_kW"][ii] * 0.05
+                elif profile["DemandForecast_kW"][ii] < 100.0:
+                    cost += profile["DemandForecast_kW"][ii] * 0.025
+                elif profile["DemandForecast_kW"][ii] < 200.0:
+                    cost += profile["DemandForecast_kW"][ii] * 0.015
+                elif profile["DemandForecast_kW"][ii] < 300.0:
+                    cost += profile["DemandForecast_kW"][ii] * 0.01
+                elif profile["DemandForecast_kW"][ii] >= 300.0:
+                    cost += profile["DemandForecast_kW"][ii] * 0.0
+        return cost
+
+    ##############################################################################
+    def get_obj_fcn_data(self):
+        pass

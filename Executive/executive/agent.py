@@ -73,8 +73,6 @@ import GeneratePriceMap
 _log = logging.getLogger("Executive")#__name__)
 __version__ = '1.0'
 
-
-
 default_units = {"setpoint":"kW",
                  "targetPwr_kW": "kW",
                  "curPwr_kW": "kW",
@@ -211,7 +209,8 @@ class ExecutiveAgent(Agent):
         self.update_endpt_cnt      = 0
         self.data_log_cnt          = 0
 
-        self.last_forecast_start   = datetime(1900,1,1)
+        self.last_forecast_start   = datetime(1900, 1, 1, tzinfo=pytz.UTC)
+
 
         self.init_tariffs()
 
@@ -620,9 +619,23 @@ class ExecutiveAgent(Agent):
             netDemandAvg_kW = self.system_resources.state_vars["AvgPwr_kW"]
 
             if USE_FORECAST_VALUE == True:
-                ii = self.find_current_timestamp_index()
-                targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ii]
-                expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][ii]
+                if ALIGN_SCHEDULES == True:
+                    cur_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0,tzinfo=pytz.utc)
+                    try:
+                        targetPwr_kW = self.sundial_resources.schedule_vars["schedule_kW"][cur_time]
+                        expectedPwr_kW = self.pv_resources.schedule_vars["schedule_kW"][cur_time]
+                        essTargetPwr_kW = self.ess_resources.schedule_vars["schedule_kW"][cur_time]
+                        self.system_resources.state_vars["TgtPwr_kW"] = targetPwr_kW
+                    except KeyError:
+                        _log.info("Error generating target command for time stamp "+str(cur_time))
+                        targetPwr_kW = 0
+                        expectedPwr_kW = 0
+                        essTargetPwr_kW = 0
+                else:
+                    ii = self.find_current_timestamp_index()
+                    targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ii]
+                    expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][ii]
+                    essTargetPwr_kW = self.ess_resources.schedule_vars["DemandForecast_kW"][ii]
             else:
                 ii = 0
                 cur_gs_time = get_gs_time(self.gs_start_time, timedelta(0))
@@ -637,6 +650,7 @@ class ExecutiveAgent(Agent):
                 _log.info(cur_gs_time.hour)
                 targetPwr_kW = self.pv_resources.state_vars["AvgPwr_kW"] + acc_load
                 expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][0]
+                essTargetPwr_kW = 0
 
             _log.debug("Regulator: Forecast solar power is " + str(expectedPwr_kW))
             _log.debug("Regulator: Scheduled power output is " + str(targetPwr_kW))
@@ -667,7 +681,7 @@ class ExecutiveAgent(Agent):
                                              max_discharge_kW)
 
             else:
-                setpoint = self.ess_resources.schedule_vars["DemandForecast_kW"][0]
+                setpoint = essTargetPwr_kW
 
 
             _log.debug("Regulator: setpoint = " + str(setpoint))
@@ -709,7 +723,7 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["netDemand_kW"]   = netDemand_kW
             self.optimizer_info["netDemandAvg_kW"] = netDemandAvg_kW
 
-            self.publish_ess_cmds(ii)
+            self.publish_ess_cmds()
 
     ##############################################################################
     def generate_schedule_timestamps(self, sim_time_corr = timedelta(seconds=0)):
@@ -719,8 +733,20 @@ class ExecutiveAgent(Agent):
         :return: schedule_timestamps - a list of datetimes, starting at the next schedule start, time step
         equal to SSA_SCHEDULE_RESOLUTION, and continuing until SSA_SCHEDULE_DURATION
         """
-        schedule_start_time = get_gs_time(self.gs_start_time,
-                                          sim_time_corr).replace(second = 0, microsecond=0)
+        if ALIGN_SCHEDULES == True:
+            if self.sundial_resources.schedule_vars["schedule_kW"] == {}:
+                # first time we call, generate a schedule for the current time period.
+                schedule_start_time = get_gs_time(self.gs_start_time,
+                                                  sim_time_corr).replace(minute = 0, second = 0, microsecond=0) + \
+                                      timedelta(hours=0)
+            else:
+                schedule_start_time = get_gs_time(self.gs_start_time,
+                                                  sim_time_corr).replace(minute = 0, second = 0, microsecond=0) + \
+                                      timedelta(hours=1)
+        else:
+            schedule_start_time = get_gs_time(self.gs_start_time,
+                                              sim_time_corr).replace(second = 0, microsecond=0)
+
 
         # generate the list of timestamps that will comprise the next forecast:
         schedule_timestamps = [schedule_start_time +
@@ -756,6 +782,9 @@ class ExecutiveAgent(Agent):
                                           update_forecasts=True)
             self.sundial_resources.interpolate_forecast(schedule_timestamps)
 
+            cur_time = datetime.utcnow().replace(microsecond=0, second=0, tzinfo=pytz.UTC)
+            self.sundial_resources.interpolate_soe(schedule_timestamps, cur_time)
+
             if self.sundial_resources.state_vars["DemandForecast_kW"][0] == None:
                 _log.info("Forecast(s) unavailable - Skipping optimization")
             else:
@@ -764,8 +793,11 @@ class ExecutiveAgent(Agent):
                 # todo - looks only at solar forecast to determine whether new forecast has arrived...should this
                 # todo - look at other forecasts also?
                 # fixme - this work around does not account for contingency if forecast or system state changes unexpectedly
-                forecast_start = datetime.strptime(self.pv_resources.state_vars["OrigDemandForecast_t_str"][0],
-                                                   "%Y-%m-%dT%H:%M:%S")
+                if ALIGN_SCHEDULES == True:
+                    forecast_start = schedule_timestamps[0]
+                else:
+                    forecast_start = datetime.strptime(self.pv_resources.state_vars["OrigDemandForecast_t_str"][0],
+                                                       "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)
 
                 if forecast_start == self.last_forecast_start:
                     self.optimizer.persist_lowest_cost = 1
@@ -940,7 +972,7 @@ class ExecutiveAgent(Agent):
 
 
     ##############################################################################
-    def publish_ess_cmds(self, ii):
+    def publish_ess_cmds(self):
         """
         prints status to log file and to database
         :return:

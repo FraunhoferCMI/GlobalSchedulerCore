@@ -104,7 +104,7 @@ UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls U
 
 #FIXME - Placeholder!
 MODBUS_SCRAPE_INTERVAL  = 1 # period in seconds for modbus device to post on the IEB bus
-MODBUS_AVERAGING_WINDOW = 180 # period in seconds over which to average instantaneous readings
+MODBUS_AVERAGING_WINDOW = 5*60 # period in seconds over which to average instantaneous readings
 MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
 MODBUS_WRITE_ATTEMPTS  = 5  # number of modbus reads before a write error is thrown
 
@@ -113,6 +113,7 @@ SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
 SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
 DURATION_1MIN_FORECAST = 5 # hrs
 
+ALIGN_SCHEDULES = True
 REGULATE_ESS_OUTPUT = True # True = Match system's output in real time to scheduled output using ESS; False = use scheduled ESS value regardless of divergence from forecast
 USE_FORECAST_VALUE = True
 IMPORT_CONSTRAINT = False    # fail safe to ensure that storage does not charge from the grid
@@ -146,8 +147,12 @@ SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0)
 
 DEMAND_CHARGE_THRESHOLD = 500 #250
 UPDATE_THRESHOLD = False
-ESS_MAX = 0.95
-ESS_MIN = 0.15
+
+# FIXME - ESS_RESERVE_xx should be set in absoluate terms, not relative terms - won't work if ESS_MIN is 0
+ESS_MAX = 0.98
+ESS_MIN = 0.05
+ESS_RESERVE_HIGH = 0.95  # relative to ESS_MAX
+ESS_RESERVE_LOW  = 1.5   # relative to ESS_MIN
 
 # SCHEDULES
 if USE_SIM == 1:   # schedules for simulated testing

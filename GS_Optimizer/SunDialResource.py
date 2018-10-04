@@ -69,6 +69,8 @@ forecast_keys = ["DemandForecast_kW",
                  "LoadShiftOptions_t",
                  "LoadShiftOptions_t_str"]
 
+REPLACE_T0_FORECAST = False
+
 ############################
 class SundialResourceProfile():
     """
@@ -366,6 +368,8 @@ class SundialResource():
                       "MinSOE_kWh": 0.0,
                       "SOE_kWh": 0.0,
                       "Pwr_kW": 0.0,
+                      "TgtPwr_kW": 0.0,
+                      "StartingSOE_kWh": 0.0,
                       "AvgPwr_kW": 0.0,
                       "Nameplate": 0.0}
         return state_vars
@@ -404,6 +408,7 @@ class SundialResource():
                                        timedelta(minutes=t) for t in range(0,
                                                                            SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
                                                                            SSA_SCHEDULE_RESOLUTION)],
+                         "schedule_kW": {},
                          "total_cost": 0.0}
         return schedule_vars
 
@@ -466,6 +471,22 @@ class SundialResource():
                                     sim_offset=self.sim_offset,
                                     forecast = self.state_vars)
 
+    ##############################################################################
+    def interpolate_soe(self, schedule_timestamps, cur_time):
+        """
+        propagates data from children to non-terminal parent nodes in the SundialResource tree
+        :return: None
+        """
+        if self.virtual_plants != []:  # not a terminal node
+            # initialize all state_vars
+            self.state_vars["StartingSOE_kWh"] = 0.0
+
+            for virtual_plant in self.virtual_plants:
+                # retrieve data from child nodes and sum
+                virtual_plant.interpolate_soe(schedule_timestamps, cur_time)
+                self.state_vars["StartingSOE_kWh"] += virtual_plant.state_vars["StartingSOE_kWh"]
+        else:
+            self.state_vars["StartingSOE_kWh"] = 0.0
 
 
     ##############################################################################
@@ -714,7 +735,8 @@ class ESSResource(SundialResource):
                                         "Nameplate"])
 
         # set up the specific set of objective functions to apply for the system
-        self.obj_fcns = [StoredEnergyValueObjectiveFunction(desc="StorageValue")]
+        self.obj_fcns = [StoredEnergyValueObjectiveFunction(desc="StorageValue")]#,
+                         #BatteryLossModelObjectiveFunction(desc="LossModel")]
 
     ##############################################################################
     def init_state_vars(self):
@@ -751,7 +773,34 @@ class ESSResource(SundialResource):
         #    print(k+": "+str(v))
 
     ##############################################################################
-    def update_soe(self, pwr_request, current_soe):
+    def interpolate_soe(self, schedule_timestamps, cur_time):
+
+        if self.virtual_plants != []:  # not a terminal node
+            # initialize all state_vars
+            self.state_vars["StartingSOE_kWh"] = 0.0
+
+            for virtual_plant in self.virtual_plants:
+                # retrieve data from child nodes and sum
+                virtual_plant.interpolate_soe(schedule_timestamps, cur_time)
+                self.state_vars["StartingSOE_kWh"] += virtual_plant.state_vars["StartingSOE_kWh"]
+        else:
+            time_elapsed = float((schedule_timestamps[0] - cur_time).total_seconds())  # seconds since the first forecast ts
+            # fraction of an hour before the next schedule starts
+            scale_factor = time_elapsed / float(MINUTES_PER_HR * SEC_PER_MIN)
+            eff_factor = self.get_eff_factor(self.state_vars["TgtPwr_kW"])
+
+            self.state_vars["StartingSOE_kWh"] = min(max(self.state_vars["SOE_kWh"] +
+                                                         self.state_vars["TgtPwr_kW"]*scale_factor*eff_factor,
+                                                         self.state_vars["MinSOE_kWh"]),
+                                                     self.state_vars["MaxSOE_kWh"])
+            _log.info("Starting SOE is "+str(self.state_vars["StartingSOE_kWh"]))
+            _log.info("Current SOE is "+str(self.state_vars["SOE_kWh"]))
+            _log.info(cur_time)
+            _log.info(scale_factor)
+
+
+    ##############################################################################
+    def update_soe(self, pwr_request, current_soe, max_soe, min_soe):
         """
         Given a power request and current state of energy, it checks ess constraints and adjusts the command
         accordingly.
@@ -767,20 +816,33 @@ class ESSResource(SundialResource):
 
         if pwr_request > 0: # charge
             # maximum energy that can be input to the battery before reaching upper constraint
-            max_energy = (self.state_vars["MaxSOE_kWh"] - current_soe) / self.state_vars["ChgEff"]
+            max_energy = (max_soe - current_soe) / self.state_vars["ChgEff"]
             pwr_cmd    = min(pwr_request, self.state_vars["MaxChargePwr_kW"])
             pwr_cmd    = min(max_energy/tResolution_hr, pwr_cmd)
             delta_energy = pwr_cmd * tResolution_hr * self.state_vars["ChgEff"]
 
         else: # discharge
             # maximum energy that can be output from the battery before reaching lower constraint
-            max_energy = (current_soe - self.state_vars["MinSOE_kWh"]) * self.state_vars["DischgEff"]
+            max_energy = (current_soe - min_soe) * self.state_vars["DischgEff"]
             pwr_cmd    = max(pwr_request, -1*self.state_vars["MaxDischargePwr_kW"])
             pwr_cmd    = max(-1 * max_energy / tResolution_hr, pwr_cmd)
             delta_energy = pwr_cmd * tResolution_hr / self.state_vars["DischgEff"]
 
         new_soe = current_soe + delta_energy
         return new_soe, pwr_cmd, delta_energy
+
+    ##############################################################################
+    def get_eff_factor(self, cur_pwr):
+        """
+        efficiency factor is defined as the scale factor needed to translate battery power command
+        to a change in battery state of charge
+        """
+
+        if cur_pwr >= 0.0: # charge
+            return self.state_vars["ChgEff"]
+        else:
+            return (1.0/self.state_vars["DischgEff"])
+
 
 
     ##############################################################################
@@ -809,21 +871,19 @@ class ESSResource(SundialResource):
         :return: profile - modified SundialResourceProfile.state_vars that does not violate any constraints
         """
         ind = int(ind)
+        max_soe = self.state_vars["MaxSOE_kWh"]*ESS_RESERVE_HIGH
+        min_soe = self.state_vars["MinSOE_kWh"]*ESS_RESERVE_LOW
 
-        if profile["DemandForecast_kW"][ind] >= 0.0: # charge
-            eff_factor = self.state_vars["ChgEff"]
-        else:
-            eff_factor = 1.0/self.state_vars["DischgEff"]
-
+        eff_factor = self.get_eff_factor(profile["DemandForecast_kW"][ind])
         profile["DeltaEnergy_kWh"][ind] = profile["DemandForecast_kW"][ind] * eff_factor
 
-        energy = numpy.cumsum(profile["DeltaEnergy_kWh"]) + [self.state_vars["SOE_kWh"]] * len(
+        energy = numpy.cumsum(profile["DeltaEnergy_kWh"]) + [self.state_vars["StartingSOE_kWh"]] * len(
             profile["DeltaEnergy_kWh"])
 
         cnt = 0
-        if max(energy) > float(self.state_vars["MaxSOE_kWh"])+0.001: # new command has violated an upper constraint
+        if max(energy) > float(max_soe)+0.001: # new command has violated an upper constraint
             # adjust power command downward by an amount equivalent to the SOE violation, after correcting for losses
-            test_val = profile["DemandForecast_kW"][ind]-(max(energy) - self.state_vars["MaxSOE_kWh"])/eff_factor
+            test_val = profile["DemandForecast_kW"][ind]-(max(energy) - max_soe)/eff_factor
             if (profile["DemandForecast_kW"][ind] > 0.0) & (test_val < 0.0):
                 # implies modified command will go from chg to discharge, so we need to update the impact on
                 # efficiency
@@ -831,18 +891,18 @@ class ESSResource(SundialResource):
                 eff_factor = 1.0 / self.state_vars["DischgEff"]
             profile["DemandForecast_kW"][ind] = test_val
             profile["DeltaEnergy_kWh"][ind] = profile["DemandForecast_kW"][ind] * eff_factor
-            energy = numpy.cumsum(profile["DeltaEnergy_kWh"]) + [self.state_vars["SOE_kWh"]] * len(profile["DeltaEnergy_kWh"])
+            energy = numpy.cumsum(profile["DeltaEnergy_kWh"]) + [self.state_vars["StartingSOE_kWh"]] * len(profile["DeltaEnergy_kWh"])
             cnt += 1
-        elif min(energy) < float(self.state_vars["MinSOE_kWh"])-0.001: # new command has violated a lower constraint
+        elif min(energy) < float(min_soe)-0.001: # new command has violated a lower constraint
             # adjust power command upward by amount equivalent to SOE violation, after correcting for losses
-            test_val = profile["DemandForecast_kW"][ind] + (self.state_vars["MinSOE_kWh"]-min(energy))/eff_factor
+            test_val = profile["DemandForecast_kW"][ind] + (min_soe-min(energy))/eff_factor
             if (profile["DemandForecast_kW"][ind] < 0.0) & (test_val > 0.0):
                 # implies modified command will go from dicharge to charge
                 test_val   = test_val*(eff_factor**2.0)
                 eff_factor = self.state_vars["ChgEff"]
             profile["DemandForecast_kW"][ind] = test_val
             profile["DeltaEnergy_kWh"][ind] = profile["DemandForecast_kW"][ind] * eff_factor
-            energy = numpy.cumsum(profile["DeltaEnergy_kWh"]) + [self.state_vars["SOE_kWh"]] * len(profile["DeltaEnergy_kWh"])
+            energy = numpy.cumsum(profile["DeltaEnergy_kWh"]) + [self.state_vars["StartingSOE_kWh"]] * len(profile["DeltaEnergy_kWh"])
             cnt += 1
 
         if cnt == 2:
@@ -868,28 +928,27 @@ class ESSResource(SundialResource):
         :param profile: SundialResourceProfile.state_vars - a profile for which a constraint needs to be checked.
         :return: profile - modified SundialResourceProfile.state_vars that does not violate any constraints
         """
+        max_soe = self.state_vars["MaxSOE_kWh"]*ESS_RESERVE_HIGH
+        min_soe = self.state_vars["MinSOE_kWh"]*ESS_RESERVE_LOW
 
-        if profile["DemandForecast_kW"][ind] >= 0.0: # charge
-            eff_factor = self.state_vars["ChgEff"]
-        else:
-            eff_factor = 1.0/self.state_vars["DischgEff"]
 
+        eff_factor = self.get_eff_factor(profile["DemandForecast_kW"][ind])
         profile["DeltaEnergy_kWh"][ind] = profile["DemandForecast_kW"][ind] * eff_factor
 
-        energy = numpy.cumsum(profile["DeltaEnergy_kWh"]) + [self.state_vars["SOE_kWh"]] * len(
+        energy = numpy.cumsum(profile["DeltaEnergy_kWh"]) + [self.state_vars["StartingSOE_kWh"]] * len(
             profile["DeltaEnergy_kWh"])
 
         #energy = numpy.cumsum(profile["DemandForecast_kW"])+[self.state_vars["SOE_kWh"]]*len(profile["DemandForecast_kW"])
 
-        if (max(energy) > self.state_vars["MaxSOE_kWh"]) | (min(energy)<self.state_vars["MinSOE_kWh"]):
+        if (max(energy) > max_soe) | (min(energy)<min_soe):
             for ii in range(len(profile["DemandForecast_kW"])):
                 if ii == 0:
-                    prev_soe = self.state_vars["SOE_kWh"]
+                    prev_soe = self.state_vars["StartingSOE_kWh"]
                 else:
                     prev_soe = profile["EnergyAvailableForecast_kWh"][ii - 1]
                 profile["EnergyAvailableForecast_kWh"][ii],\
                 profile["DemandForecast_kW"][ii], \
-                profile["DeltaEnergy_kWh"][ii]    = self.update_soe(profile["DemandForecast_kW"][ii],prev_soe)
+                profile["DeltaEnergy_kWh"][ii]    = self.update_soe(profile["DemandForecast_kW"][ii],prev_soe, max_soe, min_soe)
         else:
             profile["EnergyAvailableForecast_kWh"] = energy
 
@@ -912,8 +971,9 @@ class PVResource(SundialResource):
         :return:
         """
         interpolated_demand = SundialResource.interpolate_values(self, schedule_timestamps, init_demand)
-        if interpolated_demand[0] != None:
-            interpolated_demand[0] = self.state_vars["AvgPwr_kW"]
+        if REPLACE_T0_FORECAST == True:
+            if interpolated_demand[0] != None:
+                interpolated_demand[0] = self.state_vars["AvgPwr_kW"]
         return interpolated_demand
 
 
@@ -1041,7 +1101,7 @@ class SolarPlusStorageResource(SundialResource):
         """
         self.update_sundial_resource()
 
-
+import pprint
 
 ##############################################################################
 class SundialResource_to_SiteManager_lookup_table():
@@ -1126,17 +1186,24 @@ def export_schedule(profile, timestamps, update=True):
     #    self.virtual_plants.append(SundialResourceProfile(virtual_plant))
 
     for virtual_plant in profile.virtual_plants:
-        export_schedule(virtual_plant, timestamps)
+        export_schedule(virtual_plant, timestamps, update=update)
 
     if update == True:
-	    profile.sundial_resources.schedule_vars["DemandForecast_kW"] = profile.state_vars["DemandForecast_kW"]
-	    profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"] = profile.state_vars["EnergyAvailableForecast_kWh"]
-	    profile.sundial_resources.schedule_vars["DeltaEnergy_kWh"] = profile.state_vars["DeltaEnergy_kWh"]
-	    profile.sundial_resources.schedule_vars["timestamp"] = copy.deepcopy(timestamps)
-	    profile.sundial_resources.schedule_vars["total_cost"] = profile.total_cost
+        profile.sundial_resources.schedule_vars["DemandForecast_kW"] = profile.state_vars["DemandForecast_kW"]
+        profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"] = profile.state_vars["EnergyAvailableForecast_kWh"]
+        profile.sundial_resources.schedule_vars["DeltaEnergy_kWh"] = profile.state_vars["DeltaEnergy_kWh"]
+        profile.sundial_resources.schedule_vars["timestamp"] = copy.deepcopy(timestamps)
+        profile.sundial_resources.schedule_vars["total_cost"] = profile.total_cost
 
-	    for obj_fcn in profile.sundial_resources.obj_fcns:
-        	profile.sundial_resources.schedule_vars[obj_fcn.desc] = obj_fcn.get_obj_fcn_data()
+        for ii in range(0,len(profile.sundial_resources.schedule_vars["timestamp"])):
+            profile.sundial_resources.schedule_vars["schedule_kW"].update({
+                profile.sundial_resources.schedule_vars["timestamp"][ii]:
+                    profile.sundial_resources.schedule_vars["DemandForecast_kW"][ii]})
+        #pprint.pprint(profile.sundial_resources.schedule_vars["schedule_kW"])
+
+
+        for obj_fcn in profile.sundial_resources.obj_fcns:
+            profile.sundial_resources.schedule_vars[obj_fcn.desc] = obj_fcn.get_obj_fcn_data()
 
     demand_df = pandas.DataFrame(data=[profile.sundial_resources.schedule_vars["DemandForecast_kW"],
                                        profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"]]).transpose()
