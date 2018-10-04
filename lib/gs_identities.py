@@ -104,7 +104,7 @@ UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls U
 
 #FIXME - Placeholder!
 MODBUS_SCRAPE_INTERVAL  = 5 # period in seconds for modbus device to post on the IEB bus
-MODBUS_AVERAGING_WINDOW = 180 # period in seconds over which to average instantaneous readings
+MODBUS_AVERAGING_WINDOW = 5*60 # period in seconds over which to average instantaneous readings
 MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
 MODBUS_WRITE_ATTEMPTS  = 5  # number of modbus reads before a write error is thrown
 
@@ -123,7 +123,7 @@ CPR_1M_TIMEOUT = 600         #sets the timeout for minute forecast data requests
 # For configuring w/ simulated data
 USE_SOLAR_SIM  = 1
 USE_DEMAND_SIM = 1
-USE_SCALED_LOAD = False
+USE_SCALED_LOAD = True
 
 SIM_SCENARIO   = 1
 SIM_HRS_PER_HR = 1 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
@@ -147,8 +147,12 @@ SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0)
 
 DEMAND_CHARGE_THRESHOLD = 0 #250
 UPDATE_THRESHOLD = False
-ESS_MAX = 0.95
-ESS_MIN = 0.15
+
+# FIXME - ESS_RESERVE_xx should be set in absoluate terms, not relative terms - won't work if ESS_MIN is 0
+ESS_MAX = 0.98
+ESS_MIN = 0.05
+ESS_RESERVE_HIGH = 0.95  # relative to ESS_MAX
+ESS_RESERVE_LOW  = 1.5   # relative to ESS_MIN
 
 # SCHEDULES
 if USE_SIM == 1:   # schedules for simulated testing
