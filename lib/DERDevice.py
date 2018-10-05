@@ -1295,12 +1295,12 @@ class ShirleySite(DERSite, DERModbusDevice):
 
 
         # set ramp limit to 100% per second
-        self.pwr_ctrl_cmd.data_dict.update({"RampLimit_pct_cmd": 100.0})
+        self.pwr_ctrl_cmd.data_dict.update({"RampLimit_pct_cmd": 50.0})
         self.set_point("RealPwrCtrl", "RampLimit_pct", sitemgr)
         # make sure that the commmand has been written.
 
         # set ramp limit to 100% per second
-        self.q_ctrl_cmd.data_dict.update({"QRampLimit_pct_cmd": 100.0})
+        self.q_ctrl_cmd.data_dict.update({"QRampLimit_pct_cmd": 50.0})
         self.set_point("QModeCtrl", "QRampLimit_pct", sitemgr)
         # make sure that the commmand has been written.
 
