@@ -51,8 +51,6 @@ weatherStation.base_met.TmpAmb,ShirleySouth,EnvStatus,TmpAmb,,
 weatherStation.base_met.WndSpd,ShirleySouth,EnvStatus,WndSpd,,
 weatherStation.base_met.WndDir,ShirleySouth,EnvStatus,WndDir,,
 weatherStation.CommStatus.St,ShirleySouth,HealthStatus,CommsStatusWeather,,
-weatherStation.irradiance.GHI,ShirleySouth,EnvStatus,GHI,,
-weatherStation.irradiance.POAI,ShirleySouth,EnvStatus,POAI,,
 weatherStation.temp.TmpBOM,ShirleySouth,EnvStatus,Tmp_BOM1,,
 weatherStation.temp.TmpBOM,ShirleySouth,EnvStatus,Tmp_BOM2,,
 ess.tesla_meter.RealEnergyExported,ShirleySouth-ESSPlant-ESS1,OpStatus,kWhExp,,kWh
