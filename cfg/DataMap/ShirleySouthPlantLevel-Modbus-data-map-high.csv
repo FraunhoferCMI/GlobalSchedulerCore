@@ -5,3 +5,4 @@ ess_meter.meter.W,ShirleySouth-ESSPlant-ESS1,OpStatus,Pwr_kW,Y,kW
 inv1.pwr_ctrl.Real_Power_Setpoint,ShirleySouth-PVPlant-Inverter1,RealPwrCtrl,SetPoint,Y,kW
 inv1.solectria_meter.Real_AC_Power_Output,ShirleySouth-PVPlant-Inverter1,OpStatus,Pwr_kW,Y,kW
 pcc_meter.meter.W,ShirleySouth,OpStatus,Pwr_kW,Y,kW
+weatherStation.irradiance.GHI,ShirleySouth,EnvStatus,GHI,,

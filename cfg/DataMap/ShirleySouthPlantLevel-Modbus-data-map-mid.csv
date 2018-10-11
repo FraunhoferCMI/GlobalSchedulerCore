@@ -1,4 +1,5 @@
 ESS.CommStatus.St,ShirleySouth-ESSPlant-ESS1,HealthStatus,CommsStatus,,
+weatherStation.irradiance.POAI,ShirleySouth,EnvStatus,POAI,,
 ess.tesla_alarms.Alarm_LossBattMeter,ShirleySouth-ESSPlant-ESS1,HealthStatus,Alarm_Meter,,
 ess.tesla_alarms.Alarm_MainOpen,ShirleySouth-ESSPlant-ESS1,HealthStatus,Alarm_MainBreaker,,
 ess.tesla_alarms.Alarm_NumBlockCommFail,ShirleySouth-ESSPlant-ESS1,HealthStatus,Alarm_NumCommBlockFail,,
@@ -34,6 +35,7 @@ inv1.smartGrid_ctrl.Watts_Reference,ShirleySouth-PVPlant,ModeStatus,Watts_Refere
 inv1.solectria_meter.L1-to-L2_AC_Voltage,ShirleySouth-PVPlant-Inverter1,OpStatus,V_L1_L2,Y,V
 inv1.solectria_meter.L1-to-L3_AC_Voltage,ShirleySouth-PVPlant-Inverter1,OpStatus,V_L1_L3,Y,V
 inv1.solectria_meter.L2-to-L3_AC_Voltage,ShirleySouth-PVPlant-Inverter1,OpStatus,V_L2_L3,Y,V
+inv1.solectria_meter.Reactive_AC_Power_Output,ShirleySouth-PVPlant-Inverter1,OpStatus,VAr,Y,VAr
 inv1_meter.CommStatus.St,ShirleySouth-PVPlant-Inverter1,HealthStatus,CommsStatusMeter,,
 pcc_meter.CommStatus.St,ShirleySouth,HealthStatus,CommsStatusMeter,,
 pcc_meter.meter.Evt,ShirleySouth,HealthStatus,MeterEvt,,
