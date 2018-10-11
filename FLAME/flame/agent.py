@@ -128,6 +128,8 @@ class FLAMECommsAgent(Agent):
             "load_option_select_topic": "devices/flame/load_shift_select/all",
             "load_report_topic": "datalogger/flame/load_report",
             "current_load_topic": "devices/flame/load_report/all",
+            "facility_load_report_topic": "datalogger/flame/facility",
+            #"current_load_topic": "datalogger/flame/load_report/all",
             "DEFAULT_HEARTBEAT_PERIOD": 5,
             "DEFAULT_MESSAGE": 'FLAME_COMMS_MSG',
             "DEFAULT_AGENTID": "FLAME_COMMS_AGENT",
@@ -154,8 +156,10 @@ class FLAMECommsAgent(Agent):
 
         _log.info("Web Socket INITIALIZED")
 
-        self.cur_load = {"Load": -1,
-                         "Time": None}
+        self.cur_load = {"load": -1,
+                         "time": None}
+
+        self.load_report = None
 
         ##############################################################################
     def configure(self, config_name, action, contents):
@@ -187,7 +191,8 @@ class FLAMECommsAgent(Agent):
             _log.info("GS STart time is " + str(self.gs_start_time))
 
         self.initialization_complete = 1
-        self.get_load_report()   # do this first - pre-load with values for other fcns to reference
+        #self.get_load_report()   # do this first - pre-load with values for other fcns to reference
+        self.get_hi_res_load_report()
         self.query_baseline()
         #self.query_loadshift()
         #self.request_status()
@@ -275,13 +280,13 @@ class FLAMECommsAgent(Agent):
             # message = bl.forecast    # call to demand forecast object class thingie
             # message = self.baseline_msg.process()    # call to demand forecast object class thingie
             comm_status = 1 # were there errors?
-
-            _log.info(self.cur_load["Time"])
+            _log.info(self.cur_load["time"])
             _log.info(forecast.forecast_values["Time"][0])
 
-            if self.cur_load["Time"] == forecast.forecast_values["Time"][0]:
-                _log.info("Replacing forecast load = "+str(forecast.forecast_values["Forecast"][0])+" with "+ str(self.cur_load["Load"]))
-                forecast.forecast_values["Forecast"][0] = self.cur_load["Load"]
+            if (datetime.strptime(self.cur_load["time"], "%Y-%m-%dT%H:%M:%S") >=
+                datetime.strptime(forecast.forecast_values["Time"][0], "%Y-%m-%dT%H:%M:%S")):
+                _log.info("Replacing forecast load = "+str(forecast.forecast_values["Forecast"][0])+" with "+ str(self.cur_load["load"]))
+                forecast.forecast_values["Forecast"][0] = self.cur_load["load"]
 
             publish_data(self,
                          "flame/forecast",
@@ -367,7 +372,7 @@ class FLAMECommsAgent(Agent):
             _log.info("initialization incomplete!!")
 
     ##############################################################################
-    @Core.periodic(period=DEMAND_REPORT_SCHEDULE)
+    #@Core.periodic(period=DEMAND_REPORT_SCHEDULE)
     def get_load_report(self):
         '''
         Request standardized Load Report from FLAME server.
@@ -456,11 +461,11 @@ class FLAMECommsAgent(Agent):
                 _log.info(msg)
 
                 if USE_SCALED_LOAD == True:
-                    self.cur_load.update({"Load": float(lr.loadSchedule_scaled['value'][ind]),
-                                          "Time": lr.loadSchedule_scaled.index[ind]})
+                    self.cur_load.update({"load": float(lr.loadSchedule_scaled['value'][ind]),
+                                          "time": lr.loadSchedule_scaled.index[ind]})
                 else:
-                    self.cur_load.update({"Load": float(lr.loadSchedule['value'][ind]),
-                                          "Time": lr.loadSchedule.index[ind]})
+                    self.cur_load.update({"load": float(lr.loadSchedule['value'][ind]),
+                                          "time": lr.loadSchedule.index[ind]})
 
                 self.vip.pubsub.publish(
                     peer="pubsub",
@@ -474,6 +479,155 @@ class FLAMECommsAgent(Agent):
             ws.close()
 
         return None
+
+    ##############################################################################
+    @Core.periodic(period=HI_RES_DEMAND_REPORT_SCHEDULE)
+    def get_hi_res_load_report(self):
+        '''
+        Request high resolution Load Report from FLAME server.
+        '''
+        # determine report start time
+        #FIXME - should use get_schedule()
+
+        if self.initialization_complete == 1:
+            current_time = datetime.now(pytz.timezone('US/Eastern')).replace(microsecond=0, second=0)
+            utc_now_str = current_time.astimezone(pytz.timezone('UTC')).strftime("%Y-%m-%dT%H:%M:%S")
+            time_delta = timedelta(minutes=HI_RES_DEMAND_REPORT_DURATION)
+            start_time = current_time - time_delta
+            dstart = start_time.strftime("%Y-%m-%dT%H:%M:%S")
+            _log.info("requesting load report ending at time "+dstart)
+            duration = format_timeperiod(HI_RES_DEMAND_REPORT_DURATION)
+            sampleInterval = format_timeperiod(HI_RES_DEMAND_REPORT_RESOLUTION)
+
+            loadReport_kwargs = {
+                "dstart": dstart, # start time for report
+                "sampleInterval": sampleInterval, # sample interval
+                "duration": duration, # "PT" + str(DEMAND_REPORT_DURATION) + "H"            # duration of request
+                "facilities": self._config['facilities']
+            }
+
+            ws = create_connection(ws_url, sslopt=sslopt)
+            lr = HiResLoadReport(websocket=ws, **loadReport_kwargs)
+            lr.process()
+
+            #print(lr.loadSchedule)
+            if (1): #try:
+                # Generate load reports for the individual facilities
+                for yy in range(0, len(lr.loadSchedules)):
+                    #_log.info("length of ls is "+str(len(lr.loadSchedules[yy])))
+                    for xx in range(0, len(lr.loadSchedules[yy])):
+                        msg = {"Load": {"Readings": [lr.loadSchedules[yy].index[xx],
+                                                 float(lr.loadSchedules[yy]["value"][xx])],
+                                    "Units": "kW",
+                                    "tz": "UTC",
+                                    "data_type": "float"}}
+                        #_log.info(msg)
+                        self.vip.pubsub.publish(
+                            peer="pubsub",
+                            topic=self._config['facility_load_report_topic']+str(yy+1),
+                            headers={},
+                            message=msg)
+
+                    for xx in range(0, len(lr.loadSchedules_scaled[yy])):
+                        msg = {"ScaledLoad": {"Readings": [lr.loadSchedules_scaled[yy].index[xx],
+                                                           float(lr.loadSchedules_scaled[yy]["value"][xx])],
+                                        "Units": "kW",
+                                        "tz": "UTC",
+                                        "data_type": "float"}}
+
+                        #_log.info(msg)
+                        self.vip.pubsub.publish(
+                            peer="pubsub",
+                            topic=self._config['facility_load_report_topic']+str(yy+1),
+                            headers={},
+                            message=msg)
+
+                # now generate a load report for the aggregate of all facilities
+                for xx in range(0, len(lr.loadSchedule_scaled)):
+                    msg = {"ScaledLoad": {"Readings": [lr.loadSchedule_scaled.index[xx],
+                                                       float(lr.loadSchedule_scaled["value"][xx])],
+                                    "Units": "kW",
+                                    "tz": "UTC",
+                                    "data_type": "float"}}
+                    self.vip.pubsub.publish(
+                        peer="pubsub",
+                        topic=self._config['load_report_topic'],
+                        headers={},
+                        message=msg)
+
+                for xx in range(0, len(lr.loadSchedule)):
+                    msg = {"Load": {"Readings": [lr.loadSchedule.index[xx],
+                                                 float(lr.loadSchedule["value"][xx])],
+                                    "Units": "kW",
+                                    "tz": "UTC",
+                                    "data_type": "float"}}
+                    self.vip.pubsub.publish(
+                        peer="pubsub",
+                        topic=self._config['load_report_topic'],
+                        headers={},
+                        message=msg)
+
+                # Now get a predicted value for the load at t=now
+                # for right now, this is just using a rolling average of the last 15 minutes of good data
+                # but this could be modified to do something more sophisticated (e.g., looking at upcoming schedule
+                # changes)
+                if USE_SCALED_LOAD == True:
+                    tmp = lr.loadSchedule_scaled
+                    tmp.index = pd.to_datetime(tmp.index,
+                                               format="%Y-%m-%dT%H:%M:%S")
+
+                    if self.load_report is None:
+                        self.load_report = tmp
+                    else:
+                        self.load_report = tmp.combine_first(self.load_report)
+                else:
+                    tmp = lr.loadSchedule
+                    tmp.index = pd.to_datetime(tmp.index,
+                                               format="%Y-%m-%dT%H:%M:%S")
+                    if self.load_report is None:
+                        self.load_report = tmp
+                    else:
+                        self.load_report = tmp.combine_first(self.load_report)
+
+
+                most_recent_ts = max(self.load_report.index)
+                last_15_min = self.load_report[
+                    #self.load_report.index > self.load_report.index[most_recent_ts] - timedelta(minutes=15)]
+                    self.load_report.index > most_recent_ts - timedelta(minutes=15)]
+                _log.info("last 15 minutes load report is:")
+                _log.info(last_15_min)
+                #print(last_15_min.mean())
+
+                cur_predicted_value = last_15_min.mean().value
+                _log.info(cur_predicted_value)
+                #_log.info(last_15_min.index[most_recent_ts].strftime('%Y-%m-%dT%H:%M:%S'))
+                _log.info(most_recent_ts)
+                self.cur_load.update({"load": cur_predicted_value,
+                                      "time": last_15_min.index[0].strftime('%Y-%m-%dT%H:%M:%S')})
+
+
+                msg = [self.cur_load,
+                       {'load': {"units": 'kW',
+                                 "tz": "UTC",
+                                 "data_type": "float"},
+                        'time': {"units": "datetime",
+                                 "tz": "UTC",
+                                 "data_type": "datetime"}}]
+                _log.info(msg)
+                self.vip.pubsub.publish(
+                    peer="pubsub",
+                    topic=self._config["current_load_topic"],
+                    headers={},
+                    message=msg)
+
+
+            else: #except AttributeError:
+                _log.warn('Response requested not available')
+            ws.close()
+
+        return None
+
+
 
 def main(argv=sys.argv):
     '''Main method called by the platform.'''
