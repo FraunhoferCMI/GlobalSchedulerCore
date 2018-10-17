@@ -149,7 +149,7 @@ DEMAND_FILE_TIME_RESOLUTION_MIN = DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN #1
 
 SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0) + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
 
-DEMAND_CHARGE_THRESHOLD = 500 #250
+DEMAND_CHARGE_THRESHOLD = 300 #250
 UPDATE_THRESHOLD = False
 
 # FIXME - ESS_RESERVE_xx should be set in absoluate terms, not relative terms - won't work if ESS_MIN is 0
@@ -185,4 +185,4 @@ else:   # schedules associated with live testing
 
     HI_RES_DEMAND_REPORT_DURATION   = 60 # minutes
     HI_RES_DEMAND_REPORT_RESOLUTION = 1 # minute
-    HI_RES_DEMAND_REPORT_SCHEDULE   = 2*60 # seconds
+    HI_RES_DEMAND_REPORT_SCHEDULE   = 5*60 # seconds

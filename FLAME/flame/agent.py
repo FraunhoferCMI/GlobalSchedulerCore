@@ -83,7 +83,7 @@ MINUTES_PER_HR = 60
 MINUTES_PER_DAY = 24 * MINUTES_PER_HR
 MINUTES_PER_YR = 365 * MINUTES_PER_DAY
 
-FORCE_TIME = True  # for debugging - lets user force a start time.
+FORCE_TIME = False  # for debugging - lets user force a start time.
 max_load_report_length = 60
 
 ### WEBSOCKET ###
