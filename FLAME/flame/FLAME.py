@@ -13,6 +13,7 @@ import copy
 import ipdb # be sure to comment this out while running in Volttron instance
 from functools import reduce
 import pytz
+from gs_identities import *
 
 websocket.setdefaulttimeout(10) # set timeout quicker for testing purposes, normally 60
 
@@ -176,11 +177,11 @@ class LoadShift(IPKeys):
             absolute_forecast, costs = parse_LoadShift_response(self.response)
             ### FIXME - just have hard coded column name - needs to be fixed. ###
             print(bl.forecast)
-            absolute_forecast.loc[:,"2018-10-10--ZERO"] = bl.forecast #[:,"value"]
+            absolute_forecast.loc[:,"2018-10-12--ZERO"] = bl.forecast #[:,"value"]
             print(absolute_forecast)
-            print(absolute_forecast["2018-10-10--ZERO"])
+            print(absolute_forecast["2018-10-12--ZERO"])
             print(list(absolute_forecast.columns.values))
-            forecast = absolute_forecast.sub(absolute_forecast["2018-10-10--ZERO"], axis=0)
+            forecast = absolute_forecast.sub(absolute_forecast["2018-10-12--ZERO"], axis=0)
         except ValueError:
             print(self.response['msg']['error'])
             costs = {}
@@ -324,8 +325,52 @@ class LoadReport(IPKeys):
 
         return loadSchedules, loadSchedules_scaled, missing_vals
 
+    def generate_facility_load_report2(self, scale_values=False):
+        _log.info("Processing %s" % self.type)
+        loadSchedules = []
+        missing_vals = []
+        for request in self.requests:
+            if 'facility' in request['msg'].keys():
+                facility = request['msg']['facility']
+            self.request = json.dumps(
+               request
+            )
+            self._send_receive()
+            # assert facility is self.response['msg']['facility'],\
+            #     'facility response does not match requested facility'
+
+            if scale_values == True:
+                try:
+                    sf = scale_factors[self.response['msg']["facility"]]
+                except KeyError:
+                    sf = 1.0
+            else:
+                sf = 1.0
+            _log.info(sf)
+            try:
+                facility_loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
+                facility_loadSchedule["value"] = facility_loadSchedule["value"] * sf
+                #_log.info(facility_loadSchedule)
+                #_log.info("loadSchedule:\n" + str(facility_loadSchedule))
+            except KeyError:
+                _log.warn('previous request yielded no response')
+
+            # set the index to the time stamp
+            facility_loadSchedule.index        = facility_loadSchedule["dstart"]
+            facility_loadSchedule.index        = convert_FLAME_time_to_UTC(facility_loadSchedule.index)
+
+            for ii in range(0, len(facility_loadSchedule)):
+                if facility_loadSchedule["value"][ii] == -1:
+                    missing_vals.append(facility_loadSchedule.index[ii])
+
+            loadSchedules.append(facility_loadSchedule)
+
+        return loadSchedules, missing_vals
+
+
     def process(self):
-        loadSchedules, loadSchedules_scaled, missing_vals = self.generate_facility_load_report()
+        loadSchedules, missing_vals = self.generate_facility_load_report2(scale_values=False)
+        loadSchedules_scaled        = self.generate_facility_load_report2(scale_values=True)
 
         # sum facility schedules
         #_log.info(loadSchedules)
@@ -342,6 +387,49 @@ class LoadReport(IPKeys):
         return None
 
 class HiResLoadReport(LoadReport):
+
+    def get_load_schedule(self, loadSchedules):
+        clean_data = True
+        for ii in range(0,len(loadSchedules)):
+            loadSchedules[ii] = loadSchedules[ii].drop("dstart", axis=1)
+            if clean_data == True:
+                loadSchedules[ii] = self.clean_data(loadSchedules[ii])
+
+        # adds up each of the individual load schedules when all available.
+        if clean_data == False:
+            loadSchedule = reduce(lambda x, y: x.add(y, fill_value=0), loadSchedules)
+        else:
+            loadSchedule = reduce(lambda x, y: x.add(y), loadSchedules)
+            loadSchedule = loadSchedule.dropna(axis=0,how='any')
+        #print(loadSchedule)
+
+        return loadSchedule, loadSchedules
+
+
+    def clean_data(self, loadSchedule):
+        """
+        aligns data to top of the minute and removes "0" values
+        :return:
+        """
+
+        new_index = []
+        to_remove = []
+        for jj in range(0, len(loadSchedule)):
+            # mark all values where data is < epsilon from removal
+            if loadSchedule["value"][jj] < EPSILON:  # 0 value recorded - ignore
+                to_remove.append(jj)
+            # generate a new index in which all values are aligned to top of the minute
+            tmp_dt = datetime.strptime(loadSchedule.index[jj], TIME_FORMAT).replace(second=0, microsecond=0)
+            new_index.append(tmp_dt.strftime(TIME_FORMAT))
+
+        #print(loadSchedules[ii])
+
+        # replace w/new indices and remove zero values:
+        loadSchedule.index = new_index
+        loadSchedule       = loadSchedule.drop(index=loadSchedule.index[to_remove])
+        return(loadSchedule)
+
+
     def process(self):
         """
         process method for high resolution load reports.  In this case (1) data that is unavailable is not returned,
@@ -349,29 +437,23 @@ class HiResLoadReport(LoadReport):
         timestamp for which all facilities have data and use this to generate a total.
         :return:
         """
-        self.loadSchedules, self.loadSchedules_scaled, missing_vals = self.generate_facility_load_report()
+
+        # FIXME - this approach is opening the socket twice - once for scaled and once for unscaled values.
+        # FIXME - this was done for the sake of modularity, but it's probably better to just do one call
+        self.loadSchedules, missing_vals        = self.generate_facility_load_report2(scale_values=False)
+        self.loadSchedules_scaled, missing_vals = self.generate_facility_load_report2(scale_values=True)
+        #self.loadSchedules, self.loadSchedules_scaled, missing_vals = self.generate_facility_load_report()
         # 1. need to return individual facilities and publish each of them
         # 2. find the most recent time stamp that has all three values.
 
-        nElements = [len(ls) for ls in self.loadSchedules]
-        last_ts_index = min(nElements)
+        #nElements = [len(ls) for ls in self.loadSchedules]
+        #last_ts_index = min(nElements)
+
+        #print(last_ts_index)
+        self.loadSchedule, self.loadSchedules               = self.get_load_schedule(self.loadSchedules)
+        self.loadSchedule_scaled, self.loadSchedules_scaled = self.get_load_schedule(self.loadSchedules_scaled)
 
         #_log.info(last_ts_index)
-
-        for ii in range(0,len(self.loadSchedules_scaled)):
-            st_ind  = len(self.loadSchedules_scaled[ii])-last_ts_index
-            end_ind = len(self.loadSchedules_scaled[ii])
-
-            self.loadSchedules_scaled[ii] = self.loadSchedules_scaled[ii][st_ind:end_ind]
-            self.loadSchedules[ii] = self.loadSchedules[ii][st_ind:end_ind]
-            self.loadSchedules_scaled[ii] = self.loadSchedules_scaled[ii].drop("dstart", axis=1)
-            self.loadSchedules[ii] = self.loadSchedules[ii].drop("dstart", axis=1)
-            #print(self.loadSchedules_scaled[ii])
-
-        # adds up each of the individual load schedules when all available.
-        self.loadSchedule = reduce(lambda x, y: x.add(y, fill_value=0), self.loadSchedules)
-        self.loadSchedule_scaled = reduce(lambda x, y: x.add(y, fill_value=0), self.loadSchedules_scaled)
-
 
         #print(self.loadSchedule)
         #print(self.loadSchedule_scaled)
@@ -427,7 +509,7 @@ def create_load_request(duration='PT1H', nLoadOptions=12, price_map=None):
     # # OLD STATIC WAY
     gs_root_dir = os.environ['GS_ROOT_DIR']
     flame_path  = "FLAME/flame/"
-    fname       = 'Example10092018.json' #''defaultLoadRequest.json'
+    fname       = 'Example7.json' #''defaultLoadRequest.json'
     filepath    = os.path.join(gs_root_dir, flame_path, fname)
     with open(filepath) as f:
         old_msg = json.load(f)
@@ -544,7 +626,7 @@ if __name__ == '__main__':
     # Baseline
     def test_Baseline():
         print("running Baseline")
-        start =  '2018-10-10T00:00:00'
+        start =  '2018-10-12T00:00:00'
         granularity = 1
         # granularity =  'PT1H'
         duration = 'PT24H'
@@ -554,7 +636,7 @@ if __name__ == '__main__':
         print("Here's the Baseline forecast:\n", bl.forecast)
         print("done processing Baseline")
         return bl
-    bl = test_Baseline()
+    #bl = test_Baseline()
 ##
     def test_LoadShift():
         print("running LoadShift")
@@ -564,8 +646,8 @@ if __name__ == '__main__':
         print("Here's the LoadShift forecast:\n", ls.forecast)
         print("done processing LoadShift")
         return ls
-    ls = test_LoadShift()
-    ls.forecast.to_csv("loadshift.csv")
+    #ls = test_LoadShift()
+    #ls.forecast.to_csv("loadshift.csv")
 
     ##
     def test_LoadSelect():
@@ -583,16 +665,16 @@ if __name__ == '__main__':
         print("running LoadReport")
         current_time = datetime.now().replace(microsecond=0, second=0, minute=0)
         time_delta = timedelta(hours=24)
-        start_time = datetime.strptime('2018-09-29T15:00:00', "%Y-%m-%dT%H:%M:%S")#current_time - time_delta
+        start_time = datetime.strptime('2018-10-16T02:25:00', "%Y-%m-%dT%H:%M:%S")#current_time - time_delta
         print(start_time)
         loadReport_kwargs = {
             "dstart": start_time.strftime("%Y-%m-%dT%H:%M:%S"), #"2018-07-14T00:00:00",        #start time for report
             "sampleInterval": "PT1M",            #sample interval
             "duration": "PT1H",           # duration of request
-            #"facilities": ["Facility1", "Facility2", "Facility3"]
+            "facilities": ["Facility1", "Facility2", "Facility3"]
             # "facilities": ["Mill", "Canner", "School"]
         }
-        lr = LoadReport(ws, **loadReport_kwargs)
+        lr = HiResLoadReport(ws, **loadReport_kwargs)
         lr.process()
         # print("Here's the LoadReport response:\n", lr.response)
         print("Here's the LoadReport loadSchedule:\n")# str(lr.loadSchedule))
@@ -612,5 +694,5 @@ if __name__ == '__main__':
         print("Here's the Status currentProfile:\n", status.currentProfile)
         print("done processing Status")
         return status
-    status = test_Status()
+    #status = test_Status()
     ##

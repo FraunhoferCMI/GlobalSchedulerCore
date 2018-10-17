@@ -63,6 +63,8 @@ from gs_utilities import get_schedule, ForecastObject, Forecast
 from HistorianTools import publish_data
 import csv
 import pandas
+import math
+
 
 # from .FLAME import Baseline, LoadShift, LoadSelect, LoadReport, Status, format_timeperiod
 from .FLAME import *
@@ -80,6 +82,9 @@ __version__ = "0.1"
 MINUTES_PER_HR = 60
 MINUTES_PER_DAY = 24 * MINUTES_PER_HR
 MINUTES_PER_YR = 365 * MINUTES_PER_DAY
+
+FORCE_TIME = True  # for debugging - lets user force a start time.
+max_load_report_length = 60
 
 ### WEBSOCKET ###
 ws_url = "wss://flame.ipkeys.com:9443/socket/msg"
@@ -191,6 +196,11 @@ class FLAMECommsAgent(Agent):
             _log.info("GS STart time is " + str(self.gs_start_time))
 
         self.initialization_complete = 1
+
+        # for debugging - lets user force a start time for queries
+        self.force_start_time = datetime(year=2018,month=10,day=16,hour=2,minute=57,second=0) #'2018-10-16T02:00:00'
+        self.agent_start_time = datetime.utcnow()
+
         #self.get_load_report()   # do this first - pre-load with values for other fcns to reference
         self.get_hi_res_load_report()
         self.query_baseline()
@@ -246,6 +256,11 @@ class FLAMECommsAgent(Agent):
             start_time = datetime.strptime(get_schedule(self.gs_start_time,
                                                         resolution=SSA_SCHEDULE_RESOLUTION),
                                            "%Y-%m-%dT%H:%M:%S.%f")
+
+            if FORCE_TIME == True:
+                elapsed_time = datetime.utcnow() - self.agent_start_time
+                start_time   = (self.force_start_time+elapsed_time).replace(microsecond=0,second=0)
+
             ### Setting seconds = 3 in the forecast request scales the resulting forecast to a 750kW baseline
             #   Setting seconds = 7 scales to a 1,500kW baseline
             #   Any other value (typically 0) uses raw (unscaled) facility data
@@ -285,8 +300,11 @@ class FLAMECommsAgent(Agent):
 
             if (datetime.strptime(self.cur_load["time"], "%Y-%m-%dT%H:%M:%S") >=
                 datetime.strptime(forecast.forecast_values["Time"][0], "%Y-%m-%dT%H:%M:%S")):
-                _log.info("Replacing forecast load = "+str(forecast.forecast_values["Forecast"][0])+" with "+ str(self.cur_load["load"]))
-                forecast.forecast_values["Forecast"][0] = self.cur_load["load"]
+                if math.isnan(self.cur_load["load"]) == False:
+                    _log.info("Replacing forecast load = "+str(forecast.forecast_values["Forecast"][0])+" with "+ str(self.cur_load["load"]))
+                    forecast.forecast_values["Forecast"][0] = self.cur_load["load"]
+                else:
+                    _log.info("no recent values found for current load - using predicted value")
 
             publish_data(self,
                          "flame/forecast",
@@ -480,22 +498,50 @@ class FLAMECommsAgent(Agent):
 
         return None
 
+
+    ##############################################################################
+    def get_load_report(self, new_vals, old_vals):
+        new_vals.index = pd.to_datetime(new_vals.index,
+                                        format="%Y-%m-%dT%H:%M:%S")
+        if old_vals is None:
+            return new_vals
+        else:
+            # combine with old values
+            return new_vals.combine_first(old_vals)
+
+
     ##############################################################################
     @Core.periodic(period=HI_RES_DEMAND_REPORT_SCHEDULE)
     def get_hi_res_load_report(self):
         '''
-        Request high resolution Load Report from FLAME server.
+        Request and publish high resolution Load Reports from FLAME server.
+        A few different reports are generated:
+        (1) datalogger-style data captures are published for each individual facility on the
+        "facility_load_report_topic".  In this case, the time stamp stored in the database is the actual timestamp of
+        the measurement recorded at the facility.  Each facility is uniquely labeled as facilityN, facilityN+1, etc.  Data
+        is published for both the load and the scaledLoad
+        (2) datalogger-style data captures are published for the aggregate sum of all facilities on the
+        "load_report_topic".  Format is the same as for the individual facility load reports.  The most recent data
+        point published is the most recent data point for which data is available from ALL facilities.
+        (3) device-style data captures are published for the -predicted- aggregate sum of all facility loads on
+        "current_load_topic".   In this case, ...
+
         '''
         # determine report start time
         #FIXME - should use get_schedule()
 
         if self.initialization_complete == 1:
             current_time = datetime.now(pytz.timezone('US/Eastern')).replace(microsecond=0, second=0)
-            utc_now_str = current_time.astimezone(pytz.timezone('UTC')).strftime("%Y-%m-%dT%H:%M:%S")
+            utc_now_str = current_time.astimezone(pytz.timezone('UTC')).strftime(TIME_FORMAT)
             time_delta = timedelta(minutes=HI_RES_DEMAND_REPORT_DURATION)
             start_time = current_time - time_delta
-            dstart = start_time.strftime("%Y-%m-%dT%H:%M:%S")
-            _log.info("requesting load report ending at time "+dstart)
+
+            if FORCE_TIME == True:
+                elapsed_time = datetime.utcnow()-self.agent_start_time
+                start_time   = (self.force_start_time+elapsed_time).replace(microsecond=0,second=0)-time_delta
+
+            dstart = start_time.strftime(TIME_FORMAT)
+            _log.info("requesting load report starting at time "+dstart)
             duration = format_timeperiod(HI_RES_DEMAND_REPORT_DURATION)
             sampleInterval = format_timeperiod(HI_RES_DEMAND_REPORT_RESOLUTION)
 
@@ -511,7 +557,7 @@ class FLAMECommsAgent(Agent):
             lr.process()
 
             #print(lr.loadSchedule)
-            if (1): #try:
+            try:
                 # Generate load reports for the individual facilities
                 for yy in range(0, len(lr.loadSchedules)):
                     #_log.info("length of ls is "+str(len(lr.loadSchedules[yy])))
@@ -572,40 +618,26 @@ class FLAMECommsAgent(Agent):
                 # but this could be modified to do something more sophisticated (e.g., looking at upcoming schedule
                 # changes)
                 if USE_SCALED_LOAD == True:
-                    tmp = lr.loadSchedule_scaled
-                    tmp.index = pd.to_datetime(tmp.index,
-                                               format="%Y-%m-%dT%H:%M:%S")
-
-                    if self.load_report is None:
-                        self.load_report = tmp
-                    else:
-                        self.load_report = tmp.combine_first(self.load_report)
+                    self.load_report = self.get_load_report(lr.loadSchedule_scaled, self.load_report)
                 else:
-                    tmp = lr.loadSchedule
-                    tmp.index = pd.to_datetime(tmp.index,
-                                               format="%Y-%m-%dT%H:%M:%S")
-                    if self.load_report is None:
-                        self.load_report = tmp
-                    else:
-                        self.load_report = tmp.combine_first(self.load_report)
+                    self.load_report = self.get_load_report(lr.loadSchedule, self.load_report)
 
-
+                # Use the most recent 15 minutes worth of data for prediction purposes.
+                # Keep track of the last 60 minutes worth of data
                 most_recent_ts = max(self.load_report.index)
-                last_15_min = self.load_report[
-                    #self.load_report.index > self.load_report.index[most_recent_ts] - timedelta(minutes=15)]
-                    self.load_report.index > most_recent_ts - timedelta(minutes=15)]
+                last_15_min    = self.load_report[self.load_report.index > most_recent_ts - timedelta(minutes=15)]
+                self.load_report = self.load_report[self.load_report.index >
+                                                    most_recent_ts - timedelta(minutes=max_load_report_length)]
+                cur_predicted_value = last_15_min.mean().value
+                if math.isnan(cur_predicted_value) == True:
+                    _log.info("Warning - One or more facility meters appears to be offline")
+
                 _log.info("last 15 minutes load report is:")
                 _log.info(last_15_min)
-                #print(last_15_min.mean())
 
-                cur_predicted_value = last_15_min.mean().value
-                _log.info(cur_predicted_value)
-                #_log.info(last_15_min.index[most_recent_ts].strftime('%Y-%m-%dT%H:%M:%S'))
-                _log.info(most_recent_ts)
+                # publish resulting current predicted value on a device/ topic for consumption by a site manager agent
                 self.cur_load.update({"load": cur_predicted_value,
-                                      "time": last_15_min.index[0].strftime('%Y-%m-%dT%H:%M:%S')})
-
-
+                                      "time": most_recent_ts.strftime('%Y-%m-%dT%H:%M:%S')})
                 msg = [self.cur_load,
                        {'load': {"units": 'kW',
                                  "tz": "UTC",
@@ -621,7 +653,7 @@ class FLAMECommsAgent(Agent):
                     message=msg)
 
 
-            else: #except AttributeError:
+            except AttributeError:
                 _log.warn('Response requested not available')
             ws.close()
 

@@ -77,6 +77,10 @@ SEC_PER_MIN = 60.0
 MINUTES_PER_HR = 60
 MINUTES_PER_DAY = 24 * MINUTES_PER_HR
 
+EPSILON = 0.001
+TIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
+
+
 # Directories
 GS_ROOT_DIR     = os.environ['GS_ROOT_DIR']
 CFG_PATH        = "cfg/"
