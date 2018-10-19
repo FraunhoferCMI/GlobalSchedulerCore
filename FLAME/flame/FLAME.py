@@ -14,6 +14,7 @@ import ipdb # be sure to comment this out while running in Volttron instance
 from functools import reduce
 import pytz
 from gs_identities import *
+from gs_utilities import Forecast
 
 websocket.setdefaulttimeout(10) # set timeout quicker for testing purposes, normally 60
 
@@ -149,14 +150,21 @@ class Baseline(IPKeys):
 
 class LoadShift(IPKeys):
 
-    def __init__(self, websocket, price_map=None):
+    def __init__(self, websocket=None, start_time=None, price_map=None, nLoadOptions=12):
         IPKeys.__init__(self, websocket)
 
         self.type = u'LoadOptions'
 
         self.price_map = price_map
 
-        self.request = create_load_request(price_map=price_map)
+        if start_time is None:
+            self.baseline_index = "2018-10-19--ZERO"
+        else:
+            self.baseline_index = datetime.strptime(start_time, TIME_FORMAT).strftime("%Y-%m-%d") + "--ZERO"
+
+        #self.baseline_index = start_time.strftime("%Y-%m-d")+"--ZERO"
+        print(self.baseline_index)
+        self.request = create_load_request(price_map=price_map, start_time = start_time, nLoadOptions=nLoadOptions)
 
         _log.info("REQUEST LENGTH!!!")
         _log.info(len(self.request))
@@ -176,19 +184,40 @@ class LoadShift(IPKeys):
 
             absolute_forecast, costs = parse_LoadShift_response(self.response)
             ### FIXME - just have hard coded column name - needs to be fixed. ###
-            print(bl.forecast)
-            absolute_forecast.loc[:,"2018-10-12--ZERO"] = bl.forecast #[:,"value"]
-            print(absolute_forecast)
-            print(absolute_forecast["2018-10-12--ZERO"])
-            print(list(absolute_forecast.columns.values))
-            forecast = absolute_forecast.sub(absolute_forecast["2018-10-12--ZERO"], axis=0)
+            #print(bl.forecast)
+            #absolute_forecast.loc[:,"2018-10-12--ZERO"] = bl.forecast #[:,"value"]
+            #print(absolute_forecast["2018-10-12--ZERO"])
+
+            correction = pd.DataFrame(data=[100,100,100,130,115,15,10,10,10,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60],
+                                      index=absolute_forecast.index)
+
+            absolute_forecast[self.baseline_index] = absolute_forecast[self.baseline_index]+correction[0]
+            print(absolute_forecast[self.baseline_index])
+            forecast = absolute_forecast.sub(absolute_forecast[self.baseline_index], axis=0)
+            print(forecast)
+
+            forecast_lst = []
+
+            for f in forecast.columns:
+                forecast_lst.append(forecast[f].tolist())
+
+            print(forecast_lst)
         except ValueError:
+            print("Error Found!")
             print(self.response['msg']['error'])
             costs = {}
             forecast = pd.DataFrame()
             return None
         self.costs = costs
-        self.forecast = forecast
+
+        forecast
+
+        units    = "kW"
+        datatype = "float"
+        self.forecast = Forecast(forecast_lst,
+                                 forecast.index.tolist(),
+                                 units,
+                                 datatype)
 
         # prepare ForecastObject from response values
         # units = forecast.units[0]
@@ -504,21 +533,22 @@ def parse_Baseline_response(result):
     forecast_values.index = convert_FLAME_time_to_UTC(forecast_values.index)
     return forecast_values
 
-def create_load_request(duration='PT1H', nLoadOptions=12, price_map=None):
+def create_load_request(duration='PT1H', start_time = None, nLoadOptions=12, price_map=None):
 
     # # OLD STATIC WAY
     gs_root_dir = os.environ['GS_ROOT_DIR']
     flame_path  = "FLAME/flame/"
-    fname       = 'Example7.json' #''defaultLoadRequest.json'
+    fname       = 'Example4A.json' #''defaultLoadRequest.json'
     filepath    = os.path.join(gs_root_dir, flame_path, fname)
     with open(filepath) as f:
         old_msg = json.load(f)
 
+    if start_time is None:
+        # get set of times
+        now = pd.datetime.utcnow()
+        start_time = datetime(now.year, now.month, now.day, 0).isoformat()
 
-    # get set of times
-    now = pd.datetime.utcnow()
-    nearest_minute = datetime(now.year, now.month, now.day, 0).isoformat()
-    hourlist = pd.date_range(nearest_minute,
+    hourlist = pd.date_range(start_time,
                              freq='H',
                              periods=24)
 
@@ -538,6 +568,8 @@ def create_load_request(duration='PT1H', nLoadOptions=12, price_map=None):
         msg_to_use = old_msg
     else:
         msg_to_use = msg
+
+    print(msg_to_use)
 
     payload_request = json.dumps(
         {"type": "LoadRequest",
@@ -646,7 +678,7 @@ if __name__ == '__main__':
         print("Here's the LoadShift forecast:\n", ls.forecast)
         print("done processing LoadShift")
         return ls
-    #ls = test_LoadShift()
+    ls = test_LoadShift()
     #ls.forecast.to_csv("loadshift.csv")
 
     ##
