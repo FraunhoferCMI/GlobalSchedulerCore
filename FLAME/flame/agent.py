@@ -204,7 +204,7 @@ class FLAMECommsAgent(Agent):
         #self.get_load_report()   # do this first - pre-load with values for other fcns to reference
         self.get_hi_res_load_report()
         self.query_baseline()
-        #self.query_loadshift()
+        self.query_loadshift()
         #self.request_status()
 
     ##############################################################################
@@ -245,6 +245,27 @@ class FLAMECommsAgent(Agent):
         return None
 
     ##############################################################################
+    def get_forecast_request_start_time(self, hrs_offset=0):
+        ###  convert GS time to local time #####
+        start_time = datetime.strptime(get_schedule(self.gs_start_time,
+                                                    resolution=SSA_SCHEDULE_RESOLUTION),
+                                       "%Y-%m-%dT%H:%M:%S.%f")
+
+        if FORCE_TIME == True:
+            elapsed_time = datetime.utcnow() - self.agent_start_time
+            start_time = (self.force_start_time + elapsed_time).replace(microsecond=0, second=0)
+
+        ## need to convert the start time request to local time.  get_schedule returns a time stamp in UTC, but
+        ## as a string, so it is time naive.  It needs to be recast as UTC and then changed to local time.
+
+        print(start_time)
+        start_time = start_time.replace(tzinfo=pytz.UTC)+timedelta(hours=hrs_offset)
+        start_time = start_time.astimezone(pytz.timezone('US/Eastern'))
+        print(start_time)
+
+        return start_time
+
+    ##############################################################################
     @Core.periodic(period=DEMAND_FORECAST_QUERY_INTERVAL)   #### code for calling something periodically
     def query_baseline(self):
         "Queries the FLAME server for baseline message"
@@ -252,15 +273,7 @@ class FLAMECommsAgent(Agent):
             _log.info("querying baseline")
             # Baseline
 
-            ###  convert GS time to local time #####
-            start_time = datetime.strptime(get_schedule(self.gs_start_time,
-                                                        resolution=SSA_SCHEDULE_RESOLUTION),
-                                           "%Y-%m-%dT%H:%M:%S.%f")
-
-            if FORCE_TIME == True:
-                elapsed_time = datetime.utcnow() - self.agent_start_time
-                start_time   = (self.force_start_time+elapsed_time).replace(microsecond=0,second=0)
-
+            start_time = self. get_forecast_request_start_time()
             ### Setting seconds = 3 in the forecast request scales the resulting forecast to a 750kW baseline
             #   Setting seconds = 7 scales to a 1,500kW baseline
             #   Any other value (typically 0) uses raw (unscaled) facility data
@@ -269,14 +282,10 @@ class FLAMECommsAgent(Agent):
             else:
                 start_time = start_time.replace(minute=0, second=0, microsecond=0)
 
-            ## need to convert the start time request to local time.  get_schedule returns a time stamp in UTC, but
-            ## as a string, so it is time naive.  It needs to be recast as UTC and then changed to local time.
-            start_time = start_time.replace(tzinfo=pytz.UTC)
-            start_time = start_time.astimezone(pytz.timezone('US/Eastern')).strftime("%Y-%m-%dT%H:%M:%S")
-
+            start_time_str = start_time.strftime("%Y-%m-%dT%H:%M:%S")
             ws = create_connection(ws_url, sslopt=sslopt)
             baseline_kwargs = dict(
-                start =  start_time,
+                start =  start_time_str,
                 granularity = DEMAND_FORECAST_RESOLUTION,
                 duration = 'PT24H',
                 websocket = ws
@@ -298,13 +307,14 @@ class FLAMECommsAgent(Agent):
             _log.info(self.cur_load["time"])
             _log.info(forecast.forecast_values["Time"][0])
 
-            if (datetime.strptime(self.cur_load["time"], "%Y-%m-%dT%H:%M:%S") >=
-                datetime.strptime(forecast.forecast_values["Time"][0], "%Y-%m-%dT%H:%M:%S")):
-                if math.isnan(self.cur_load["load"]) == False:
-                    _log.info("Replacing forecast load = "+str(forecast.forecast_values["Forecast"][0])+" with "+ str(self.cur_load["load"]))
-                    forecast.forecast_values["Forecast"][0] = self.cur_load["load"]
-                else:
-                    _log.info("no recent values found for current load - using predicted value")
+            if self.cur_load["time"]:
+                if (datetime.strptime(self.cur_load["time"], "%Y-%m-%dT%H:%M:%S") >=
+                    datetime.strptime(forecast.forecast_values["Time"][0], "%Y-%m-%dT%H:%M:%S")):
+                    if math.isnan(self.cur_load["load"]) == False:
+                        _log.info("Replacing forecast load = "+str(forecast.forecast_values["Forecast"][0])+" with "+ str(self.cur_load["load"]))
+                        forecast.forecast_values["Forecast"][0] = self.cur_load["load"]
+                    else:
+                        _log.info("no recent values found for current load - using predicted value")
 
             publish_data(self,
                          "flame/forecast",
@@ -361,22 +371,59 @@ class FLAMECommsAgent(Agent):
                                          # **gcm_kwargs
                                          ).get(timeout=5)
 
+            _log.info(price_map)
+
+
+            current_time = datetime.now(pytz.timezone('US/Eastern')).replace(hour=0, minute=0, microsecond=0, second=0)
+            utc_now_str = current_time.astimezone(pytz.timezone('UTC')).strftime(TIME_FORMAT)
+            time_delta = timedelta(days=1)
+            start_time = current_time + time_delta
+
+            #if FORCE_TIME == True:
+            #    elapsed_time = datetime.utcnow()-self.agent_start_time
+            #    start_time   = (self.force_start_time+elapsed_time).replace(microsecond=0,second=0)-time_delta
+
+            dstart = start_time.strftime(TIME_FORMAT)
+            _log.info("requesting load shift starting at time "+dstart)
+
+            #start_time   = self.get_forecast_request_start_time(hrs_offset=1) # start time for 1 hr in the future
+            #start_time = start_time.replace(minute=0, second=0, microsecond=0)
+            #start_time_str = start_time.strftime("%Y-%m-%dT%H:%M:%S")
+
             ws = create_connection(ws_url, sslopt=sslopt)
-            ls = LoadShift(websocket=ws,  price_map=price_map)
+            ls = LoadShift(websocket=ws,  start_time = dstart, price_map=price_map, nLoadOptions = N_LOADSHIFT_PROFILES)
             ls.process()
             # message = ls.fo.forecast_values    # call to demand forecast object class thingie
             # ws.close()
             # message = self.load_shift_msg.process()    # call to demand forecast object class thingie
             comm_status = 1 # were there errors?
-            for option, message_parts in ls.fos.items():
-                forecast = Forecast(**message_parts)
-                message = forecast.forecast_obj
-                _log.info(message)
-                self.vip.pubsub.publish(
-                    peer="pubsub",
-                    topic=self._config['loadshift_forecast_topic'],
-                    headers={},
-                    message=message)
+
+
+            message = ls.forecast.forecast_obj
+            _log.info(message)
+            self.vip.pubsub.publish(
+                peer="pubsub",
+                topic=self._config['loadshift_forecast_topic'],
+                headers={},
+                message=message)
+
+            message = [{"nOptions": len(ls.forecast.forecast)}, {"nOptions": {'type': 'int', 'units': 'none'}}]
+            _log.info(message)
+            self.vip.pubsub.publish(
+                peer="pubsub",
+                topic=self._config['loadshift_forecast_topic'],
+                headers={},
+                message=message)
+
+            #for option, message_parts in ls.fos.items():
+            #    forecast = Forecast(**message_parts)
+            #    message = forecast.forecast_obj
+            #    _log.info(message)
+            #    self.vip.pubsub.publish(
+            #        peer="pubsub",
+            #        topic=self._config['loadshift_forecast_topic'],
+            #        headers={},
+            #        message=message)
 
 
             # self.vip.pubsub.publish(
@@ -500,7 +547,7 @@ class FLAMECommsAgent(Agent):
 
 
     ##############################################################################
-    def get_load_report(self, new_vals, old_vals):
+    def merge_load_report(self, new_vals, old_vals):
         new_vals.index = pd.to_datetime(new_vals.index,
                                         format="%Y-%m-%dT%H:%M:%S")
         if old_vals is None:
@@ -618,9 +665,9 @@ class FLAMECommsAgent(Agent):
                 # but this could be modified to do something more sophisticated (e.g., looking at upcoming schedule
                 # changes)
                 if USE_SCALED_LOAD == True:
-                    self.load_report = self.get_load_report(lr.loadSchedule_scaled, self.load_report)
+                    self.load_report = self.merge_load_report(lr.loadSchedule_scaled, self.load_report)
                 else:
-                    self.load_report = self.get_load_report(lr.loadSchedule, self.load_report)
+                    self.load_report = self.merge_load_report(lr.loadSchedule, self.load_report)
 
                 # Use the most recent 15 minutes worth of data for prediction purposes.
                 # Keep track of the last 60 minutes worth of data
