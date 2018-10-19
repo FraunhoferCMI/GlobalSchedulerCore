@@ -703,11 +703,11 @@ class ExecutiveAgent(Agent):
                             # Right now configured with only one ESS - has not been tested this iteration with more
                             # than one ESS end point in this iteration
                             if (setpoint > 0):  # charging
-                                pro_rata_share = float(device_state_vars["SOE_kWh"]+0.001) / (float(SOE_kWh)+0.001) * float(setpoint)
+                                pro_rata_share = float(device_state_vars["SOE_kWh"]+EPSILON) / (float(SOE_kWh)+EPSILON) * float(setpoint)
                                 #todo - need to check for min SOE - implication of the above is that min = 0
                             else: # discharging
-                                pro_rata_share = float(device_state_vars["MaxSOE_kWh"] - device_state_vars["SOE_kWh"]+0.001) /\
-                                                 (max_SOE_kWh - float(SOE_kWh)+0.001) * float(setpoint)
+                                pro_rata_share = float(device_state_vars["MaxSOE_kWh"] - device_state_vars["SOE_kWh"]+EPSILON) /\
+                                                 (max_SOE_kWh - float(SOE_kWh)+EPSILON) * float(setpoint)
                             _log.debug("Optimizer: Sending request for " + str(pro_rata_share) + "to " + devices["AgentID"])
                             # send command
                             self.vip.rpc.call(str(devices["AgentID"]),

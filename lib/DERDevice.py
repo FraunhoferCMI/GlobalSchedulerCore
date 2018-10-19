@@ -629,13 +629,12 @@ class DERDevice():
 
         :return:
         """
-        epsilon = 0.01
         self.write_status = 1
         for reg in self.chkReg:
             if self.writePending[reg] == 1:
                 # there is a command pending - check to see if corresponding register has updated
-                if ((self.writeRegAttributes[reg].data_dict[self.writeReg[reg]] >= float(self.expectedValue[reg]) - epsilon) &
-                    (self.writeRegAttributes[reg].data_dict[self.writeReg[reg]] <= float(self.expectedValue[reg]) + epsilon)):
+                if ((self.writeRegAttributes[reg].data_dict[self.writeReg[reg]] >= float(self.expectedValue[reg]) - EPSILON) &
+                    (self.writeRegAttributes[reg].data_dict[self.writeReg[reg]] <= float(self.expectedValue[reg]) + EPSILON)):
                     # write completed successfully - clear all the write pending registers:
                     self.nTries[reg]       = 0
                     self.writePending[reg] = 0
