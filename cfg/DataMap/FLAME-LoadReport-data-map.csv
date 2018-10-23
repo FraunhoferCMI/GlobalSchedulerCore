@@ -1,2 +1,3 @@
 load,FLAME-Baseline,OpStatus,Pwr_kW,,kW
+time,FLAME-Baseline,OpStatus,ts,Y,utc
 comm_status,FLAME,HealthStatus,CommsStatus,0,
