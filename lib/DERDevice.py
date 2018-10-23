@@ -1616,7 +1616,7 @@ class LoadNode(DERDevice):
 
 
 ##############################################################################
-class LoadShiftCtrlNode(DERDevice):
+class LoadShiftCtrlNode(DERCtrlNode):
 
     ##############################################################################
     def __init__(self, device_info, parent_device=None):
@@ -1638,6 +1638,22 @@ class LoadShiftCtrlNode(DERDevice):
         self.expectedValue = {"SetPoint": 0}
         self.nTries = {"SetPoint": 0}
         self.writeError = {"SetPoint": 0}
+
+        self.state_vars["OrigDemandForecast_t_str"] = [0.0]*SSA_PTS_PER_SCHEDULE
+
+
+    ##############################################################################
+    def update_state_vars(self):
+        DERCtrlNode.update_state_vars(self)
+
+        #fixme - should use get_gs_time
+        now = utils.get_aware_utc_now()
+        self.state_vars["OrigDemandForecast_t_str"] = [(now.replace(minute=0, second=0)  +
+                                                        timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%S")
+                                                       for t in range(0,
+                                                                      SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                                      SSA_SCHEDULE_RESOLUTION)]
+
 
     ##############################################################################
     def calc_avg_pwr(self, val):
