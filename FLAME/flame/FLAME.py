@@ -15,6 +15,7 @@ from functools import reduce
 import pytz
 from gs_identities import *
 from gs_utilities import Forecast
+import numpy as np
 
 websocket.setdefaulttimeout(10) # set timeout quicker for testing purposes, normally 60
 
@@ -26,7 +27,7 @@ scale_factors = {"School": 1.0,
                  "Canner": 0.2,
                  "Mill": 0.1}
 
-USE_STATIC = True
+USE_STATIC = False
 
 # Classes
 class IPKeys(object):
@@ -155,16 +156,22 @@ class LoadShift(IPKeys):
 
         self.type = u'LoadOptions'
 
-        self.price_map = price_map
+        self.price_map  = price_map
+        self.start_time = start_time
 
+        # set the load shift request for the start of the next day:
+        req_start_time = start_time.replace(hour=0) + timedelta(days=1)
+        dstart         = req_start_time.strftime(TIME_FORMAT)
+
+        print(req_start_time)
         if start_time is None:
-            self.baseline_index = "2018-10-19--ZERO"
+            self.base_index = "2018-10-19"
         else:
-            self.baseline_index = datetime.strptime(start_time, TIME_FORMAT).strftime("%Y-%m-%d") + "--ZERO"
+            self.base_index = req_start_time.strftime("%Y-%m-%d")
 
         #self.baseline_index = start_time.strftime("%Y-%m-d")+"--ZERO"
-        print(self.baseline_index)
-        self.request = create_load_request(price_map=price_map, start_time = start_time, nLoadOptions=nLoadOptions)
+        print(self.base_index)
+        self.request = create_load_request(price_map=price_map, start_time = dstart, nLoadOptions=nLoadOptions)
 
         _log.info("REQUEST LENGTH!!!")
         _log.info(len(self.request))
@@ -188,12 +195,38 @@ class LoadShift(IPKeys):
             #absolute_forecast.loc[:,"2018-10-12--ZERO"] = bl.forecast #[:,"value"]
             #print(absolute_forecast["2018-10-12--ZERO"])
 
-            correction = pd.DataFrame(data=[100,100,100,130,115,15,10,10,10,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60],
+            #correction = pd.DataFrame(data=[100,100,100,130,115,15,10,10,10,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+            #                          index=absolute_forecast.index)
+            correction = pd.DataFrame(data=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
                                       index=absolute_forecast.index)
 
-            absolute_forecast[self.baseline_index] = absolute_forecast[self.baseline_index]+correction[0]
-            print(absolute_forecast[self.baseline_index])
-            forecast = absolute_forecast.sub(absolute_forecast[self.baseline_index], axis=0)
+            baseline_index = self.base_index + "--ZERO"
+            delta_index    = self.base_index + "--DELTA"
+            absolute_forecast[baseline_index] = absolute_forecast[baseline_index]+correction[0]
+            #print(absolute_forecast[baseline_index])
+            forecast = absolute_forecast.sub(absolute_forecast[baseline_index], axis=0)
+
+            try:
+                forecast = forecast.drop(delta_index, axis=1)
+            except:
+                print("DELTA label not found!")
+
+            #print(absolute_forecast)
+
+            #current_tz = pytz.timezone('US/Eastern')
+            #utc_start_time = current_tz.localize(self.start_time).astimezone(pytz.timezone('UTC'))
+            utc_start_time = self.start_time.astimezone(pytz.timezone('UTC'))
+            pad_length = 24-self.start_time.hour
+            #utc_start_time = ts.astimezone(pytz.timezone('UTC')))
+
+            columns = forecast.columns
+            #df2 = pd.DataFrame(data=np.array(lst).transpose(), columns=df.columns)
+            padding = pd.DataFrame(data  = np.zeros(shape=(pad_length, len(columns))), #[[0.0]*pad_length]*len(columns),
+                                   index = [(utc_start_time.replace(tzinfo=None) +
+                                            timedelta(hours=t)).strftime(TIME_FORMAT) for t in range(0, pad_length)],
+                                   columns = columns)
+
+            forecast = forecast.combine_first(padding)
             print(forecast)
 
             forecast_lst = []
@@ -201,7 +234,6 @@ class LoadShift(IPKeys):
             for f in forecast.columns:
                 forecast_lst.append(forecast[f].tolist())
 
-            print(forecast_lst)
         except ValueError:
             print("Error Found!")
             print(self.response['msg']['error'])
@@ -209,8 +241,6 @@ class LoadShift(IPKeys):
             forecast = pd.DataFrame()
             return None
         self.costs = costs
-
-        forecast
 
         units    = "kW"
         datatype = "float"
@@ -569,7 +599,7 @@ def create_load_request(duration='PT1H', start_time = None, nLoadOptions=12, pri
     else:
         msg_to_use = msg
 
-    print(msg_to_use)
+    # print(msg_to_use)
 
     payload_request = json.dumps(
         {"type": "LoadRequest",
@@ -658,7 +688,7 @@ if __name__ == '__main__':
     # Baseline
     def test_Baseline():
         print("running Baseline")
-        start =  '2018-10-12T00:00:00'
+        start =  '2018-10-21T00:00:00'
         granularity = 1
         # granularity =  'PT1H'
         duration = 'PT24H'
@@ -673,7 +703,10 @@ if __name__ == '__main__':
     def test_LoadShift():
         print("running LoadShift")
         # LoadShift
-        ls = LoadShift(ws)
+        current_tz = pytz.timezone('US/Eastern')
+        start_time = current_tz.localize(datetime(year=2018,month=10,day=23,hour=14))
+        ls = LoadShift(websocket = ws,
+                       start_time = start_time)
         ls.process()
         print("Here's the LoadShift forecast:\n", ls.forecast)
         print("done processing LoadShift")

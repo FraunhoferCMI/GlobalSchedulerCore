@@ -258,7 +258,6 @@ class FLAMECommsAgent(Agent):
         ## need to convert the start time request to local time.  get_schedule returns a time stamp in UTC, but
         ## as a string, so it is time naive.  It needs to be recast as UTC and then changed to local time.
 
-        print(start_time)
         start_time = start_time.replace(tzinfo=pytz.UTC)+timedelta(hours=hrs_offset)
         start_time = start_time.astimezone(pytz.timezone('US/Eastern'))
         print(start_time)
@@ -374,24 +373,15 @@ class FLAMECommsAgent(Agent):
             _log.info(price_map)
 
 
-            current_time = datetime.now(pytz.timezone('US/Eastern')).replace(hour=0, minute=0, microsecond=0, second=0)
-            utc_now_str = current_time.astimezone(pytz.timezone('UTC')).strftime(TIME_FORMAT)
-            time_delta = timedelta(days=1)
-            start_time = current_time + time_delta
-
-            #if FORCE_TIME == True:
-            #    elapsed_time = datetime.utcnow()-self.agent_start_time
-            #    start_time   = (self.force_start_time+elapsed_time).replace(microsecond=0,second=0)-time_delta
-
-            dstart = start_time.strftime(TIME_FORMAT)
-            _log.info("requesting load shift starting at time "+dstart)
+            current_time = datetime.now(pytz.timezone('US/Eastern')).replace(minute=0, microsecond=0, second=0)
+            _log.info("requesting load shift starting at time "+current_time.strftime(TIME_FORMAT))
 
             #start_time   = self.get_forecast_request_start_time(hrs_offset=1) # start time for 1 hr in the future
             #start_time = start_time.replace(minute=0, second=0, microsecond=0)
             #start_time_str = start_time.strftime("%Y-%m-%dT%H:%M:%S")
 
             ws = create_connection(ws_url, sslopt=sslopt)
-            ls = LoadShift(websocket=ws,  start_time = dstart, price_map=price_map, nLoadOptions = N_LOADSHIFT_PROFILES)
+            ls = LoadShift(websocket=ws,  start_time = current_time, price_map=price_map, nLoadOptions = N_LOADSHIFT_PROFILES)
             ls.process()
             # message = ls.fo.forecast_values    # call to demand forecast object class thingie
             # ws.close()
