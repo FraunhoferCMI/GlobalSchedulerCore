@@ -230,9 +230,13 @@ class LoadShift(IPKeys):
             print(forecast)
 
             forecast_lst = []
+            forecast_id  = []
+            forecast_dict = {}
 
             for f in forecast.columns:
                 forecast_lst.append(forecast[f].tolist())
+                forecast_id.append(f)
+                forecast_dict.update({f: forecast[f].tolist()})
 
         except ValueError:
             print("Error Found!")
@@ -248,7 +252,9 @@ class LoadShift(IPKeys):
                                  forecast.index.tolist(),
                                  units,
                                  datatype)
-
+        self.forecast_id = forecast_id
+        self.forecast_dict = forecast_dict
+        self.baseline_index = self.base_index+'--ZERO'
         # prepare ForecastObject from response values
         # units = forecast.units[0]
 
@@ -688,7 +694,7 @@ if __name__ == '__main__':
     # Baseline
     def test_Baseline():
         print("running Baseline")
-        start =  '2018-10-21T00:00:00'
+        start =  '2018-10-25T00:00:00'
         granularity = 1
         # granularity =  'PT1H'
         duration = 'PT24H'
@@ -704,7 +710,7 @@ if __name__ == '__main__':
         print("running LoadShift")
         # LoadShift
         current_tz = pytz.timezone('US/Eastern')
-        start_time = current_tz.localize(datetime(year=2018,month=10,day=23,hour=14))
+        start_time = current_tz.localize(datetime(year=2018,month=10,day=25,hour=14))
         ls = LoadShift(websocket = ws,
                        start_time = start_time)
         ls.process()
