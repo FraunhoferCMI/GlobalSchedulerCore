@@ -94,7 +94,7 @@
             "TopicName":"LoadShift",
             "TopicPath":"devices/flame/loadshift_forecast",
             "TopicAgent":"cpr",
-            "TopicScrapeTimeout":"LOADSHIFT_QUERY_INTERVAL*2"
+            "TopicScrapeTimeout":"LOADSHIFT_FORECAST_UPDATE_INTERVAL*2"
          }
       ],
       "Use" :"Y",
