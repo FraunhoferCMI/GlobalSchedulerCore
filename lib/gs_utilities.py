@@ -175,7 +175,8 @@ class Forecast():
     """
     def __init__(self, forecast, time, units, datatype, ghi = None,
                  duration =  SSA_SCHEDULE_DURATION,
-                 resolution = SSA_SCHEDULE_RESOLUTION):
+                 resolution = SSA_SCHEDULE_RESOLUTION,
+                 labels = None):
         assert isinstance(forecast, list)
         assert isinstance(time, list)
         self.forecast = forecast
@@ -186,30 +187,40 @@ class Forecast():
         self.resolution = resolution
         self.ghi      = ghi
 
+        if labels == None:
+            self.labels = {"Forecast": "Forecast",
+                           "Time": "Time",
+                           "Duration": "Duration",
+                           "Resolution": "Resolution",
+                           "ghi": "ghi"}
+        else:
+            self.labels = labels
+
+
         self.serialize()
         return None
 
     def serialize(self):
         if self.ghi == None:
-            self.forecast_values = {"Forecast": self.forecast,
-                                    "Time": self.time,
-                                    "Duration": self.duration,
-                                    "Resolution": self.resolution}
-            self.forecast_meta_data = {"Forecast": {"units": self.units, "type": self.datatype},
-                                       "Time": {"units": "UTC", "type": "str"},
-                                       "Duration": {"units": "hr", "type": "int"},
-                                       "Resolution": {"units": "min", "type": "int"}}
+            self.forecast_values = {self.labels["Forecast"]: self.forecast,
+                                    self.labels["Time"]: self.time,
+                                    self.labels["Duration"]: self.duration,
+                                    self.labels["Resolution"]: self.resolution}
+            self.forecast_meta_data = {self.labels["Forecast"]: {"units": self.units, "type": self.datatype},
+                                       self.labels["Time"]: {"units": "UTC", "type": "str"},
+                                       self.labels["Duration"]: {"units": "hr", "type": "int"},
+                                       self.labels["Resolution"]: {"units": "min", "type": "int"}}
         else:
-            self.forecast_values = {"Forecast": self.forecast,
-                                    "ghi": self.ghi,
-                                    "Time": self.time,
-                                    "Duration": self.duration,
-                                    "Resolution": self.resolution}
-            self.forecast_meta_data = {"Forecast": {"units": self.units, "type": self.datatype},
-                                       "ghi": {"units": self.units, "type": self.datatype},
-                                       "Time": {"units": "UTC", "type": "str"},
-                                       "Duration": {"units": "hr", "type": "int"},
-                                       "Resolution": {"units": "min", "type": "int"}}
+            self.forecast_values = {self.labels["Forecast"]: self.forecast,
+                                    self.labels["ghi"]: self.ghi,
+                                    self.labels["Time"]: self.time,
+                                    self.labels["Duration"]: self.duration,
+                                    self.labels["Resolution"]: self.resolution}
+            self.forecast_meta_data = {self.labels["Forecast"]: {"units": self.units, "type": self.datatype},
+                                       self.labels["ghi"]: {"units": self.units, "type": self.datatype},
+                                       self.labels["Time"]: {"units": "UTC", "type": "str"},
+                                       self.labels["Duration"]: {"units": "hr", "type": "int"},
+                                       self.labels["Resolution"]: {"units": "min", "type": "int"}}
 
 
         self.forecast_obj = [self.forecast_values, self.forecast_meta_data]
