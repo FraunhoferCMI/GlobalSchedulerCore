@@ -508,8 +508,7 @@ class SundialResource():
             _log.debug(str(self.state_vars["OrigDemandForecast_kW"]))
             self.state_vars["DemandForecast_kW"]           = self.interpolate_values(schedule_timestamps,
                                                                                      self.state_vars["OrigDemandForecast_kW"])
-            self.state_vars["EnergyAvailableForecast_kWh"] = self.interpolate_values(schedule_timestamps,
-                                                                                     self.state_vars["OrigEnergyAvailableForecast_kWh"])
+            self.state_vars["EnergyAvailableForecast_kWh"] = self.state_vars["OrigEnergyAvailableForecast_kWh"]
 
             try:
                 self.state_vars["LoadShiftOptions_kW"] = self.interpolate_values(schedule_timestamps,
@@ -1038,7 +1037,35 @@ class LoadShiftResource(SundialResource):
 
         # define a bunch of LoadShift-specific end points to update
         self.forecast_update_list.extend(["OrigLoadShiftOptions_kW",
-                                          "OrigLoadShiftOptions_t_str"])
+                                          "OrigLoadShiftOptions_t_str",
+                                          "IDList",
+                                          "OptionsPending"])
+
+
+    ##############################################################################
+    def init_state_vars(self):
+        """
+        intializes the state_vars data structure
+        :param length: length of time series keys in the state_vars dictionary
+        :return: None
+        """
+        state_vars = SundialResource.init_state_vars(self)
+        state_vars.update({"IDList": None, # temporarily set here
+                           "OptionsPending": 0})
+        return state_vars
+
+    ##############################################################################
+    def init_schedule_vars(self, gs_start_time):
+        """
+        intializes the state_vars data structure
+        :param length: length of time series keys in the state_vars dictionary
+        :return: None
+        """
+        schedule_vars = SundialResource.init_schedule_vars(self, gs_start_time)
+        schedule_vars.update({"SelectedProfile": None})
+        return schedule_vars
+
+
 
     ##############################################################################
     def init_forecast_vars(self, gs_start_time):
