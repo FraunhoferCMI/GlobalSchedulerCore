@@ -456,7 +456,8 @@ class SimulatedAnnealer():
 
 
         for ii in range(0, len(loadshift_resources.state_vars["LoadShiftOptions_kW"])):
-
+            _log.info("*************** Searching Load Shift Option "+str(ii+1)+" of "+
+                      str(len(loadshift_resources.state_vars["LoadShiftOptions_kW"]))+"***************************")
             loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii]
             sundial_resources.state_vars["DemandForecast_kW"]   = sundial_resources.state_vars["LoadShiftOptions_kW"][ii]
         #    sundial_resources.interpolate_forecast(schedule_timestamps)
@@ -464,9 +465,10 @@ class SimulatedAnnealer():
             least_cost_soln_list.append(least_cost_soln)
             least_cost_soln_cost_list.append(least_cost_soln.total_cost)
 
+            _log.info("*************** Finished Searching Load Shift Option " + str(ii+1) + " of " +
+                      str(len(loadshift_resources.state_vars[
+                                  "LoadShiftOptions_kW"])) + ", results are: ***************************")
             export_schedule(least_cost_soln, timestamps)
-
-
             # now copy the least cost solution for this load shift option to the lcs list
             # once all load shift options have been searched, we will choose the global least cost
             #least_cost_soln_list.append(self.copy_profile(least_cost_soln, final_soln))
@@ -493,6 +495,7 @@ class SimulatedAnnealer():
             _log.info("SSA: Lower cost solution not found - using previous solution")
 
 
+        loadshift_resources.schedule_vars["SelectedProfile"] = loadshift_resources.state_vars["IDList"][lcs_ind]
 
 
 
