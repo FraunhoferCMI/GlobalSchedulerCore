@@ -84,6 +84,8 @@ default_units = {"CommStatus": "",
                  "OrigDemandForecast_t_str": "utc",
                  "OrigLoadShiftOptions_kW": "kW",
                  "OrigLoadShiftOptions_t_str": "utc",
+                 "IDList": "",
+                 "OptionsPending": "",
                  "Nameplate_kW": "kW",
                  "MaxSOE_kWh": "kWh",
                  "SOE_kWh": "kWh",
@@ -125,12 +127,28 @@ flame_load_state_vars_update_rate = {"CommStatus": 720,
                                      "AvgPwr_kW": 30,
                                      "OrigDemandForecast_kW": 120,
                                      "OrigDemandForecast_t_str": 120,
-                                     "OrigLoadShiftOptions_kW": 500,
-                                     "OrigLoadShiftOptions_t_str": 500,
+                                     "OrigLoadShiftOptions_kW": None,
+                                     "OrigLoadShiftOptions_t_str": None,
                                      "Nameplate_kW": 100,
                                      "SetPt": 30,
                                      "SetPtCmd": 30}
 
+flame_loadshift_state_vars_update_rate = {"CommStatus": 720,
+                                          "DeviceStatus": 720,
+                                          "ReadStatus": 720,
+                                          "WriteStatus": 720,
+                                          "ControlMode": 720,
+                                          "Pwr_kW": 360,
+                                          "AvgPwr_kW": 360,
+                                          "OrigDemandForecast_kW": 360,
+                                          "OrigDemandForecast_t_str": 360,
+                                          "OrigLoadShiftOptions_kW": 1800,
+                                          "OrigLoadShiftOptions_t_str": 1800,
+                                          "IDList": None,
+                                          "OptionsPending": None,
+                                          "Nameplate_kW": 100,
+                                          "SetPt": None,
+                                          "SetPtCmd": 30}
 
 flame_site_state_vars_update_rate = {"CommStatus": None,
                                      "DeviceStatus": None,
@@ -230,7 +248,7 @@ class DERDevice():
         self.DGPlant = ["ESSCtrlNode", "PVCtrlNode", "LoadShiftCtrlNode", "TeslaCtrlNode"]
 
         self.parent_device = parent_device
-        if self.parent_device == None:
+        if self.parent_device is None:
             self.device_id = device_info["ID"]
             self.device_type = "Site"
         else:
@@ -385,7 +403,7 @@ class DERDevice():
             for cur_device in self.devices:
                 _log.debug("FindDevice: "+cur_device.device_id)
                 child_device = cur_device.find_device(device_id)
-                if child_device != None:
+                if child_device is not None:
                     return child_device
             return None
 
@@ -439,7 +457,7 @@ class DERDevice():
             for cur_device in self.devices:
                 child_device = cur_device.init_data_maps(device_id, group_id, int_endpt, ext_endpt,
                                                          units, topic_index, log_to_db, endpt_units)
-                if child_device != None:
+                if child_device is not None:
                     return child_device
 
     ##############################################################################
@@ -485,7 +503,7 @@ class DERDevice():
         device in the site data model).
         :return:
         """
-        if self.parent_device != None:
+        if self.parent_device is not None:
             self.comms_status = self.parent_device.comms_status
         try:
             if (self.health_status.data_dict["CommsStatus"] == 0):
@@ -587,7 +605,7 @@ class DERDevice():
         #    self.state_vars.update({k: self.op_status.data_dict[k]})
 
         try:
-            if self.op_status.data_dict["Pwr_kW"] != None:
+            if self.op_status.data_dict["Pwr_kW"] is not None:
                 self.state_vars.update({"Pwr_kW": self.op_status.data_dict["Pwr_kW"]})
                 self.state_vars.update({"AvgPwr_kW": self.calc_avg_pwr(self.op_status.data_dict["Pwr_kW"])})
         except KeyError:
@@ -596,20 +614,21 @@ class DERDevice():
         try:
             self.state_vars.update({"OrigDemandForecast_kW": self.forecast.data_dict["Pwr"]})
             self.state_vars.update({"OrigDemandForecast_t_str": self.forecast.data_dict["t"]})
+
         except KeyError:
             pass
 
         try:
             self.state_vars.update({"OrigLoadShiftOptions_kW": self.forecast.data_dict["LoadShiftOptions"]})
-            self.state_vars.update({"OrigLoadShiftOptions_t_str": self.forecast.data_dict["t"]})
+            self.state_vars.update({"OrigLoadShiftOptions_t_str": self.forecast.data_dict["LoadShift_t"]})
         except KeyError:
             pass
 
         try:
-            if self.pwr_ctrl.data_dict["SetPt"] != None:
+            if self.pwr_ctrl.data_dict["SetPt"] is not None:
                 self.state_vars.update({"SetPt": self.pwr_ctrl.data_dict["SetPoint"]}),
 
-            if self.pwr_ctrl_cmd.data_dict["SetPoint_cmd"] != None:
+            if self.pwr_ctrl_cmd.data_dict["SetPoint_cmd"] is not None:
                 self.state_vars.update({"SetPtCmd": self.pwr_ctrl_cmd.data_dict["SetPoint_cmd"]})
         except KeyError:
             pass
@@ -755,7 +774,7 @@ class DERDevice():
             _log.debug(k + ': No unit conversion required - skipping: ' + conversionKey)
             cur_attribute.data_dict[keyval] = raw_val
 
-            ##############################################################################
+    ##############################################################################
     def convert_units_to_endpt2(self, attribute, cmd, site):
 
         ext_endpt = self.datagroup_dict_list[attribute].map_int_to_ext_endpt[cmd]
@@ -802,7 +821,7 @@ class DERDevice():
                 _log.debug("PopEndpts: "+cur_device + "." + cur_attribute_name + "." + keyval + "= " + str(
                     raw_val))
 
-                if meta_data != None:
+                if meta_data is not None:
                     #_log.info("PopEndpts: Units - "+meta_data[k]["units"])
                     cur_attribute.endpt_units.update({k: meta_data[k]["units"]})
                 else:
@@ -922,7 +941,7 @@ class DERDevice():
             # SetPtCmd end point.
 
             _log.debug("device - "+ self.device_id+"; k= "+k+"; pub cnt = "+str(self.publish_cnt)+"; update=" +str(self.state_vars_update_rate[k]))
-            if self.state_vars_update_rate[k] != None:
+            if self.state_vars_update_rate[k] is not None:
                 if self.publish_cnt % self.state_vars_update_rate[k] == 0:
                     units = default_units[k]
 
@@ -1073,7 +1092,7 @@ class DERSite(DERDevice):
                     for row in data_map:
                         #_log.info("row[0] is " + row[0])
                         cur_device = self.init_data_maps(row[1], row[2], row[3], row[0], row[5], cnt, row[4], topics["endpt_units"])
-                        if cur_device != None:
+                        if cur_device is not None:
                             _log.info("cur_device id is "+cur_device.device_id)
                         else:
                             _log.info("no device?")
@@ -1623,10 +1642,12 @@ class LoadShiftCtrlNode(DERCtrlNode):
         DERDevice.__init__(self, device_info, parent_device)  # device_id, device_type, parent_device)
         self.state_vars.update({"OrigLoadShiftOptions_kW": [[0.0] * SSA_PTS_PER_SCHEDULE],
                                 "OrigLoadShiftOptions_t_str": None,
+                                "IDList": [],
+                                "OptionsPending": 0,
                                 "SetPt": 0,
                                 "SetPtCmd": 0})
         self.state_vars_update_list = device_update_list
-        self.state_vars_update_rate = flame_load_state_vars_update_rate
+        self.state_vars_update_rate = flame_loadshift_state_vars_update_rate
         _log.info(self.device_id)
         _log.info(self.state_vars_update_rate)
 
@@ -1647,12 +1668,27 @@ class LoadShiftCtrlNode(DERCtrlNode):
         DERCtrlNode.update_state_vars(self)
 
         #fixme - should use get_gs_time
-        now = utils.get_aware_utc_now()
-        self.state_vars["OrigDemandForecast_t_str"] = [(now.replace(minute=0, second=0)  +
-                                                        timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%S")
-                                                       for t in range(0,
-                                                                      SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
-                                                                      SSA_SCHEDULE_RESOLUTION)]
+        #now = utils.get_aware_utc_now()
+        #self.state_vars["OrigDemandForecast_t_str"] = [(now.replace(minute=0, second=0)  +
+        #                                                timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%S")
+        #                                               for t in range(0,
+        #                                                              SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+        #                                                              SSA_SCHEDULE_RESOLUTION)]
+
+        if self.forecast.data_dict["IDList"] is not None:
+            self.state_vars.update({"IDList": self.forecast.data_dict["IDList"]})
+
+        if self.forecast.data_dict["OptionsPending"] is not None:
+            self.state_vars.update({"OptionsPending": self.forecast.data_dict["OptionsPending"]})
+
+
+    ##############################################################################
+    def check_write_status(self):
+        """
+        place holder - need to check for string
+        :return:
+        """
+        self.write_status = 1
 
 
     ##############################################################################
@@ -1668,12 +1704,17 @@ class LoadShiftCtrlNode(DERCtrlNode):
 
     ##############################################################################
     def set_power_real(self, val, sitemgr):
-        self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": int(val)})
+        self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": val})
         _log.info("Selecting Option ID "+str(val))
-        self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
 
         self.writePending["SetPoint"] = 1
-        self.expectedValue["SetPoint"] = int(val)
+        self.expectedValue["SetPoint"] = val
+
+        sitemgr.vip.rpc.call('flameagent-0.1_1',
+                             'load_option_select',
+                             val)
+        self.pwr_ctrl.data_dict.update({"SetPoint": val})
+
         return 1
 
 
@@ -1960,17 +2001,17 @@ class TeslaPowerPack(ESSDevice):
         """
         DERDevice.update_state_vars(self)
 
-        if self.op_status.data_dict["FullChargeEnergy_kWh"] != None:
+        if self.op_status.data_dict["FullChargeEnergy_kWh"] is not None:
             self.state_vars.update({"MaxSOE_kWh": self.op_status.data_dict["FullChargeEnergy_kWh"] * ESS_MAX,
                                     "MinSOE_kWh": self.op_status.data_dict["FullChargeEnergy_kWh"] * ESS_MIN})
 
-        if self.op_status.data_dict["Energy_kWh"] != None:
+        if self.op_status.data_dict["Energy_kWh"] is not None:
             self.state_vars.update({"SOE_kWh": self.op_status.data_dict["Energy_kWh"]})
 
-        if self.op_status.data_dict["MaxChargePwr_kW"] != None:
+        if self.op_status.data_dict["MaxChargePwr_kW"] is not None:
             self.state_vars.update({"MaxChargePwr_kW": self.op_status.data_dict["MaxChargePwr_kW"]})
 
-        if self.op_status.data_dict["MaxDischargePwr_kW"] != None:
+        if self.op_status.data_dict["MaxDischargePwr_kW"] is not None:
             self.state_vars.update({"MaxDischargePwr_kW": self.op_status.data_dict["MaxDischargePwr_kW"]}) #,
                                     #"Nameplate_kW": self.op_status.data_dict["MaxDischargePwr_kW"]})
 
@@ -1982,7 +2023,7 @@ class TeslaPowerPack(ESSDevice):
         check the device's communications status
         :return:
         """
-        if self.parent_device != None:
+        if self.parent_device is not None:
             self.comms_status = self.parent_device.comms_status
 
         try:
@@ -2042,7 +2083,7 @@ class SolectriaInverter(PVDevice):
         :return:
         """
         #if IGNORE_DEVICE_ERRORS == 0:
-        if self.parent_device != None:
+        if self.parent_device is not None:
             self.comms_status = self.parent_device.comms_status
 
         try:
