@@ -596,6 +596,31 @@ class ExecutiveAgent(Agent):
             ii = 0
         return ii
 
+
+    ##############################################################################
+    def send_loadshift_commands(self):
+        """
+        Method for sending select load shift profile(s) to the appropriate Site Manager agents
+        :return:
+        """
+        for entries in self.sdr_to_sm_lookup_table:
+            if entries.sundial_resource.resource_type == "LoadShiftCtrlNode":
+                for devices in entries.device_list:  # for each end point device associated with that ctrl node
+                    if devices["isAvailable"] == 1:  # device is available for control
+                        # retrieve a reference to the device end point operational registers
+                        device_state_vars = self.vip.rpc.call(str(devices["AgentID"]),
+                                                              "get_device_state_vars",
+                                                              devices["DeviceID"]).get(timeout=5)
+
+                        val = self.loadshift_resources.schedule_vars["SelectedProfile"]
+
+                        _log.info("Optimizer: Sending request for load shift profile " + str(val) + "to " + devices["AgentID"])
+                        # send command
+                        self.vip.rpc.call(str(devices["AgentID"]),
+                                          "set_real_pwr_cmd",
+                                          devices["DeviceID"],
+                                          val)
+
     ##############################################################################
     #@Core.periodic(ESS_SCHEDULE)
     def send_ess_commands(self):
@@ -816,10 +841,18 @@ class ExecutiveAgent(Agent):
                 #_log.info(json.dumps(tiers))
 
                 if SEARCH_LOADSHIFT_OPTIONS == True:
-                    self.optimizer.search_load_shift_options(self.sundial_resources,
-                                                             self.loadshift_resources,
-                                                             schedule_timestamps) # SSA optimization - search load shift space
+                    if self.loadshift_resources.state_vars["OptionsPending"] == 1:
+                        _log.info("*** New Optimization Pass: New load options pending - Search Multiple!! ****")
+                        self.optimizer.search_load_shift_options(self.sundial_resources,
+                                                                 self.loadshift_resources,
+                                                                 schedule_timestamps) # SSA optimization - search load shift space
+                        self.send_loadshift_commands()
+                    else:
+                        _log.info("*** New Optimization Pass: No New load options pending! ****")
+                        self.optimizer.search_single_option(self.sundial_resources,
+                                                            schedule_timestamps)  # SSA optimization - single pass
                 else:
+                    _log.info("*** New Optimization Pass: Load Shift disabled! ****")
                     self.optimizer.search_single_option(self.sundial_resources,
                                                         schedule_timestamps)  # SSA optimization - single pass
                 self.publish_schedules()
