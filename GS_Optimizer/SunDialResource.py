@@ -1204,6 +1204,13 @@ def export_schedule(profile, timestamps, update=True):
 
         for obj_fcn in profile.sundial_resources.obj_fcns:
             profile.sundial_resources.schedule_vars[obj_fcn.desc] = obj_fcn.get_obj_fcn_data()
+    else:
+	rejected_df = pandas.DataFrame(data=[profile.state_vars["DemandForecast_kW"],
+                                       profile.state_vars["EnergyAvailableForecast_kWh"]]).transpose()
+    	rejected_df.columns = ["Demand-"+profile.sundial_resources.resource_id, "Energy-"+profile.sundial_resources.resource_id]
+    	rejected_df.index = pandas.Series(profile.sundial_resources.schedule_vars["timestamp"])
+    	pandas.options.display.float_format = '{:,.1f}'.format
+    	print(rejected_df)
 
     demand_df = pandas.DataFrame(data=[profile.sundial_resources.schedule_vars["DemandForecast_kW"],
                                        profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"]]).transpose()
