@@ -209,6 +209,8 @@ class ExecutiveAgent(Agent):
         self.update_endpt_cnt      = 0
         self.data_log_cnt          = 0
 
+        self.prevPwr_kW = None
+
         self.last_forecast_start   = datetime(1900, 1, 1, tzinfo=pytz.UTC)
 
 
@@ -598,6 +600,21 @@ class ExecutiveAgent(Agent):
 
 
     ##############################################################################
+    def get_extrapolation(self, v1, v2, delta_t, pred_t):
+        """
+        Returns a linear extrapolation of two samples (v1 and v2) separated in time by delta_t for a sample pt
+        pred_t time in the future
+        :param v1:
+        :param v2:
+        :param delta_t:
+        :param pred_t:
+        :return:
+        """
+        pred_change = pred_t * (v2 - v1)/delta_t
+        pred_val = v2 + pred_change
+        return pred_val
+
+    ##############################################################################
     def send_loadshift_commands(self):
         """
         Method for sending select load shift profile(s) to the appropriate Site Manager agents
@@ -642,6 +659,11 @@ class ExecutiveAgent(Agent):
             curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
             netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
             netDemandAvg_kW = self.system_resources.state_vars["AvgPwr_kW"]
+
+            if self.prevPwr_kW is None:
+                self.prevPwr_kW = curPwr_kW
+            predPwr_kW = self.get_extrapolation(self.prevPwr_kW, curPwr_kW, 1, 1)
+            self.prevPwr_kW = curPwr_kW # update - just one time step back
 
             if USE_FORECAST_VALUE == True:
                 if ALIGN_SCHEDULES == True:
@@ -698,7 +720,7 @@ class ExecutiveAgent(Agent):
                 # note that this returns a setpoint command for a SundialResource ESSCtrlNode, which can group together
                 # potentially multiple ESS end point devices
                 setpoint = calc_ess_setpoint(targetPwr_kW,
-                                             curPwr_kW,
+                                             predPwr_kW,
                                              SOE_kWh,
                                              min_SOE_kWh,
                                              max_SOE_kWh,
@@ -748,6 +770,7 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["netDemand_kW"]   = netDemand_kW
             self.optimizer_info["netDemandAvg_kW"] = netDemandAvg_kW
 
+            _log.info("Predicted Power is: "+predPwr_kW)
             self.publish_ess_cmds()
 
     ##############################################################################
