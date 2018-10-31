@@ -207,14 +207,14 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
                 pass
 
         # Generate a linear approximation of demand charge
-        v = kwargs["forecast"]["DemandForecast_kW"]-self.init_params["threshold"]
-        energy_above_threshold = v[numpy.where(v > 0)].sum()
-        cost = self.obj_fcn_cost(kwargs["forecast"])
-        if cost == 0:
-            self.imputed_cost_per_kWh = 0
-        else:
-            self.imputed_cost_per_kWh = energy_above_threshold / cost
-        print(self.imputed_cost_per_kWh)
+        #v = kwargs["forecast"]["DemandForecast_kW"]-self.init_params["threshold"]
+        #energy_above_threshold = v[numpy.where(v > 0)].sum()
+        #cost = self.obj_fcn_cost(kwargs["forecast"])
+        #if cost == 0:
+        #    self.imputed_cost_per_kWh = 0
+        #else:
+        #    self.imputed_cost_per_kWh = energy_above_threshold / cost
+        #print(self.imputed_cost_per_kWh)
         print(self.init_params)
         #self.init_params["threshold"] = kwargs["threshold"]
         #self.init_params["cost_per_kW"] = kwargs["cost_per_kW"]
@@ -245,9 +245,13 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
         """
         v = profile["DemandForecast_kW"]-self.init_params["threshold"]
         energy_above_threshold = v[numpy.where(v > 0)].sum()
-        cost = self.imputed_cost_per_kWh * energy_above_threshold
+        cost = self.obj_fcn_cost(profile)
+        if cost == 0:
+            imputed_cost_per_kWh = 0
+        else:
+            imputed_cost_per_kWh = energy_above_threshold / cost
 
-        return cost
+        return imputed_cost_per_kWh
 
 
     ##############################################################################

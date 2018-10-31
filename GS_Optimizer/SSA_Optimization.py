@@ -230,7 +230,7 @@ class SimulatedAnnealer():
         :return: None
         """
         run_optimization = True
-        use_recursive    = True
+        use_recursive    = False
 
         # get an initial set of commands to seed the ssa process
         # then, set least_cost_soln AND current_soln to initiate the SSA
@@ -417,8 +417,15 @@ class SimulatedAnnealer():
 
         return least_cost_soln
 
-
+    ############################
     def search_single_option(self, sundial_resources, timestamps):
+        """
+        searches a single load shape to find a least cost solution.
+        It is assumed that load shift options are not available
+        :param sundial_resources: sundial resource tree, with system as a top node, of type SundialSystemResource
+        :param timestamps: schedule time stamps
+        :return: None
+        """
         least_cost_soln = self.run_ssa_optimization(sundial_resources, timestamps)
         # exports least_cost_soln to sundial_resources.schedule_vars
         if (self.persist_lowest_cost == 0):
@@ -433,14 +440,24 @@ class SimulatedAnnealer():
             export_schedule(least_cost_soln, timestamps, update=False)
 
 
+    ############################
     def search_load_shift_options(self, sundial_resources, loadshift_resources, timestamps):
+        """
+        searches multiple load shift options to find a least cost solution.
+        It is assumed that load shift options are available and enabled
+        :param sundial_resources: sundial resource tree, with system as a top node, of type SundialSystemResource
+        :param loadshift_resources: reference to the load shift resource node of type LoadShiftResource Class
+        :param timestamps: schedule time stamps
+        :return: None
+        """
 
         least_cost_soln_list      = []
         least_cost_soln_cost_list = []
 
 
         for ii in range(0, len(loadshift_resources.state_vars["LoadShiftOptions_kW"])):
-
+            _log.info("*************** Searching Load Shift Option "+str(ii+1)+" of "+
+                      str(len(loadshift_resources.state_vars["LoadShiftOptions_kW"]))+"***************************")
             loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii]
             sundial_resources.state_vars["DemandForecast_kW"]   = sundial_resources.state_vars["LoadShiftOptions_kW"][ii]
         #    sundial_resources.interpolate_forecast(schedule_timestamps)
@@ -448,6 +465,10 @@ class SimulatedAnnealer():
             least_cost_soln_list.append(least_cost_soln)
             least_cost_soln_cost_list.append(least_cost_soln.total_cost)
 
+            _log.info("*************** Finished Searching Load Shift Option " + str(ii+1) + " of " +
+                      str(len(loadshift_resources.state_vars[
+                                  "LoadShiftOptions_kW"])) + ", results are: ***************************")
+            export_schedule(least_cost_soln, timestamps)
             # now copy the least cost solution for this load shift option to the lcs list
             # once all load shift options have been searched, we will choose the global least cost
             #least_cost_soln_list.append(self.copy_profile(least_cost_soln, final_soln))
@@ -474,6 +495,7 @@ class SimulatedAnnealer():
             _log.info("SSA: Lower cost solution not found - using previous solution")
 
 
+        loadshift_resources.schedule_vars["SelectedProfile"] = loadshift_resources.state_vars["IDList"][lcs_ind]
 
 
 
@@ -492,7 +514,7 @@ if __name__ == '__main__':
     #msgs.setLevel(logging.INFO)
     #_log.addHandler(msgs)
 
-    SundialCfgFile = "../cfg/SystemCfg/SundialSystemConfiguration2.json"#"SundialSystemConfiguration2.json"
+    SundialCfgFile = "../cfg/SystemCfg/SundialSystemConfiguration.json"#"SundialSystemConfiguration2.json"
     sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
 
     gs_start_time = datetime.utcnow().replace(microsecond=0)
@@ -612,7 +634,6 @@ if __name__ == '__main__':
     except:
         pass
 
-
     #if solarPlusStorage_resources != []:
     #    solarPlusStorage_resources.load_scenario()
 
@@ -660,6 +681,13 @@ if __name__ == '__main__':
 
         #    sundial_resources.interpolate_forecast(schedule_timestamps)
         #    optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps, tariffs)
+
+        try:
+            print("load shift options")
+            print(loadshift_resources.state_vars["LoadShiftOptions_kW"])
+            print(loadshift_resources.state_vars["OrigLoadShiftOptions_t_str"])
+        except:
+            pass
         sundial_resources.interpolate_forecast(schedule_timestamps)
         sundial_resources.interpolate_soe(schedule_timestamps, cur_time)
 
@@ -679,8 +707,8 @@ if __name__ == '__main__':
             sundial_resources.cfg_cost(schedule_timestamps,
                                        system_tariff = system_tariff,
                                        solarPlusStorage_tariff = solarPlusStorage_tariff)
-            #optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
-            optimizer.search_single_option(sundial_resources, schedule_timestamps)
+            optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
+            #optimizer.search_single_option(sundial_resources, schedule_timestamps)
             #optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps)
         else:
             _log.info("No valid forecasts found - skipping")

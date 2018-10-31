@@ -170,6 +170,8 @@ if USE_SIM == 1:   # schedules for simulated testing
     DEMAND_REPORT_DURATION   = 24*60 # minutes for load request
     N_LOADSHIFT_PROFILES   = 5
     STATUS_REPORT_SCHEDULE = 60 # in seconds # Time interval at which the GS should poll the FLAME to check for status
+    LOADSHIFT_FORECAST_UPDATE_INTERVAL = 2*60 # # seconds
+
 
 else:   # schedules associated with live testing
     CPR_QUERY_INTERVAL = 20*60 # period in seconds for forecasts to arrive
@@ -186,3 +188,7 @@ else:   # schedules associated with live testing
     HI_RES_DEMAND_REPORT_DURATION   = 60 # minutes
     HI_RES_DEMAND_REPORT_RESOLUTION = 1 # minute
     HI_RES_DEMAND_REPORT_SCHEDULE   = 5*60 # seconds
+
+    LOADSHIFT_FORECAST_UPDATE_INTERVAL = 30*60 # # seconds
+
+

@@ -72,6 +72,7 @@ def generate_cost_map(sundial_resources, pv_resources, n_time_steps = 24, search
             # print(test_profile)
             sv = {}
             sv.update({"DemandForecast_kW": test_profile[ii]})
+            #print(test_profile[ii])
             cost_map.iloc[ii][jj] = sundial_resources.calc_cost(sv, linear_approx=True)
 
     v = cost_map.diff(axis=1)
@@ -211,7 +212,7 @@ if __name__ == '__main__':
     system_resources.load_scenario()
 
 
-    tariffs = {"threshold": -100} #DEMAND_CHARGE_THRESHOLD}
+    tariffs = {"threshold": 500} #DEMAND_CHARGE_THRESHOLD}
 
     #########
 
@@ -224,7 +225,8 @@ if __name__ == '__main__':
                                                                SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
                                                                SSA_SCHEDULE_RESOLUTION)]
     sundial_resources.interpolate_forecast(schedule_timestamps)
-    sundial_resources.cfg_cost(schedule_timestamps, tariffs)
+    sundial_resources.cfg_cost(schedule_timestamps,
+                               system_tariff = tariffs)
 
 
     tiers = generate_cost_map(sundial_resources, pv_resources)

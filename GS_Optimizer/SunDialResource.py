@@ -65,9 +65,10 @@ forecast_keys = ["DemandForecast_kW",
                  "OrigDemandForecast_kW",
                  "OrigDemandForecast_t_str",
                  "OrigEnergyAvailableForecast_kWh",
+                 "OrigLoadShiftOptions_kW",
+                 "OrigLoadShiftOptions_t_str",
                  "LoadShiftOptions_kW",
-                 "LoadShiftOptions_t",
-                 "LoadShiftOptions_t_str"]
+                 "LoadShiftOptions_t"]
 
 REPLACE_T0_FORECAST = False
 
@@ -507,12 +508,12 @@ class SundialResource():
             _log.debug(str(self.state_vars["OrigDemandForecast_kW"]))
             self.state_vars["DemandForecast_kW"]           = self.interpolate_values(schedule_timestamps,
                                                                                      self.state_vars["OrigDemandForecast_kW"])
-            self.state_vars["EnergyAvailableForecast_kWh"] = self.interpolate_values(schedule_timestamps,
-                                                                                     self.state_vars["OrigEnergyAvailableForecast_kWh"])
+            self.state_vars["EnergyAvailableForecast_kWh"] = self.state_vars["OrigEnergyAvailableForecast_kWh"]
 
             try:
-                self.state_vars["LoadShiftOptions_kW"] = self.interpolate_loadshift_options(schedule_timestamps,
-                                                                                            self.state_vars["OrigLoadShiftOptions_kW"])
+                self.state_vars["LoadShiftOptions_kW"] = self.interpolate_values(schedule_timestamps,
+                                                                                 self.state_vars["OrigLoadShiftOptions_kW"],
+                                                                                 interpolate_load_shift=True)
                 self.state_vars["LoadShiftOptions_t"] = schedule_timestamps
             except KeyError: # not a load shift resource
                 pass
@@ -527,15 +528,15 @@ class SundialResource():
             len_load_options = 0
             for virtual_plant in self.virtual_plants:
                 # retrieve data from child nodes and sum
-                _log.debug(self.resource_id)
-                _log.debug(virtual_plant.resource_id)
+                _log.debug("**********************"+self.resource_id)
+                _log.debug("***********************"+virtual_plant.resource_id)
                 virtual_plant.interpolate_forecast(schedule_timestamps)
 
 
-                if (virtual_plant.state_vars["DemandForecast_kW"][0] == None):
+                if (virtual_plant.state_vars["DemandForecast_kW"][0] is None):
                     self.state_vars["DemandForecast_kW"] = virtual_plant.state_vars["DemandForecast_kW"]
                     self.state_vars["EnergyAvailableForecast_kWh"] = virtual_plant.state_vars["EnergyAvailableForecast_kWh"]
-                elif (self.state_vars["DemandForecast_kW"][0] != None):
+                elif (self.state_vars["DemandForecast_kW"][0] is not None):
                     self.state_vars["DemandForecast_kW"]           += virtual_plant.state_vars["DemandForecast_kW"]
                     self.state_vars["EnergyAvailableForecast_kWh"] += virtual_plant.state_vars["EnergyAvailableForecast_kWh"]
 
@@ -562,117 +563,164 @@ class SundialResource():
             _log.debug(str(self.state_vars["LoadShiftOptions_kW"]))
 
     ##############################################################################
-    def interpolate_loadshift_options(self, schedule_timestamps, init_demand):
+    def find_starting_ts(self, schedule_timestamps, orig_ts):
         """
-
-        :param schedule_start_time: start time for schedule, in GS frame of reference
-        :return:
+        find the index of the forecast that most closely precedes the timestamp of the current schedule, and
+        calculate the scale factor to use to align to the baseline time.
+        :param schedule_timestamps: timestamps of the current schedule
+        :param orig_ts: timestamps of the underlying forecast that we need to interpolate
+        :return: ts_ind - starting index for the underlying forecast that most closely precedes schedule_timestamps,
+                 scale_factor - factor used to interpolate between timestamps
         """
-        ind = 1  # index into timestamp list -- 1 = forecast at t+1, 0 = forecast at t-1
+        # FIXME - for a load shift - need to figure out how to define the "start" index - t+1?
 
-        _log.debug(self.resource_id)
-        _log.debug(str(self.state_vars["LoadShiftOptions_t_str"]))
-        _log.debug("Timestamps are: "+str(schedule_timestamps))
+        ts_ind = 0
+        cont = True
+        while (cont == True) and (ts_ind < len(orig_ts)):
+            cur_time_elapsed = float((schedule_timestamps[0] -
+                                      datetime.strptime(orig_ts[ts_ind],
+                                                        TIME_FORMAT).replace(
+                                          tzinfo=pytz.UTC)).total_seconds())  # seconds since the first forecast ts
+            if cur_time_elapsed < 0:
+                # implies that we are one index past the start of the schedule - subtract one from the current index
+                # to get the starting point, and calculate a scale factor based on linear interpolation to convert
+                # original forecast time to align with the schedule timestamps
+                cont = False
+                ts_ind -= 1
+                ts_ind = max(ts_ind, 0)
 
-        interpolated_demand = [[0.0] * SSA_PTS_PER_SCHEDULE] * len(init_demand)
+                time_elapsed = float((schedule_timestamps[0] -
+                                      datetime.strptime(orig_ts[ts_ind],
+                                                        TIME_FORMAT).replace(
+                                          tzinfo=pytz.UTC)).total_seconds())  # seconds since the first forecast ts
+                _log.debug("time elapsed = " + str(time_elapsed))
+                scale_factor = time_elapsed / float(SSA_SCHEDULE_RESOLUTION * SEC_PER_MIN)
+                _log.debug("scale factor= " + str(scale_factor))
+            else:
+                ts_ind += 1
 
-        if self.state_vars["LoadShiftOptions_t_str"] != None:
-            time_elapsed = float((schedule_timestamps[0] -
-                                  datetime.strptime(self.state_vars["LoadShiftOptions_t_str"][0],
-                                                    "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)).total_seconds())   # seconds since the first forecast ts
-            _log.debug("time elapsed = "+str(time_elapsed))
-            scale_factor = time_elapsed / float(SSA_SCHEDULE_RESOLUTION*SEC_PER_MIN)
-            _log.debug("scale factor= "+str(scale_factor))
-            _log.debug("demand forecast orig = "+str(init_demand))
+        if cont == True:
+            ts_ind = None # stale data!
+        else:
+            _log.debug('ts ind is ' + str(ts_ind))
+        return ts_ind, scale_factor
 
-            for jj in range(0,len(init_demand)):
-                interpolated_demand[jj] = [init_demand[jj][ii-1] +
-                                   (init_demand[jj][ii] -
-                                    init_demand[jj][ii-1]) * scale_factor
-                                   for ii in range(1,SSA_PTS_PER_SCHEDULE)]
+    ##############################################################################
+    def calculate_interpolated_1d(self, orig_forecast, ts_ind, max_ind, scale_factor, interpolated_demand):
+        """
+        Interpolates an individual value to align a forecast timestamps with a schedule timestamp
+        This approach treats the forecast as a circular buffer, which makes sense for daily forecasts
+        i.e., it the original forecast buffer wraps around if it gets to the end prior to filling the schedule forecast
+        buffer.  Tthe underlying assumption is that we can fill in any missing forecast data with data from the previous
+        day.
+        :param orig_forecast: Underlying forecast
+        :param ii: index to interpolate
+        :param max_ind: indicates the end of the orig_forecast buffer - need to wrap around
+        :param scale_factor: factor used to calculate interpolation
+        :return: interpolated_value - calculated value of the new, schedule-aligned forecast
+                 ii - index into the orginal forecast buffer for the next interpolation
+        """
+        cnt = 0
+        ii = ts_ind
+        while cnt < SSA_PTS_PER_SCHEDULE:
+            if ii == max_ind:
+                interpolated_demand[cnt] = orig_forecast[ii] + \
+                                           (orig_forecast[0] -
+                                            orig_forecast[ii]) * scale_factor
+                ii = 0
+            else:
+                _log.debug("ii= " + str(ii) + "; init_demand[ii] = " + str(orig_forecast[ii]))
+                interpolated_demand[cnt] = orig_forecast[ii] + \
+                                           (orig_forecast[ii + 1] -
+                                            orig_forecast[ii]) * scale_factor
+                ii += 1
+            cnt += 1
+        return interpolated_demand
 
-                interpolated_demand[jj].append(init_demand[jj][SSA_PTS_PER_SCHEDULE-1]) # FIXME - tmp fix to pad last element
+    ##############################################################################
+    def calculate_interpolated_2d(self, orig_forecast, ts_ind, max_ind, scale_factor, interpolated_demand):
+        cnt = 0
+        ii  = ts_ind
+        _log.debug("****** interpolate 2d*****")
+        _log.debug(orig_forecast)
 
-        _log.debug(self.resource_id+": demand forecast is "+str(interpolated_demand))
+        while (cnt<SSA_PTS_PER_SCHEDULE) and (ii<len(orig_forecast[0])):
 
-        return numpy.array(interpolated_demand)
+        #for ii in range(ts_ind, SSA_PTS_PER_SCHEDULE):
+            for jj in range (0,len(orig_forecast)):
+
+                if ii == len(orig_forecast[jj])-1:
+                    interpolated_demand[jj][cnt] = orig_forecast[jj][ii] + \
+                                         (0 - orig_forecast[jj][ii]) * scale_factor
+                else:
+                    interpolated_demand[jj][cnt] = orig_forecast[jj][ii] + \
+                                         (orig_forecast[jj][ii + 1] -
+                                          orig_forecast[jj][ii]) * scale_factor
+            cnt+= 1
+            ii += 1
+        return interpolated_demand
+
 
 
     ##############################################################################
-    def interpolate_values(self, schedule_timestamps, init_demand):
+    def interpolate_values(self, schedule_timestamps, init_demand, interpolate_load_shift=False):
         """
-
-        :param schedule_start_time: start time for schedule, in GS frame of reference
+        this method interpolates values for a forecast to coincide with the timestamps of the next schedule
+        The original (non schedule-aligned) forecast is stored in OrigDemandForecast_kW
+        The original (non schedule-aligned) time stamps are stored in OrigDemandForecast_t_str
+        :param schedule_timestamps: time stamps for the start of the next schedule
         :return:
         """
         ind = 1  # index into timestamp list -- 1 = forecast at t+1, 0 = forecast at t-1
         SEC_PER_MIN = 60.0
 
-        _log.debug(self.resource_id)
-        _log.debug(str(self.state_vars["OrigDemandForecast_t_str"]))
+        if interpolate_load_shift == False:
+            orig_ts = self.state_vars["OrigDemandForecast_t_str"]
+        else:
+            orig_ts = self.state_vars["OrigLoadShiftOptions_t_str"]
+
+        _log.debug(self.resource_id + "; original time stamps are: ")
+        _log.debug(str(orig_ts))
         _log.debug("Timestamps are: "+str(schedule_timestamps))
+        _log.debug(init_demand)
 
+        if interpolate_load_shift == False:
+            interpolated_demand = [0.0] * SSA_PTS_PER_SCHEDULE  # Initialize to 0
+        else:
+            interpolated_demand = [[0.0] * SSA_PTS_PER_SCHEDULE for n in xrange(len(init_demand))]
 
-        if self.state_vars["OrigDemandForecast_t_str"] != None:
+        if orig_ts is not None:
             # forecast for this resource was found
             # do a point by point interpolation to determine forecast for the current schedule.
 
-            ### First: find the index of the forecast that most closely precedes the timestamp of the current schedule
-            ts_ind = 0
-            cont = True
-            while (cont==True) and (ts_ind<len(self.state_vars["OrigDemandForecast_t_str"])):
-                cur_time_elapsed = float((schedule_timestamps[0] -
-                                          datetime.strptime(self.state_vars["OrigDemandForecast_t_str"][ts_ind],
-                                                            "%Y-%m-%dT%H:%M:%S").replace(
-                                              tzinfo=pytz.UTC)).total_seconds())  # seconds since the first forecast ts
-                if cur_time_elapsed < 0:
-                    cont = False
-                    ts_ind-=1
-                    ts_ind = max(ts_ind,0)
+            ts_ind, scale_factor = self.find_starting_ts(schedule_timestamps, orig_ts)
 
-                    time_elapsed = float((schedule_timestamps[0] -
-                                          datetime.strptime(self.state_vars["OrigDemandForecast_t_str"][ts_ind],
-                                                            "%Y-%m-%dT%H:%M:%S").replace(
-                                              tzinfo=pytz.UTC)).total_seconds())  # seconds since the first forecast ts
-                    _log.debug("time elapsed = " + str(time_elapsed))
-                    scale_factor = time_elapsed / float(SSA_SCHEDULE_RESOLUTION * SEC_PER_MIN)
-                    _log.debug("scale factor= " + str(scale_factor))
-                    _log.debug("demand forecast orig = " + str(init_demand))
-                else:
-                    ts_ind += 1
+            _log.debug("ts_ind="+str(ts_ind)+"; scale factor = "+str(scale_factor))
 
-            _log.debug('ts ind is '+str(ts_ind))
-
-            interpolated_demand = [0.0] * SSA_PTS_PER_SCHEDULE  # Initialize to 0
             #### check contingencies
-            if cont == True: # implies that forecast data is totally stale (>1 day old).
-                ts_ind=0
+            if ts_ind is None: # implies that forecast data is totally stale (>1 day old).
                 interpolated_demand[0] = None
                 _log.info("Forecast data is > 24 hrs old for "+str(self.resource_id))
 
             else:
-                ### now - fill in the interpolation.
-                # treat the forecast as a circular buffer, interpolate starting at ts_ind
-                # and wrap around when we get to the end.
-                # contiue until interpolated forecast is fully populated
-                cnt = 0
-                ii = ts_ind
-                while (cnt<SSA_PTS_PER_SCHEDULE):
-                    if ii == len(self.state_vars["OrigDemandForecast_t_str"]) - 1:
-                        interpolated_demand[cnt] = init_demand[ii] +\
-                                                  (init_demand[0] -
-                                                   init_demand[ii]) * scale_factor
-                        ii = 0
-                    else:
-                        _log.debug("ii= "+str(ii)+"; init_demand[ii] = "+str(init_demand[ii]))
-                        interpolated_demand[cnt] = init_demand[ii] +\
-                                                  (init_demand[ii+1] -
-                                                   init_demand[ii]) * scale_factor
-                        ii += 1
-                    cnt += 1
+                # Fill in the interpolated demand buffer.  The first value starts at ts_ind and continues
+                # until the interpolated forecast buffer is fully populated.  There are class specific methods for
+                # dealing with edge-conditions.  The default uses a circular buffer.
+                if interpolate_load_shift == False:
+                    interpolated_demand = self.calculate_interpolated_1d(init_demand,
+                                                                         ts_ind,
+                                                                         len(orig_ts) - 1,
+                                                                         scale_factor,
+                                                                         interpolated_demand)
+
+                else:
+                    interpolated_demand = self.calculate_interpolated_2d(init_demand,
+                                                                         ts_ind,
+                                                                         SSA_PTS_PER_SCHEDULE-1,
+                                                                         scale_factor,
+                                                                         interpolated_demand)
 
         else:
-            interpolated_demand = [0.0] * SSA_PTS_PER_SCHEDULE  # Initialize to 0
             interpolated_demand[0] = None
             _log.info("Warning: Forecast not available for resource - "+self.resource_id)
             #interpolated_demand = [0.0]*SSA_PTS_PER_SCHEDULE
@@ -881,7 +929,7 @@ class ESSResource(SundialResource):
             profile["DeltaEnergy_kWh"])
 
         cnt = 0
-        if max(energy) > float(max_soe)+0.001: # new command has violated an upper constraint
+        if max(energy) > float(max_soe)+EPSILON: # new command has violated an upper constraint
             # adjust power command downward by an amount equivalent to the SOE violation, after correcting for losses
             test_val = profile["DemandForecast_kW"][ind]-(max(energy) - max_soe)/eff_factor
             if (profile["DemandForecast_kW"][ind] > 0.0) & (test_val < 0.0):
@@ -893,7 +941,7 @@ class ESSResource(SundialResource):
             profile["DeltaEnergy_kWh"][ind] = profile["DemandForecast_kW"][ind] * eff_factor
             energy = numpy.cumsum(profile["DeltaEnergy_kWh"]) + [self.state_vars["StartingSOE_kWh"]] * len(profile["DeltaEnergy_kWh"])
             cnt += 1
-        elif min(energy) < float(min_soe)-0.001: # new command has violated a lower constraint
+        elif min(energy) < float(min_soe)-EPSILON: # new command has violated a lower constraint
             # adjust power command upward by amount equivalent to SOE violation, after correcting for losses
             test_val = profile["DemandForecast_kW"][ind] + (min_soe-min(energy))/eff_factor
             if (profile["DemandForecast_kW"][ind] < 0.0) & (test_val > 0.0):
@@ -988,8 +1036,36 @@ class LoadShiftResource(SundialResource):
         SundialResource.__init__(self, resource_cfg, gs_start_time)
 
         # define a bunch of LoadShift-specific end points to update
-        self.forecast_update_list.extend(["LoadShiftOptions_kW",
-                                          "LoadShiftOptions_t_str"])
+        self.forecast_update_list.extend(["OrigLoadShiftOptions_kW",
+                                          "OrigLoadShiftOptions_t_str",
+                                          "IDList",
+                                          "OptionsPending"])
+
+
+    ##############################################################################
+    def init_state_vars(self):
+        """
+        intializes the state_vars data structure
+        :param length: length of time series keys in the state_vars dictionary
+        :return: None
+        """
+        state_vars = SundialResource.init_state_vars(self)
+        state_vars.update({"IDList": None, # temporarily set here
+                           "OptionsPending": 0})
+        return state_vars
+
+    ##############################################################################
+    def init_schedule_vars(self, gs_start_time):
+        """
+        intializes the state_vars data structure
+        :param length: length of time series keys in the state_vars dictionary
+        :return: None
+        """
+        schedule_vars = SundialResource.init_schedule_vars(self, gs_start_time)
+        schedule_vars.update({"SelectedProfile": None})
+        return schedule_vars
+
+
 
     ##############################################################################
     def init_forecast_vars(self, gs_start_time):
@@ -1016,15 +1092,17 @@ class LoadShiftResource(SundialResource):
     def load_scenario(self,
                       load_options = [[0.0]*SSA_PTS_PER_SCHEDULE]*10,
                       t = None):
-        self.state_vars["LoadShiftOptions_kW"] = numpy.array(load_options)
-        self.state_vars["LoadShiftOptions_kW"] = load_options
-        self.state_vars["LoadShiftOptions_t_str"]  = t
+        #self.state_vars["LoadShiftOptions_kW"] = numpy.array(load_options)
+        #self.state_vars["LoadShiftOptions_kW"] = load_options
+        self.state_vars["OrigLoadShiftOptions_kW"] = load_options
+        self.state_vars["LoadShiftOptions_kW"]     = numpy.array(load_options)
+        self.state_vars["OrigLoadShiftOptions_t_str"] = t
         self.state_vars["LoadShiftOptions_t"]  = [datetime.strptime(ts,
                                                                     "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)
                                                   for ts in t]
-        self.state_vars["DemandForecast_t"]    = [datetime.strptime(ts,
-                                                                    "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)
-                                                  for ts in t]
+        SundialResource.load_scenario(self, t=t)
+
+
 
 
 ##############################################################################

@@ -1,5 +1,9 @@
-Forecast,FLAME-LoadShift,Forecast,LoadShiftOptions,,kW
-Time,FLAME-LoadShift,Forecast,t,,UTC
+Forecast,FLAME-LoadShift,Forecast,LoadShiftOptions,Y,kW
+Time,FLAME-LoadShift,Forecast,LoadShift_t,Y,UTC
 Duration,FLAME-LoadShift,Forecast,duration,,hr
 Resolution,FLAME-LoadShift,Forecast,resolution,,min
-nOptions,FLAME-LoadShift,Forecast,nOption,0,
+nOptions,FLAME-LoadShift,Forecast,nOption,,
+ID,FLAME-LoadShift,Forecast,IDList,Y,
+OptionsPending,FLAME-LoadShift,Forecast,OptionsPending,Y,
+SelectedProfileLoad,FLAME-LoadShift,Forecast,Pwr,Y,kW
+SelectedProfileTime,FLAME-LoadShift,Forecast,t,Y,UTC

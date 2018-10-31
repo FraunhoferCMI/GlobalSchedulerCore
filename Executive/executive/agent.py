@@ -209,6 +209,8 @@ class ExecutiveAgent(Agent):
         self.update_endpt_cnt      = 0
         self.data_log_cnt          = 0
 
+        self.prevPwr_kW = None
+
         self.last_forecast_start   = datetime(1900, 1, 1, tzinfo=pytz.UTC)
 
 
@@ -596,6 +598,46 @@ class ExecutiveAgent(Agent):
             ii = 0
         return ii
 
+
+    ##############################################################################
+    def get_extrapolation(self, v1, v2, delta_t, pred_t):
+        """
+        Returns a linear extrapolation of two samples (v1 and v2) separated in time by delta_t for a sample pt
+        pred_t time in the future
+        :param v1:
+        :param v2:
+        :param delta_t:
+        :param pred_t:
+        :return:
+        """
+        pred_change = pred_t * (v2 - v1)/delta_t
+        pred_val = v2 + pred_change
+        return pred_val
+
+    ##############################################################################
+    def send_loadshift_commands(self):
+        """
+        Method for sending select load shift profile(s) to the appropriate Site Manager agents
+        :return:
+        """
+        for entries in self.sdr_to_sm_lookup_table:
+            if entries.sundial_resource.resource_type == "LoadShiftCtrlNode":
+                for devices in entries.device_list:  # for each end point device associated with that ctrl node
+                    if devices["isAvailable"] == 1:  # device is available for control
+                        # retrieve a reference to the device end point operational registers
+                        device_state_vars = self.vip.rpc.call(str(devices["AgentID"]),
+                                                              "get_device_state_vars",
+                                                              devices["DeviceID"]).get(timeout=5)
+
+                        val = self.loadshift_resources.schedule_vars["SelectedProfile"]
+
+                        _log.info("Optimizer: Sending request for load shift profile " + str(val) + "to " + devices["AgentID"])
+                        # send command
+                        self.vip.rpc.call(str(devices["AgentID"]),
+                                          "set_real_pwr_cmd",
+                                          devices["DeviceID"],
+                                          val)
+
     ##############################################################################
     #@Core.periodic(ESS_SCHEDULE)
     def send_ess_commands(self):
@@ -617,6 +659,11 @@ class ExecutiveAgent(Agent):
             curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
             netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
             netDemandAvg_kW = self.system_resources.state_vars["AvgPwr_kW"]
+
+            if self.prevPwr_kW is None:
+                self.prevPwr_kW = curPwr_kW
+            predPwr_kW = self.get_extrapolation(self.prevPwr_kW, curPwr_kW, 1, 1)
+            self.prevPwr_kW = curPwr_kW # update - just one time step back
 
             if USE_FORECAST_VALUE == True:
                 if ALIGN_SCHEDULES == True:
@@ -673,7 +720,7 @@ class ExecutiveAgent(Agent):
                 # note that this returns a setpoint command for a SundialResource ESSCtrlNode, which can group together
                 # potentially multiple ESS end point devices
                 setpoint = calc_ess_setpoint(targetPwr_kW,
-                                             curPwr_kW,
+                                             predPwr_kW,
                                              SOE_kWh,
                                              min_SOE_kWh,
                                              max_SOE_kWh,
@@ -703,11 +750,11 @@ class ExecutiveAgent(Agent):
                             # Right now configured with only one ESS - has not been tested this iteration with more
                             # than one ESS end point in this iteration
                             if (setpoint > 0):  # charging
-                                pro_rata_share = float(device_state_vars["SOE_kWh"]+0.001) / (float(SOE_kWh)+0.001) * float(setpoint)
+                                pro_rata_share = float(device_state_vars["SOE_kWh"]+EPSILON) / (float(SOE_kWh)+EPSILON) * float(setpoint)
                                 #todo - need to check for min SOE - implication of the above is that min = 0
                             else: # discharging
-                                pro_rata_share = float(device_state_vars["MaxSOE_kWh"] - device_state_vars["SOE_kWh"]+0.001) /\
-                                                 (max_SOE_kWh - float(SOE_kWh)+0.001) * float(setpoint)
+                                pro_rata_share = float(device_state_vars["MaxSOE_kWh"] - device_state_vars["SOE_kWh"]+EPSILON) /\
+                                                 (max_SOE_kWh - float(SOE_kWh)+EPSILON) * float(setpoint)
                             _log.debug("Optimizer: Sending request for " + str(pro_rata_share) + "to " + devices["AgentID"])
                             # send command
                             self.vip.rpc.call(str(devices["AgentID"]),
@@ -723,6 +770,7 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["netDemand_kW"]   = netDemand_kW
             self.optimizer_info["netDemandAvg_kW"] = netDemandAvg_kW
 
+            _log.info("Predicted Power is: "+predPwr_kW)
             self.publish_ess_cmds()
 
     ##############################################################################
@@ -816,10 +864,18 @@ class ExecutiveAgent(Agent):
                 #_log.info(json.dumps(tiers))
 
                 if SEARCH_LOADSHIFT_OPTIONS == True:
-                    self.optimizer.search_load_shift_options(self.sundial_resources,
-                                                             self.loadshift_resources,
-                                                             schedule_timestamps) # SSA optimization - search load shift space
+                    if self.loadshift_resources.state_vars["OptionsPending"] == 1:
+                        _log.info("*** New Optimization Pass: New load options pending - Search Multiple!! ****")
+                        self.optimizer.search_load_shift_options(self.sundial_resources,
+                                                                 self.loadshift_resources,
+                                                                 schedule_timestamps) # SSA optimization - search load shift space
+                        self.send_loadshift_commands()
+                    else:
+                        _log.info("*** New Optimization Pass: No New load options pending! ****")
+                        self.optimizer.search_single_option(self.sundial_resources,
+                                                            schedule_timestamps)  # SSA optimization - single pass
                 else:
+                    _log.info("*** New Optimization Pass: Load Shift disabled! ****")
                     self.optimizer.search_single_option(self.sundial_resources,
                                                         schedule_timestamps)  # SSA optimization - single pass
                 self.publish_schedules()
