@@ -770,7 +770,7 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["netDemand_kW"]   = netDemand_kW
             self.optimizer_info["netDemandAvg_kW"] = netDemandAvg_kW
 
-            _log.info("Predicted Power is: "+predPwr_kW)
+            _log.info("ExecutiveStatus: Predicted Power="+ (str(predPwr_kW)))
             self.publish_ess_cmds()
 
     ##############################################################################
