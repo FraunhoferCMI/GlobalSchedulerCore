@@ -77,11 +77,10 @@ def generate_cost_map(sundial_resources, pv_resources, n_time_steps = 24, search
 
     v = cost_map.diff(axis=1)
     v.columns = range(lb, ub + search_resolution, search_resolution)
-
+    _log.debug(v)
     tiers = []
     for ii in range(0, n_time_steps):
-        jj = lb + 2 * search_resolution
-        jj=0.0
+        jj=max(0.0, lb+2*search_resolution)
         cnt = 0
         cur_generation = -1*pv_resources.state_vars["DemandForecast_kW"][ii]
         _log.info(cur_generation)
