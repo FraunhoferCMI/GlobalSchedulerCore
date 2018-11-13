@@ -514,25 +514,26 @@ if __name__ == '__main__':
     #msgs.setLevel(logging.INFO)
     #_log.addHandler(msgs)
 
-    SundialCfgFile = "../cfg/SystemCfg/SundialSystemConfiguration.json"#"SundialSystemConfiguration2.json"
+    _log.info("Getting variables ready for SundialSystemResource")
+    SundialCfgFile = "../cfg/SystemCfg/SundialSystemConfiguration2.json"#"SundialSystemConfiguration2.json"
     sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
 
     gs_start_time = datetime.utcnow().replace(microsecond=0)
     if shift_to_start_of_day == True:
         gs_start_time = gs_start_time.replace(hour=0, minute=0, second=0)
-
     gs_start_time_str = gs_start_time.strftime("%Y-%m-%dT%H:%M:%S")
 
-    _log.info(gs_start_time_str)
+    _log.info("Initializing SundialSystemResource with start time: {}".format(gs_start_time_str))
     sundial_resources = SundialSystemResource(sundial_resource_cfg_list, gs_start_time_str)
 
 
+    _log.info("Breaking out resources from main SundialSystemResource")
     ess_resources = sundial_resources.find_resource_type("ESSCtrlNode")[0]
     pv_resources = sundial_resources.find_resource_type("PVCtrlNode")[0]
 
     try:
         solarPlusStorage_resources = sundial_resources.find_resource_type("SolarPlusStorageCtrlNode")[0]
-        print("found!")
+        _log.info("solarPlusStorage found!")
     except:
         solarPlusStorage_resources = []
 
@@ -546,11 +547,12 @@ if __name__ == '__main__':
     except:
         load_resources = []
 
+
+    _log.info("initializing variables")
     forecast_timestamps = [(gs_start_time.replace(minute=0, second=0) +
                            timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%S") for t in range(0,
                                                                                               SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
                                                                                               SSA_SCHEDULE_RESOLUTION)]
-
 
     #### Just load with example values - ######
     ess_forecast = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -613,7 +615,7 @@ if __name__ == '__main__':
         pv_forecast     = pv_forecast_base
         demand_forecast = demand_forecast_base
 
-
+    _log.info("Load scenarios")
     pv_resources.load_scenario(demand_forecast = pv_forecast,
                                pk_capacity = 1000.0,
                                t=forecast_timestamps)
@@ -648,11 +650,14 @@ if __name__ == '__main__':
 
     ##### This section replicates the periodic call of the optimizer ######
     # calls the actual optimizer.
+    _log.info("Initializing optimizer")
     toffset = 0
     nIterations = 1
     optimizer = SimulatedAnnealer()
     last_forecast_start = datetime(1900, 1, 1, tzinfo=pytz.UTC)
 
+
+    _log.info("Starting optimization")
     for ii in range(0,nIterations):
         cur_time = gs_start_time.replace(tzinfo=pytz.UTC)+timedelta(minutes=toffset)
         if ALIGN_SCHEDULES == True:

@@ -6,7 +6,8 @@ import sys
 import pytz
 import numpy
 import pandas
-from random import *
+from random import random
+# from random import *
 from SunDialResource import SundialSystemResource, SundialResource, SundialResourceProfile, export_schedule
 from datetime import datetime, timedelta
 import logging
@@ -15,6 +16,7 @@ from gs_utilities import get_schedule
 
 _log = logging.getLogger("PriceMap")
 
+import pandas as pd
 
 
 ##############################################################################
@@ -212,7 +214,16 @@ if __name__ == '__main__':
     system_resources.load_scenario()
 
 
-    tariffs = {"threshold": 500} #DEMAND_CHARGE_THRESHOLD}
+    # tariffs = {"threshold": 500} #DEMAND_CHARGE_THRESHOLD}
+    start_times = pd.date_range(datetime.now().date(),
+                                periods=24,
+                                freq='H')
+    iso_data = pd.DataFrame([random() / 10 for i in range(24)],
+                            index = start_times)
+
+    tariffs = {"threshold": -100,
+               "isone": iso_data
+               }
 
     #########
 
@@ -225,8 +236,7 @@ if __name__ == '__main__':
                                                                SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
                                                                SSA_SCHEDULE_RESOLUTION)]
     sundial_resources.interpolate_forecast(schedule_timestamps)
-    sundial_resources.cfg_cost(schedule_timestamps,
-                               system_tariff = tariffs)
+    sundial_resources.cfg_cost(schedule_timestamps, tariffs=tariffs)
 
 
     tiers = generate_cost_map(sundial_resources, pv_resources)
