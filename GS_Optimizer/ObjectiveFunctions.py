@@ -50,6 +50,7 @@ class ObjectiveFunction():
         :param fname: filename
         :return: self.obj_fcn_data --> dataframe of time series cost data
         """
+        # fname_fullpath = get_gs_path("", fname)
         fname_fullpath = get_gs_path("GS_Optimizer/", fname)
 
         df = pandas.read_excel(fname_fullpath, header=0, index_col=0)
@@ -119,12 +120,12 @@ class ObjectiveFunction():
     def get_obj_fcn_data(self):
         return self.init_params["cur_cost"]
 
-
 ##############################################################################
 class EnergyCostObjectiveFunction(ObjectiveFunction):
 
     ##############################################################################
     def __init__(self, desc="", init_params=None, **kwargs):
+
         init_params = {'fname': None}
 
         # duration --> 'time_step': isodate.parse_duration('PT60M')
@@ -150,6 +151,26 @@ class EnergyCostObjectiveFunction(ObjectiveFunction):
     def get_obj_fcn_data(self):
         return self.init_params["cur_cost"][0].tolist()
 
+class ISONECostObjectiveFunction(EnergyCostObjectiveFunction):
+
+    ##############################################################################
+    def __init__(self, desc="", init_params=None, **kwargs):
+        init_params = {'fname': None}
+        EnergyCostObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
+        self.init_params = {'fname': None,
+                       'tariff_key': 'tariffs'}
+
+    ##############################################################################
+    def obj_fcn_cfg(self, **kwargs):
+        self.init_params["cur_cost"] = kwargs[self.init_params['tariff_key']]["isone"]
+
+    ##############################################################################
+    def obj_fcn_cost(self, profile):
+        cost = self.init_params["cur_cost"][-1]
+        # cost = numpy.array(self.init_params["cur_cost"].to_records(index=False))
+
+        return cost
+
 ##############################################################################
 class StoredEnergyValueObjectiveFunction(ObjectiveFunction):
     """
@@ -161,13 +182,14 @@ class StoredEnergyValueObjectiveFunction(ObjectiveFunction):
 
     def obj_fcn_cost(self, profile):
         end_ind = len(profile["EnergyAvailableForecast_kWh"])-1
+        # print( "CURRENT FORECAST")
+        # print( profile["EnergyAvailableForecast_kWh"])
+        # print( type(profile["EnergyAvailableForecast_kWh"]))
         cost = self.init_params["value_per_kWh"] * profile["EnergyAvailableForecast_kWh"][end_ind]
         return cost
 
     def get_obj_fcn_data(self):
         return self.init_params["value_per_kWh"]
-
-
 
 ##############################################################################
 class dkWObjectiveFunction(ObjectiveFunction):
@@ -258,7 +280,6 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
     def get_obj_fcn_data(self):
         return self.init_params["threshold"]
 
-
 ##############################################################################
 class TieredEnergyObjectiveFunction():
     """
@@ -296,7 +317,6 @@ class TieredEnergyObjectiveFunction():
         # else:
         #    cost = 0
         return cost
-
 
 ##############################################################################
 class LoadShapeObjectiveFunction(ObjectiveFunction):
@@ -341,8 +361,6 @@ class LoadShapeObjectiveFunction(ObjectiveFunction):
     ##############################################################################
     def get_obj_fcn_data(self):
         return self.init_params["cur_cost"][0].tolist()
-
-
 
 ##############################################################################
 class BatteryLossModelObjectiveFunction(ObjectiveFunction):
