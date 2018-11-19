@@ -1126,7 +1126,7 @@ class SundialSystemResource(SundialResource):
 
         # set up the specific set of objective functions to apply for the system
         self.obj_fcns = [EnergyCostObjectiveFunction(desc="EnergyPrice", fname="energy_price_data.xlsx"),
-                        ISONECostObjectiveFunction(desc="ISONEPrice", fname="energy_price_data.xlsx"),
+                        #ISONECostObjectiveFunction(desc="ISONEPrice", fname="energy_price_data.xlsx"),
                          #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_data_load.xlsx"),
                          #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_prices.xlsx", vble_price=True),
                          DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0, threshold = 0, tariff_key='system_tariff'),

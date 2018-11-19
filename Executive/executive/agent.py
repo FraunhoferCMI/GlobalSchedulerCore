@@ -182,8 +182,7 @@ class ExecutiveAgent(Agent):
         # refer to Executive state machine documentation
         self.OperatingMode_set = EXEC_STARTING
         self.OperatingMode     = self.OperatingMode_set
-        # self.OptimizerEnable   = DISABLED
-        self.OptimizerEnable   = ENABLED
+        self.OptimizerEnable   = DISABLED
         self.UICtrlEnable      = DISABLED
 
         # Initialize Configuration Files
@@ -376,8 +375,7 @@ class ExecutiveAgent(Agent):
                                     self.tariffs["threshold"])
 
 
-        self.OperatingMode_set = APPLICATION_CONTROL
-        # self.OperatingMode_set = USER_CONTROL
+        self.OperatingMode_set = USER_CONTROL
 
 
     ##############################################################################
@@ -456,7 +454,7 @@ class ExecutiveAgent(Agent):
                                     freq='H')
         # iso_data = pd.DataFrame([random.random() / 10 for i in range(24)],
         #                         index = start_times)
-        iso_data = numpy.array([random.random() / 10 for i in range(24)])
+        iso_data = numpy.array([random.random() / 10 for i in range(SSA_PTS_PER_SCHEDULE)])
         self.tariffs = {"threshold": DEMAND_CHARGE_THRESHOLD,
                         "isone": iso_data
                         }
@@ -819,7 +817,7 @@ class ExecutiveAgent(Agent):
         return schedule_timestamps
 
     ##############################################################################
-    @Core.periodic(GS_SCHEDULE)
+    #@Core.periodic(GS_SCHEDULE)
     def run_optimizer(self):
         """
         runs optimizer on specified schedule
@@ -827,10 +825,8 @@ class ExecutiveAgent(Agent):
         devices.
         :return: None
         """
-        _log.info("Trying optimization!!")
-        _log.info("OptimizerEnable value: {}".format(self.OptimizerEnable))
+
         if self.OptimizerEnable == ENABLED:
-            _log.info("Optimization Enabled!")
             # check to make sure that resources have been updated
             # if they have not - ... - request an update and go into a waiting state.
 
