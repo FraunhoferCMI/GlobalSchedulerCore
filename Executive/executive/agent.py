@@ -472,8 +472,8 @@ class ExecutiveAgent(Agent):
     ##############################################################################
     def update_tariffs(self):
         if UPDATE_THRESHOLD == True:
-            if self.system_resources.state_vars["AvgPwr_kW"] > 1.2*self.tariffs["threshold"]:
-                self.tariffs["threshold"] = self.system_resources.state_vars["AvgPwr_kW"]/1.2
+            if self.system_resources.state_vars["AvgPwr_kW"] > 1.1*self.tariffs["threshold"]:
+                self.tariffs["threshold"] = self.system_resources.state_vars["AvgPwr_kW"]/1.1
 
                 HistorianTools.publish_data(self,
         	                                "Tariffs",

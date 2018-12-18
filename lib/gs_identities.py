@@ -99,11 +99,11 @@ USER_CONTROL = 1
 APPLICATION_CONTROL = 2
 EXEC_STARTING = 3
 
-EXECUTIVE_CLKTIME = 2 # period, in seconds, at which the executive polls system state
+EXECUTIVE_CLKTIME = 1 # period, in seconds, at which the executive polls system state
 DATA_LOG_SCHEDULE = 1  # period at which state vars are logged, in executive clock cycles
 ENDPT_UPDATE_SCHEDULE  = DATA_LOG_SCHEDULE # period at which sundial system resource objects are updated
-GS_SCHEDULE       = 60  # GS optimizer period, in executive clock cycles
-ESS_SCHEDULE      = 2 # ess regulation period, in executive clock cycles
+GS_SCHEDULE       = 180  # GS optimizer period, in executive clock cycles
+ESS_SCHEDULE      = 1 # ess regulation period, in executive clock cycles
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
 
 #FIXME - Placeholder!
@@ -152,13 +152,15 @@ DEMAND_FILE_TIME_RESOLUTION_MIN = DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN #1
 SIM_START_TIME = datetime(year=2018, month=1, day=1, hour=0, minute=0, second=0) + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
 
 DEMAND_CHARGE_THRESHOLD = 300 #250
-UPDATE_THRESHOLD = False
+UPDATE_THRESHOLD = True
 
 # FIXME - ESS_RESERVE_xx should be set in absoluate terms, not relative terms - won't work if ESS_MIN is 0
 ESS_MAX = 0.98
 ESS_MIN = 0.05
-ESS_RESERVE_HIGH = 0.95  # relative to ESS_MAX
-ESS_RESERVE_LOW  = 1.5   # relative to ESS_MIN
+ESS_RESERVE_HIGH = 0.85  # relative to ESS_MAX
+ESS_RESERVE_LOW  = 6.0   # relative to ESS_MIN
+
+PV_ADJUST = 0.72
 
 PV_ADJUST = 0.75
 DEMAND_ADJUST = 1.0

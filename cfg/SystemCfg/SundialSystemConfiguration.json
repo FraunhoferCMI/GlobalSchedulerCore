@@ -19,7 +19,7 @@
       {
         "ID": "SystemLoad",
         "ResourceType": "Load",
-        "Use": "N",
+        "Use": "Y",
         "VirtualPlantList": [],
         "DeviceList": [
           {
