@@ -120,6 +120,21 @@ class FLAMECommsAgent(Agent):
 
     ##############################################################################
     def __init__(self, config_path, **kwargs):
+        """
+        Class Variables:
+
+        self.pending_loadshift_options - most recent load shift options provided from flame server
+        self.forecast_load_option_profile -
+        self.OptionID
+        self.options_pending
+        self.load_report
+        self.initialization_complete
+        self.comm_status
+        :param config_path:
+        :param kwargs:
+        """
+
+
         super(FLAMECommsAgent, self).__init__(**kwargs)
 
         _log.info("CONFIGURATION PATH IS %s" % config_path)
@@ -308,7 +323,7 @@ class FLAMECommsAgent(Agent):
 
         _log.info("selecting load option")
 
-        if (0):
+        if ENABLE_LOAD_SELECT == True:
             ws = create_connection(ws_url, sslopt=sslopt)
             lsel = LoadSelect(websocket=ws,
                               optionID=optionID)
@@ -322,26 +337,26 @@ class FLAMECommsAgent(Agent):
                 message=optionID) # CHECK if this is what's wanted
                 # message=lsel.status) # CHECK if this is what's wanted
             ws.close()
-        else:
-            _log.info("selecting option "+optionID)
-            #_log.info(self.pending_loadshift_options.forecast_dict[optionID])
 
-            self.options_pending = 0
-            self.optionID        = optionID
+        _log.info("selecting option "+optionID)
+        #_log.info(self.pending_loadshift_options.forecast_dict[optionID])
 
-            # When a new load option is selected, update with the new data:
-            new_selected_profile = pd.DataFrame(data=self.pending_loadshift_options.forecast_dict[optionID],
-                                                index=self.pending_loadshift_options.forecast.time)
-            self.forecast_load_option_profile = new_selected_profile.combine_first(self.forecast_load_option_profile)
+        self.options_pending = 0
+        self.optionID        = optionID
 
-            message = [{"OptionsPending": self.options_pending}, {"OptionsPending": {'type': 'int', 'units': 'none'}}]
-            self.vip.pubsub.publish(
-                peer="pubsub",
-                topic=self._config['loadshift_forecast_topic'],
-                headers={},
-                message=message)
+        # When a new load option is selected, update with the new data:
+        new_selected_profile = pd.DataFrame(data=self.pending_loadshift_options.forecast_dict[optionID],
+                                            index=self.pending_loadshift_options.forecast.time)
+        self.forecast_load_option_profile = new_selected_profile.combine_first(self.forecast_load_option_profile)
 
-            self.publish_load_option_forecast()
+        message = [{"OptionsPending": self.options_pending}, {"OptionsPending": {'type': 'int', 'units': 'none'}}]
+        self.vip.pubsub.publish(
+            peer="pubsub",
+            topic=self._config['loadshift_forecast_topic'],
+            headers={},
+            message=message)
+
+        self.publish_load_option_forecast()
 
         return None
 
@@ -707,6 +722,11 @@ class FLAMECommsAgent(Agent):
 
         if self.initialization_complete == 1:
             current_time = datetime.now(pytz.timezone('US/Eastern')).replace(microsecond=0, second=0)
+
+            # There seems to be a bug on the FLAME server associated with processing load requests since DST took
+            # effect
+            current_time += current_time.astimezone(pytz.timezone('US/Eastern')).dst() - timedelta(hours=1)
+
             utc_now_str = current_time.astimezone(pytz.timezone('UTC')).strftime(TIME_FORMAT)
             time_delta = timedelta(minutes=HI_RES_DEMAND_REPORT_DURATION)
             start_time = current_time - time_delta
