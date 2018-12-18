@@ -434,11 +434,12 @@ class LoadReport(IPKeys):
 
 
     def process(self):
-        loadSchedules, missing_vals = self.generate_facility_load_report2(scale_values=False)
-        loadSchedules_scaled        = self.generate_facility_load_report2(scale_values=True)
+        loadSchedules, missing_vals        = self.generate_facility_load_report2(scale_values=False)
+        loadSchedules_scaled, missing_vals = self.generate_facility_load_report2(scale_values=True)
 
         # sum facility schedules
         #_log.info(loadSchedules)
+        #_log.info(loadSchedules_scaled)
         self.loadSchedule = reduce(lambda x, y: x.add(y, fill_value=0), loadSchedules)
         self.loadSchedule_scaled = reduce(lambda x, y: x.add(y, fill_value=0), loadSchedules_scaled)
 
@@ -565,6 +566,7 @@ def create_baseline_request(start, granularity, duration):
 
 def parse_Baseline_response(result):
     forecast_values = pd.DataFrame(result['msg']['loadSchedule'])
+    #forecast_values = forecast_values * DEMAND_ADJUST
     forecast_values.set_index('dstart', inplace=True)
     forecast_values.index = convert_FLAME_time_to_UTC(forecast_values.index)
     return forecast_values
@@ -679,6 +681,99 @@ def format_timeperiod(granularity):
                                 time_designator])
     return full_time_string
 
+
+def store_forecasts(start_time, end_time):
+    query_start = datetime.strptime(start_time, TIME_FORMAT)
+    end_datetime   = datetime.strptime(end_time, TIME_FORMAT)
+
+    forecasts = None
+
+    while query_start < end_datetime:
+        # 0. Connect to server
+        ws_url = "wss://flame.ipkeys.com:9443/socket/msg"
+        sslopt = {"ca_certs": 'IPKeys_Root.pem'}
+        ws = create_connection(ws_url, sslopt=sslopt)
+
+        # 1. query server
+
+        start =  query_start.strftime(TIME_FORMAT)
+        granularity = 1
+        # granularity =  'PT1H'
+        duration = 'PT24H'
+
+        repeat = True
+        print("Querying " + start)
+        bl = Baseline(start, granularity, duration, ws)
+        try:
+            bl.process()
+            repeat = False
+
+            # 2. combine with existing dataset
+            if forecasts is None:
+                forecasts = bl.forecast
+            else:
+                forecasts = forecasts.combine_first(bl.forecast)
+        except:
+            print("query failed - skipping!")
+
+        # 3. increment query_start
+        query_start = query_start +timedelta(days=1)
+
+
+    forecasts.to_csv("stored_forecasts.csv")
+
+    pass
+
+
+def store_loadreports(start_time, end_time):
+    query_start = datetime.strptime(start_time, TIME_FORMAT)
+    end_datetime = datetime.strptime(end_time, TIME_FORMAT)
+
+    load_reports = None
+
+    while query_start < end_datetime:
+        # 0. Connect to server
+        ws_url = "wss://flame.ipkeys.com:9443/socket/msg"
+        sslopt = {"ca_certs": 'IPKeys_Root.pem'}
+        ws = create_connection(ws_url, sslopt=sslopt)
+
+        # 1. query server
+
+        start = query_start.strftime(TIME_FORMAT)
+
+        print("Querying " + start)
+
+
+        loadReport_kwargs = {
+            "dstart": start, #"2018-07-14T00:00:00",        #start time for report
+            "sampleInterval": "PT1H",            #sample interval
+            "duration": "PT24H",           # duration of request
+            "facilities": ["Facility2"] #"["Facility1", "Facility2", "Facility3"]
+        }
+        lr = LoadReport(ws, **loadReport_kwargs)
+
+        try:
+            lr.process()
+
+            # 2. combine with existing dataset
+            if load_reports is None:
+                load_reports = lr.loadSchedule
+            else:
+                load_reports = load_reports.combine_first(lr.loadSchedule)
+        except:
+            print("query failed - skipping!")
+
+        # 3. increment query_start
+        query_start = query_start + timedelta(days=1)
+
+    load_reports.to_csv("stored_loadreports.csv")
+
+    pass
+
+
+
+
+
 if __name__ == '__main__':
 
     ws_url = "wss://flame.ipkeys.com:9443/socket/msg"
@@ -690,6 +785,15 @@ if __name__ == '__main__':
     sslopt = {"ca_certs": 'IPKeys_Root.pem'}
 
     ws = create_connection(ws_url, sslopt=sslopt)
+
+    TEST_BASELINE   = False
+    TEST_STATUS     = False
+    TEST_LOADSHIFT  = False
+    TEST_STATUS     = False
+    TEST_LOADSELECT = False
+    TEST_LOADREPORT = False
+    STORE_FORECASTS = True
+
 
     # Baseline
     def test_Baseline():
@@ -704,33 +808,37 @@ if __name__ == '__main__':
         print("Here's the Baseline forecast:\n", bl.forecast)
         print("done processing Baseline")
         return bl
-    #bl = test_Baseline()
+    if TEST_BASELINE == True:
+        bl = test_Baseline()
 ##
     def test_LoadShift():
         print("running LoadShift")
         # LoadShift
         current_tz = pytz.timezone('US/Eastern')
-        start_time = current_tz.localize(datetime(year=2018,month=10,day=25,hour=14))
+        start_time = current_tz.localize(datetime(year=2018,month=11,day=20,hour=0))
         ls = LoadShift(websocket = ws,
                        start_time = start_time)
         ls.process()
         print("Here's the LoadShift forecast:\n", ls.forecast)
         print("done processing LoadShift")
         return ls
-    ls = test_LoadShift()
-    #ls.forecast.to_csv("loadshift.csv")
+    if TEST_LOADSHIFT == True:
+        ls = test_LoadShift()
+        #ls.forecast.to_csv("loadshift.csv")
 
     ##
     def test_LoadSelect():
         print("running LoadSelect")
-        lsel = LoadSelect(ws, 1)
+        lsel = LoadSelect(ws, 1234)
         lsel.process()
         # print("Here's the LoadSelect response:\n", lsel.response)
         print("Here's the LoadSelect status:\n", lsel.status)
         print("done processing LoadSelect")
         return lsel
-    # Actuates things!!
-    #lsel = test_LoadSelect()
+    if TEST_LOADSELECT == True:
+        # Actuates things!!
+        lsel = test_LoadSelect()
+
     ##
     def test_LoadReport():
         print("running LoadReport")
@@ -752,7 +860,8 @@ if __name__ == '__main__':
         print(lr.loadSchedule)
         print("done processing LoadReport")
         return lr
-    lr = test_LoadReport()
+    if TEST_LOADREPORT == True:
+        lr = test_LoadReport()
     ##
 
     def test_Status():
@@ -765,5 +874,12 @@ if __name__ == '__main__':
         print("Here's the Status currentProfile:\n", status.currentProfile)
         print("done processing Status")
         return status
-    #status = test_Status()
+    if TEST_STATUS == True:
+        status = test_Status()
     ##
+
+    if STORE_FORECASTS == True:
+        start_time = "2018-09-01T00:00:00"
+        end_time   = "2018-12-12T00:00:00"
+        #store_forecasts(start_time, end_time)
+        store_loadreports(start_time, end_time)
