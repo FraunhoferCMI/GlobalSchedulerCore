@@ -941,7 +941,7 @@ class ESSResource(SundialResource):
             profile["DeltaEnergy_kWh"][ind] = profile["DemandForecast_kW"][ind] * eff_factor
             energy = numpy.cumsum(profile["DeltaEnergy_kWh"]) + [self.state_vars["StartingSOE_kWh"]] * len(profile["DeltaEnergy_kWh"])
             cnt += 1
-        elif min(energy) < float(min_soe)-EPSILON: # new command has violated a lower constraint
+        if min(energy) < float(min_soe)-EPSILON: # new command has violated a lower constraint
             # adjust power command upward by amount equivalent to SOE violation, after correcting for losses
             test_val = profile["DemandForecast_kW"][ind] + (min_soe-min(energy))/eff_factor
             if (profile["DemandForecast_kW"][ind] < 0.0) & (test_val > 0.0):
