@@ -707,6 +707,13 @@ class FLAMECommsAgent(Agent):
 
         if self.initialization_complete == 1:
             current_time = datetime.now(pytz.timezone('US/Eastern')).replace(microsecond=0, second=0)
+
+            # there is a bug on the FLAME server in which it seems to process hi res load report requests
+            # as DST, not as local time.  So during standard time, it returns results that are offset by 
+            # 1 hour from the request.
+            current_time += current_time.dst() - timedelta(hours=1)
+
+
             utc_now_str = current_time.astimezone(pytz.timezone('UTC')).strftime(TIME_FORMAT)
             time_delta = timedelta(minutes=HI_RES_DEMAND_REPORT_DURATION)
             start_time = current_time - time_delta
