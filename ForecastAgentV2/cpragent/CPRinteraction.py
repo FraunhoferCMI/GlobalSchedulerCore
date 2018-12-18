@@ -92,7 +92,7 @@ def parse_query(query):
         time.append(iso_datetime.astimezone(pytz.UTC).strftime("%Y-%m-%dT%H:%M:%S"))
         try:
             #print(sim.attributes['StartTime'].value + ": " + sim.attributes['PowerAC_kW'].value)
-            forecast.append(-1.0*float(sim.attributes['PowerAC_kW'].value))
+            forecast.append(-1.0*float(sim.attributes['PowerAC_kW'].value)*PV_ADJUST)
         except KeyError:
             #print(sim.attributes['StartTime'].value + ": " + "synthesized 0.0")
             forecast.append(0.0)
