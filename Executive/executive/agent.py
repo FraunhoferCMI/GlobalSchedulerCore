@@ -262,6 +262,7 @@ class ExecutiveAgent(Agent):
                                     "OperatingMode",
                                     self.OperatingMode)
 
+        self.send_exec_heartbeat()
 
         ######### This section initializes SiteManager agents that correspond to sites identified in the #############
         ######### SiteConfiguration.json file ########################################################################
@@ -650,6 +651,18 @@ class ExecutiveAgent(Agent):
                                           "set_real_pwr_cmd",
                                           devices["DeviceID"],
                                           val)
+
+    ##############################################################################
+    @Core.periodic(3600)
+    def send_exec_heartbeat(self):
+
+        HistorianTools.publish_data(self,
+                                    "Executive",
+                                    "",
+                                    "exec_heartbeat",
+                                    1)
+
+        pass
 
     ##############################################################################
     #@Core.periodic(ESS_SCHEDULE)
