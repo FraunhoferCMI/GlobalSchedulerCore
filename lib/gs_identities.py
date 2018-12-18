@@ -122,6 +122,8 @@ REGULATE_ESS_OUTPUT = True # True = Match system's output in real time to schedu
 USE_FORECAST_VALUE = True
 IMPORT_CONSTRAINT = False    # fail safe to ensure that storage does not charge from the grid
 SEARCH_LOADSHIFT_OPTIONS = False
+ENABLE_LOAD_SELECT = False
+
 # For configuring forecast agent
 CPR_TIMEOUT = 600            #sets the timeout for hourly forecast data requests
 CPR_1M_TIMEOUT = 600         #sets the timeout for minute forecast data requests
@@ -157,6 +159,9 @@ ESS_MAX = 0.98
 ESS_MIN = 0.05
 ESS_RESERVE_HIGH = 0.95  # relative to ESS_MAX
 ESS_RESERVE_LOW  = 1.5   # relative to ESS_MIN
+
+PV_ADJUST = 0.75
+DEMAND_ADJUST = 1.0
 
 # SCHEDULES
 if USE_SIM == 1:   # schedules for simulated testing
