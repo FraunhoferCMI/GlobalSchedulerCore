@@ -67,6 +67,11 @@ import pandas
 from SunDialResource import SundialSystemResource, SundialResource, SundialResourceProfile, build_SundialResource_to_SiteManager_lookup_table
 from SSA_Optimization import SimulatedAnnealer
 import GeneratePriceMap
+import pandas as pd
+from pprint import pformat
+
+# delete this imports
+import random
 
 
 #utils.setup_logging()
@@ -118,7 +123,7 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     if setpoint > max_charge_kW:
         setpoint = max_charge_kW
         _log.info("Optimizer: Power-limited Setpoint =" + str(setpoint))
-	
+
     # now check that the target setpoint is within the energy limits
 
     # calculate what the remaining charge will be at the end of the next period
@@ -444,7 +449,15 @@ class ExecutiveAgent(Agent):
         #fname_fullpath = volttron_root+fname
         #self.energy_price_data = pandas.read_excel(fname_fullpath, header=0, index_col=0)
 
-        self.tariffs = {"threshold": DEMAND_CHARGE_THRESHOLD}
+        start_times = pd.date_range(datetime.now().date(),
+                                    periods=24,
+                                    freq='H')
+        # iso_data = pd.DataFrame([random.random() / 10 for i in range(24)],
+        #                         index = start_times)
+        iso_data = numpy.array([random.random() / 10 for i in range(SSA_PTS_PER_SCHEDULE)])
+        self.tariffs = {"threshold": DEMAND_CHARGE_THRESHOLD,
+                        "isone": iso_data
+                        }
 
         #self.tariffs = {"energy_price": }
 
@@ -812,6 +825,7 @@ class ExecutiveAgent(Agent):
         devices.
         :return: None
         """
+
         if self.OptimizerEnable == ENABLED:
             # check to make sure that resources have been updated
             # if they have not - ... - request an update and go into a waiting state.
@@ -856,8 +870,10 @@ class ExecutiveAgent(Agent):
                 self.last_forecast_start = forecast_start
 
                 ## queue up time-differentiated cost data
+                _log.info("THESE ARE THE TARIFFS: {}".format(self.tariffs))
                 self.sundial_resources.cfg_cost(schedule_timestamps,
-                                                system_tariff = self.tariffs)
+                                                tariffs = self.tariffs)
+                                                # system_tariff = self.tariffs)
 
                 ## generate a cost map - for testing
                 #tiers = self.generate_cost_map()
@@ -1143,6 +1159,26 @@ class ExecutiveAgent(Agent):
             self.vip.rpc.call(CONTROL, "remove_agent", site["uuid"]).get(timeout=5)
 
 
+    @PubSub.subscribe('pubsub', "datalogger/isone/da_lmp/4332")
+    def on_match(self, peer, sender, bus,  topic, headers, message):
+        """Use match_all to receive all messages and print them out."""
+        _log.info("FOUND A MATCH!!!")
+        _log.info(
+            "Peer: %r, Sender: %r:, Bus: %r, Topic: %r, Headers: %r, "
+            "Message: \n%s", peer, sender, bus, topic, headers, pformat(message))
+        # interpreted = json.loads(message)
+
+        _log.info("INTERPRETED TYPE")
+        data = message['LMP']['Readings']
+        _log.info(type(data))
+        _log.info(data)
+        price_only = [pricetime[1] for pricetime in data]
+        interpreted = numpy.array(price_only)
+        _log.info(interpreted)
+        _log.info(type(interpreted))
+        self.tariffs['isone'] = interpreted
+        # interpreted = np
+        # print(interpreted['LMP']['Readings'])
 
 def main(argv=sys.argv):
     '''Main method called by the eggsecutable.'''

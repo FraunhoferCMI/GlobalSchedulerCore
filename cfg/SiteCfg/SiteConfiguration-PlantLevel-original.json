@@ -81,7 +81,7 @@
             "TopicScrapeTimeout":"LOADSHIFT_QUERY_INTERVAL*2"
          }
       ],
-      "Use" :"N",
+      "Use" :"Y",
       "Metered" : "Y",
       "DeviceList":[
          {

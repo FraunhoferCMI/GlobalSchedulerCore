@@ -745,6 +745,8 @@ class SundialResource():
         cost = 0 #[]
         for obj_fcn in self.obj_fcns:
             if linear_approx == False:
+                # print("PROFILE_STATE_VARS") # cost.append(obj_fcn.obj_fcn_cost(profile))
+                # print(profile_state_vars) # cost.append(obj_fcn.obj_fcn_cost(profile))
                 cost += obj_fcn.obj_fcn_cost(profile_state_vars) # cost.append(obj_fcn.obj_fcn_cost(profile))
             else:
                 cost += obj_fcn.get_linear_approximation(profile_state_vars)  # cost.append(obj_fcn.obj_fcn_cost(profile))
@@ -1124,6 +1126,7 @@ class SundialSystemResource(SundialResource):
 
         # set up the specific set of objective functions to apply for the system
         self.obj_fcns = [EnergyCostObjectiveFunction(desc="EnergyPrice", fname="energy_price_data.xlsx"),
+                        #ISONECostObjectiveFunction(desc="ISONEPrice", fname="energy_price_data.xlsx"),
                          #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_data_load.xlsx"),
                          #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_prices.xlsx", vble_price=True),
                          DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0, threshold = 0, tariff_key='system_tariff'),
@@ -1211,9 +1214,9 @@ class SundialResource_to_SiteManager_lookup_table():
                             device["isAvailable"] = 1
                             break
 
-                    if site["identity"] != device["AgentID"]:
-                        # error trapping - make sure that the agent & associated device are valid entries
-                        _log.info("SunDial Resource: Warning - Agent " + device["AgentID"] + " not found.  Skipping...")
+                        if site["identity"] != device["AgentID"]:
+                            # error trapping - make sure that the agent & associated device are valid entries
+                            _log.info("SunDial Resource: Warning - Agent " + device["AgentID"] + " not found.  Skipping...")
                 else:
                     _log.info("SunDial Resource: Agent " + device["AgentID"] + " set to ignore.  Skipping...")
 
