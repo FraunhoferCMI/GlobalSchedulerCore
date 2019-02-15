@@ -756,9 +756,9 @@ class DERDevice():
 
         try:
             if type(raw_val) is list:
-                tmplist = [eval(self.unit_conversion_table[conversionKey]) for val in raw_val]
-                del cur_attribute.data_dict[keyval][:]
-                cur_attribute.data_dict[keyval] = tmplist[:]
+                #tmplist = [eval(self.unit_conversion_table[conversionKey]) for val in raw_val]
+                #del cur_attribute.data_dict[keyval][:]
+                cur_attribute.data_dict[keyval] = [eval(self.unit_conversion_table[conversionKey]) for val in raw_val] #tmplist[:]
                 _log.debug("PopEndpts: converted " + k + "from " + endpt_units +
                            " to " + cur_attribute.units[keyval] + ". New val = " + str(cur_attribute.data_dict[keyval]))
             else:
