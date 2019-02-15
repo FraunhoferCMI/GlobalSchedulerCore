@@ -12,9 +12,12 @@ def PctToUnits(val,nameplate):
 def UnitsToPct(val, nameplate):
     return int(float(val)*100.0 / float(nameplate))
 
-def SunSpecScale(keyval, data_dict, to_unit_scale, to_unit_units):
-    base_name = keyval[:len(keyval) - to_unit_units]  # assume this has a unit on the end of the name
-    return (data_dict[keyval] * 10.0 ** data_dict[base_name + "SF"]) / to_unit_scale
+def SunSpecScale(keyval, data_dict, to_unit_scale, to_unit_units, val):
+    base_name = keyval[:len(keyval) - len(to_unit_units)]  # assume this has a unit on the end of the name
+    if data_dict[base_name + "SF"] is None:
+        return 0.0
+    else:
+        return (val * 10.0 ** data_dict[base_name + "SF"]) / to_unit_scale
 
 def ScaleNegPctToUnits(val,nameplate):
     return -1*PctToUnits(val, nameplate)
