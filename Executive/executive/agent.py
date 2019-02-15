@@ -673,7 +673,6 @@ class ExecutiveAgent(Agent):
         devices
         :return: None
         """
-
         if self.OptimizerEnable == ENABLED:
             # Now we need to determine the target battery set point.  To do so, look at the total current system
             # power output, subtracting the contribution from the battery.  The delta between total current system
@@ -696,7 +695,7 @@ class ExecutiveAgent(Agent):
                     cur_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0,tzinfo=pytz.utc)
                     try:
                         targetPwr_kW = self.sundial_resources.schedule_vars["schedule_kW"][cur_time]
-                        expectedPwr_kW = self.pv_resources.schedule_vars["schedule_kW"][cur_time]
+                        expectedPwr_kW = self.pv_resources.schedule_vars["schedule_kW"][cur_time] + self.load_resources.schedule_vars["schedule_kW"][cur_time]
                         essTargetPwr_kW = self.ess_resources.schedule_vars["schedule_kW"][cur_time]
                         self.system_resources.state_vars["TgtPwr_kW"] = targetPwr_kW
                     except KeyError:
@@ -707,7 +706,7 @@ class ExecutiveAgent(Agent):
                 else:
                     ii = self.find_current_timestamp_index()
                     targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ii]
-                    expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][ii]
+                    expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][ii] + self.load_resources.schedule_vars["schedule_kW"][cur_time]
                     essTargetPwr_kW = self.ess_resources.schedule_vars["DemandForecast_kW"][ii]
             else:
                 ii = 0
@@ -838,7 +837,6 @@ class ExecutiveAgent(Agent):
         devices.
         :return: None
         """
-
         if self.OptimizerEnable == ENABLED:
             # check to make sure that resources have been updated
             # if they have not - ... - request an update and go into a waiting state.
@@ -1012,12 +1010,33 @@ class ExecutiveAgent(Agent):
                                     TimeStamp_str=self.ess_resources.schedule_vars["timestamp"][23].strftime(
                                         "%Y-%m-%dT%H:%M:%S"))
 
-
         HistorianTools.publish_data(self,
                                     "PVResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_kW",
                                     self.pv_resources.schedule_vars["DemandForecast_kW"].tolist())
+
+        HistorianTools.publish_data(self,
+                                    "PVResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_tPlus1_kW",
+                                    self.pv_resources.schedule_vars["DemandForecast_kW"][1],
+                                    TimeStamp_str=self.pv_resources.schedule_vars["timestamp"][1].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
+        HistorianTools.publish_data(self,
+                                    "PVResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_tPlus5_kW",
+                                    self.pv_resources.schedule_vars["DemandForecast_kW"][5],
+                                    TimeStamp_str=self.pv_resources.schedule_vars["timestamp"][5].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
+        HistorianTools.publish_data(self,
+                                    "PVResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_tPlus23_kW",
+                                    self.pv_resources.schedule_vars["DemandForecast_kW"][23],
+                                    TimeStamp_str=self.pv_resources.schedule_vars["timestamp"][23].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
         HistorianTools.publish_data(self,
                                     "PVResource/Schedule",
                                     default_units["timestamp"],
@@ -1029,6 +1048,28 @@ class ExecutiveAgent(Agent):
                                         default_units["DemandForecast_kW"],
                                         "DemandForecast_kW",
                                         self.load_resources.schedule_vars["DemandForecast_kW"].tolist())
+
+            HistorianTools.publish_data(self,
+                                        "LoadResource/Schedule",
+                                        default_units["DemandForecast_kW"],
+                                        "DemandForecast_tPlus1_kW",
+                                        self.load_resources.schedule_vars["DemandForecast_kW"][1],
+                                        TimeStamp_str=self.load_resources.schedule_vars["timestamp"][1].strftime(
+                                            "%Y-%m-%dT%H:%M:%S"))
+            HistorianTools.publish_data(self,
+                                        "LoadResource/Schedule",
+                                        default_units["DemandForecast_kW"],
+                                        "DemandForecast_tPlus5_kW",
+                                        self.load_resources.schedule_vars["DemandForecast_kW"][5],
+                                        TimeStamp_str=self.load_resources.schedule_vars["timestamp"][5].strftime(
+                                            "%Y-%m-%dT%H:%M:%S"))
+            HistorianTools.publish_data(self,
+                                        "LoadResource/Schedule",
+                                        default_units["DemandForecast_kW"],
+                                        "DemandForecast_tPlus23_kW",
+                                        self.load_resources.schedule_vars["DemandForecast_kW"][23],
+                                        TimeStamp_str=self.load_resources.schedule_vars["timestamp"][23].strftime(
+                                            "%Y-%m-%dT%H:%M:%S"))
             HistorianTools.publish_data(self,
                                         "LoadResource/Schedule",
                                         default_units["timestamp"],
