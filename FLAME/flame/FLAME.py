@@ -552,7 +552,10 @@ class Status(IPKeys):
         # self.loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
         print(self.response['msg'])
         self.alertStatus = self.response['msg']['alertStatus']
-        self.currentProfile = self.response['msg']['currentProfile']
+        try:
+            self.currentProfile = self.response['msg']['currentProfile']
+        except KeyError:
+            self.currentProfile = None
 
 # functions
 def create_baseline_request(start, granularity, duration):
