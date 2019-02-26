@@ -200,6 +200,7 @@ class CPRAgent(Agent):
         # indicates that forecast data is ready to be published
         self.initialization_complete = 1
 
+        self.query_solar_forecast()
 
 
 
