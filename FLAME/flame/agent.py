@@ -381,11 +381,11 @@ class FLAMECommsAgent(Agent):
         real_start_time = datetime.strptime(get_schedule(self.gs_start_time,
                                                          resolution=SSA_SCHEDULE_RESOLUTION),
                                             "%Y-%m-%dT%H:%M:%S.%f")
+        _log.info(real_start_time)
         start_time = real_start_time
         if FORCE_TIME == True:
-            elapsed_time = datetime.utcnow() - self.agent_start_time
+            elapsed_time = (datetime.utcnow().replace(tzinfo=pytz.UTC) - self.gs_start_time)*SIM_HRS_PER_HR #self.agent_start_time
             start_time = (self.force_start_time + elapsed_time).replace(microsecond=0, second=0)
-
         ## need to convert the start time request to local time.  get_schedule returns a time stamp in UTC, but
         ## as a string, so it is time naive.  It needs to be recast as UTC and then changed to local time.
 
@@ -400,7 +400,6 @@ class FLAMECommsAgent(Agent):
     def query_baseline(self):
         "Queries the FLAME server for baseline message"
         if self.initialization_complete == 1:
-            _log.info("querying baseline")
             # Baseline
 
             start_time = self.get_forecast_request_start_time()
@@ -413,6 +412,7 @@ class FLAMECommsAgent(Agent):
                 start_time = start_time.replace(minute=0, second=0, microsecond=0)
 
             start_time_str = start_time.strftime("%Y-%m-%dT%H:%M:%S")
+            _log.info("Querying baseline at "+start_time_str)
             ws = create_connection(ws_url, sslopt=sslopt)
             baseline_kwargs = dict(
                 start =  start_time_str,
@@ -759,7 +759,7 @@ class FLAMECommsAgent(Agent):
 
             if FORCE_TIME == True:
                 now = datetime.utcnow().replace(tzinfo=pytz.UTC)
-                elapsed_time = now-self.gs_start_time    #self.agent_start_time
+                elapsed_time = (now-self.gs_start_time)*SIM_HRS_PER_HR    #self.agent_start_time
 
                 base_time = (self.force_start_time+elapsed_time).replace(microsecond=0,second=0)
                 base_time = base_time.replace(tzinfo=pytz.UTC)
