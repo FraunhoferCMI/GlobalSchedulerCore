@@ -49,6 +49,13 @@ import os
 USE_SIM      = 1
 USE_VOLTTRON = 1
 
+USE_SOLAR_SIM  = 1
+USE_DEMAND_SIM = 1
+USE_SCALED_LOAD = True #False
+SIM_SCENARIO   = 2
+SIM_HRS_PER_HR = 15 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
+
+
 # Configuration File Locations
 #SITE_CFG_FILE   = "SiteConfiguration-PlantLevel-original.json" 
 #SITE_CFG_FILE   = "SiteConfiguration-PlantLevel.json"
@@ -103,13 +110,13 @@ EXEC_STARTING = 3
 EXECUTIVE_CLKTIME = 2 # period, in seconds, at which the executive polls system state
 DATA_LOG_SCHEDULE = 2  # period at which state vars are logged, in executive clock cycles
 ENDPT_UPDATE_SCHEDULE  = DATA_LOG_SCHEDULE # period at which sundial system resource objects are updated
-GS_SCHEDULE       = 120  # GS optimizer period, in executive clock cycles
+GS_SCHEDULE       = 2880/6  # GS optimizer period, in executive clock cycles
 ESS_SCHEDULE      = 4 # ess regulation period, in executive clock cycles
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
 
 #FIXME - Placeholder!
 MODBUS_SCRAPE_INTERVAL  = 4 # period in seconds for modbus device to post on the IEB bus
-MODBUS_AVERAGING_WINDOW = 5*60 # period in seconds over which to average instantaneous readings
+MODBUS_AVERAGING_WINDOW = 15*60 / SIM_HRS_PER_HR # period in seconds over which to average instantaneous readings
 MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
 MODBUS_WRITE_ATTEMPTS  = 5  # number of modbus reads before a write error is thrown
 
@@ -118,9 +125,10 @@ SSA_SCHEDULE_RESOLUTION   = 60 # Time resolution, in minutes, of SSA schedule
 SSA_PTS_PER_SCHEDULE = SSA_SCHEDULE_DURATION * 60/SSA_SCHEDULE_RESOLUTION
 DURATION_1MIN_FORECAST = 5 # hrs
 
-ALIGN_SCHEDULES = True
+ALIGN_SCHEDULES = False
 REGULATE_ESS_OUTPUT = True # True = Match system's output in real time to scheduled output using ESS; False = use scheduled ESS value regardless of divergence from forecast
 USE_FORECAST_VALUE = True
+SMOOTH_RAMP = False
 IMPORT_CONSTRAINT = False    # fail safe to ensure that storage does not charge from the grid
 SEARCH_LOADSHIFT_OPTIONS = False
 ENABLE_LOAD_SELECT = False
@@ -129,11 +137,6 @@ ENABLE_LOAD_SELECT = False
 CPR_TIMEOUT = 600            #sets the timeout for hourly forecast data requests
 CPR_1M_TIMEOUT = 600         #sets the timeout for minute forecast data requests
 # For configuring w/ simulated data
-USE_SOLAR_SIM  = 1
-USE_DEMAND_SIM = 1
-USE_SCALED_LOAD = True #False
-SIM_SCENARIO   = 2
-SIM_HRS_PER_HR = 1 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
 if SIM_SCENARIO == 1:
     PV_FORECAST_FILE = "SAM_PVPwr_nyc.csv"  # "irr_1min.csv"
     PV_TS_FILE       = None
@@ -144,8 +147,9 @@ elif SIM_SCENARIO == 2:
     PV_FORECAST_FILE = 'solar_forecast_matrix.csv'
     PV_TS_FILE       = 'solar_forecast_ts_matrix.csv'
     PV_FORECAST_FILE_TIME_RESOLUTION_MIN = 60  # 1
-    SIM_START_TIME = datetime(year=2018, month=10, day=5, hour=11, minute=0, second=0)
-    SIM_START_DAY = (SIM_START_TIME - START_OF_YR).days
+    #SIM_START_TIME = datetime(year=2018, month=10, day=5, hour=11, minute=0, second=0)
+    SIM_START_TIME = datetime(year=2018, month=10, day=11, hour=1, minute=0, second=0)
+    SIM_START_DAY = (SIM_START_TIME - START_OF_YR).days+1
     SIM_START_HR  = SIM_START_TIME.hour
 else:
     PV_FORECAST_FILE = "irr_1min.csv"
@@ -160,7 +164,7 @@ DEMAND_FILE_TIME_RESOLUTION_MIN = DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN #1
 
 SIM_START_TIME = START_OF_YR + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
 
-DEMAND_CHARGE_THRESHOLD = 300 #250
+DEMAND_CHARGE_THRESHOLD = 400 #250
 UPDATE_THRESHOLD = True
 
 # FIXME - ESS_RESERVE_xx should be set in absoluate terms, not relative terms - won't work if ESS_MIN is 0
@@ -169,9 +173,7 @@ ESS_MIN = 0.05
 ESS_RESERVE_HIGH = 0.85  # relative to ESS_MAX
 ESS_RESERVE_LOW  = 6.0   # relative to ESS_MIN
 
-PV_ADJUST = 0.72
-
-PV_ADJUST = 0.75
+PV_ADJUST = 0.65
 DEMAND_ADJUST = 1.0
 
 # SCHEDULES
