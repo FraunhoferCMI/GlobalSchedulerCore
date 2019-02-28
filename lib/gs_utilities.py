@@ -505,7 +505,7 @@ class StoredMatrixForecast(StoredForecast):
             next_forecast_timestamps = self.get_timestamps(sim_time_corr)
 
             # Convert irradiance to a percentage
-            self.forecast_values["Forecast"] = [-1*100 * v / SOLAR_NAMEPLATE for v in sl.iloc[len(sl) - 1]]
+            self.forecast_values["Forecast"] = [-1*100 * PV_ADJUST * v / SOLAR_NAMEPLATE for v in sl.iloc[len(sl) - 1]]
             self.forecast_values["Time"] = [datetime.strftime(ts, "%Y-%m-%dT%H:%M:%S") for ts in
                                             next_forecast_timestamps]
 
