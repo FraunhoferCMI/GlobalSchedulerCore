@@ -69,6 +69,9 @@ from SSA_Optimization import SimulatedAnnealer
 import GeneratePriceMap
 import pandas as pd
 from pprint import pformat
+#import deque function for rolling average
+from collections import deque
+
 
 # delete this imports
 import random
@@ -219,7 +222,8 @@ class ExecutiveAgent(Agent):
         self.data_log_cnt          = 0
 
         self.prevPwr_kW = None
-
+        #initializes queue for rolling average, maxlen of 600 elements, recommend assigning a variable to this
+        self.queuePwr = deque([0], maxlen=600)
         self.last_forecast_start   = datetime(1900, 1, 1, tzinfo=pytz.UTC)
 
 
@@ -630,8 +634,8 @@ class ExecutiveAgent(Agent):
         :return:
         """
         pred_change = pred_t * (v2 - v1)/delta_t
-        pred_val = v2 + pred_change
-        return pred_val
+        #pred_val = v2 + pred_change
+        return pred_change
 
     ##############################################################################
     def send_loadshift_commands(self):
@@ -694,8 +698,19 @@ class ExecutiveAgent(Agent):
                 self.prevPwr_kW = curPwr_kW
             elif SMOOTH_RAMP == False:
                 self.prevPwr_kW = curPwr_kW
-            predPwr_kW = self.get_extrapolation(self.prevPwr_kW, curPwr_kW, 1, 1)
-            self.prevPwr_kW = curPwr_kW # update - just one time step back
+
+            #Determines slope between current and previous point
+            predchangePwr_kW = self.get_extrapolation(self.prevPwr_kW, curPwr_kW, 1, 1)
+                        #Determines if queue(FIFO) is full
+            if len(self.queuePwr) == self.queuePwr.maxlen:
+                #If full, pop the most element at front of queue(FIFO)
+                self.queuePwr.popleft()
+            #Push latest calculated slope value into end of queue(FIFO)
+            self.queuePwr.append(predchangePwr_kW)
+            #Predicted power is equal to the current Power + rolling average of slope
+            predPwr_kW = curPwr_kW + (sum(self.queuePwr) / len(self.queuePwr))
+            #Updates previous power holding variable
+            self.prevPwr_kW = curPwr_kW
 
             if USE_FORECAST_VALUE == True:
                 if ALIGN_SCHEDULES == True:
