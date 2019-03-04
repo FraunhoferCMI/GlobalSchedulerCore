@@ -682,45 +682,62 @@ def format_timeperiod(granularity):
     return full_time_string
 
 
-def store_forecasts(start_time, end_time):
+def store_forecasts(start_time, end_time, res=24):
     query_start = datetime.strptime(start_time, TIME_FORMAT)
     end_datetime   = datetime.strptime(end_time, TIME_FORMAT)
-
+    cur_end_time = query_start
     forecasts = None
+    forecast_dict = {}
+    #pd.DataFrame([], columns=range(0, 24))
 
     while query_start < end_datetime:
         # 0. Connect to server
         ws_url = "wss://flame.ipkeys.com:9443/socket/msg"
         sslopt = {"ca_certs": 'IPKeys_Root.pem'}
-        ws = create_connection(ws_url, sslopt=sslopt)
-
-        # 1. query server
-
-        start =  query_start.strftime(TIME_FORMAT)
-        granularity = 1
-        # granularity =  'PT1H'
-        duration = 'PT24H'
-
-        repeat = True
-        print("Querying " + start)
-        bl = Baseline(start, granularity, duration, ws)
         try:
-            bl.process()
-            repeat = False
+            ws = create_connection(ws_url, sslopt=sslopt)
 
-            # 2. combine with existing dataset
-            if forecasts is None:
-                forecasts = bl.forecast
-            else:
-                forecasts = forecasts.combine_first(bl.forecast)
+            # 1. query server
+
+            start =  query_start.strftime(TIME_FORMAT)
+            granularity = 1
+            # granularity =  'PT1H'
+            duration = 'PT24H'
+
+            repeat = True
+            print("Querying " + start)
+            bl = Baseline(start, granularity, duration, ws)
+            try:
+                bl.process()
+                repeat = False
+
+                # 2. combine with existing dataset
+                if forecasts is None:
+                    forecasts = bl.forecast
+                else:
+                    forecasts = forecasts.combine_first(bl.forecast)
+
+                forecast_dict.update({bl.forecast.index[0]:bl.forecast['value'].tolist()})
+                cur_end_time = query_start
+            except:
+                print("query failed - skipping!")
         except:
-            print("query failed - skipping!")
+            pass
 
         # 3. increment query_start
-        query_start = query_start +timedelta(days=1)
+        query_start = query_start +timedelta(hours=res)
 
+    orig_start_time = datetime.strptime(start_time, TIME_FORMAT)
 
-    forecasts.to_csv("stored_forecasts.csv")
+    suffix = str(query_start.second) + '_' + str(res)+'_'+orig_start_time.strftime('%Y%m%d') + '_' + cur_end_time.strftime('%Y%m%d')
+    matrix_fname    = 'forecast_matrix_'+suffix+'.csv'
+    forecasts_fname = 'forecasts_' + suffix + '.csv'
+
+    forecast_matrix = pd.DataFrame(forecast_dict).T
+    forecast_matrix.to_csv(matrix_fname)
+    forecasts.to_csv(forecasts_fname)
+    #forecast_matrix.to_csv('forecast_matrix_mill_020719.csv')
+    #forecasts.to_csv("forecasts_mill_020719.csv")
 
     pass
 
@@ -879,7 +896,7 @@ if __name__ == '__main__':
     ##
 
     if STORE_FORECASTS == True:
-        start_time = "2018-09-01T00:00:00"
-        end_time   = "2018-12-12T00:00:00"
-        #store_forecasts(start_time, end_time)
-        store_loadreports(start_time, end_time)
+        start_time = "2018-06-24T00:00:04"
+        end_time   = "2019-12-24T00:00:04"
+        store_forecasts(start_time, end_time, res=1)
+        #store_loadreports(start_time, end_time)
