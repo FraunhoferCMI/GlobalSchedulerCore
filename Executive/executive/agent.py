@@ -69,6 +69,9 @@ from SSA_Optimization import SimulatedAnnealer
 import GeneratePriceMap
 import pandas as pd
 from pprint import pformat
+#import deque function for rolling average
+from collections import deque
+
 
 # delete this imports
 import random
@@ -82,8 +85,10 @@ default_units = {"setpoint":"kW",
                  "targetPwr_kW": "kW",
                  "curPwr_kW": "kW",
                  "expectedPwr_kW": "kW",
+                 "forecastError_kW": "kW",
                  "DemandForecast_kW": "kW",
                  "EnergyAvailableForecast_kWh": "kWh",
+                 "expectedSOE_kWh": "kWh",
                  "netDemand_kW": "kW",
                  "netDemandAvg_kW": "kW",
                  "timestamp": "datetime",
@@ -206,6 +211,8 @@ class ExecutiveAgent(Agent):
         self.optimizer_info.update({"targetPwr_kW": 0.0})
         self.optimizer_info.update({"curPwr_kW": 0.0})
         self.optimizer_info.update({"expectedPwr_kW": 0.0})
+        self.optimizer_info.update({"expectedSOE_kWh": 0.0})
+        self.optimizer_info.update({"forecastError_kW": 0.0})
         self.optimizer_info.update({"netDemand_kW": 0.0})
         self.optimizer_info.update({"netDemandAvg_kW": 0.0})
 
@@ -215,7 +222,8 @@ class ExecutiveAgent(Agent):
         self.data_log_cnt          = 0
 
         self.prevPwr_kW = None
-
+        #initializes queue for rolling average, maxlen of 600 elements, recommend assigning a variable to this
+        self.queuePwr = deque([0], maxlen=600)
         self.last_forecast_start   = datetime(1900, 1, 1, tzinfo=pytz.UTC)
 
 
@@ -263,6 +271,12 @@ class ExecutiveAgent(Agent):
                                     self.OperatingMode)
 
         self.send_exec_heartbeat()
+
+        ###This section instantiates a SundialResource tree based on SystemConfiguration.json, and an Optimizer ########
+        #self.gs_start_time_exact = utils.get_aware_utc_now()
+        #self.gs_start_time       = get_schedule(self.gs_start_time_exact)
+        self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
+        _log.info("Setup: GS Start time is "+str(self.gs_start_time))
 
         ######### This section initializes SiteManager agents that correspond to sites identified in the #############
         ######### SiteConfiguration.json file ########################################################################
@@ -324,11 +338,6 @@ class ExecutiveAgent(Agent):
 
         # SiteManager Initialization complete
 
-        ###This section instantiates a SundialResource tree based on SystemConfiguration.json, and an Optimizer ########
-        #self.gs_start_time_exact = utils.get_aware_utc_now()
-        #self.gs_start_time       = get_schedule(self.gs_start_time_exact)
-        self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
-        _log.info("Setup: GS Start time is "+str(self.gs_start_time))
         self.sundial_resources = SundialSystemResource(self.sundial_resource_cfg_list, self.get_gs_start_time())
         _log.info("sundial_resources assigned")
         self.sdr_to_sm_lookup_table = build_SundialResource_to_SiteManager_lookup_table(self.sundial_resource_cfg_list,
@@ -625,8 +634,8 @@ class ExecutiveAgent(Agent):
         :return:
         """
         pred_change = pred_t * (v2 - v1)/delta_t
-        pred_val = v2 + pred_change
-        return pred_val
+        #pred_val = v2 + pred_change
+        return pred_change
 
     ##############################################################################
     def send_loadshift_commands(self):
@@ -673,7 +682,6 @@ class ExecutiveAgent(Agent):
         devices
         :return: None
         """
-
         if self.OptimizerEnable == ENABLED:
             # Now we need to determine the target battery set point.  To do so, look at the total current system
             # power output, subtracting the contribution from the battery.  The delta between total current system
@@ -688,27 +696,43 @@ class ExecutiveAgent(Agent):
 
             if self.prevPwr_kW is None:
                 self.prevPwr_kW = curPwr_kW
-            predPwr_kW = self.get_extrapolation(self.prevPwr_kW, curPwr_kW, 1, 1)
-            self.prevPwr_kW = curPwr_kW # update - just one time step back
+            elif SMOOTH_RAMP == False:
+                self.prevPwr_kW = curPwr_kW
+
+            #Determines slope between current and previous point
+            predchangePwr_kW = self.get_extrapolation(self.prevPwr_kW, curPwr_kW, 1, 1)
+                        #Determines if queue(FIFO) is full
+            if len(self.queuePwr) == self.queuePwr.maxlen:
+                #If full, pop the most element at front of queue(FIFO)
+                self.queuePwr.popleft()
+            #Push latest calculated slope value into end of queue(FIFO)
+            self.queuePwr.append(predchangePwr_kW)
+            #Predicted power is equal to the current Power + rolling average of slope
+            predPwr_kW = curPwr_kW + (sum(self.queuePwr) / len(self.queuePwr))
+            #Updates previous power holding variable
+            self.prevPwr_kW = curPwr_kW
 
             if USE_FORECAST_VALUE == True:
                 if ALIGN_SCHEDULES == True:
                     cur_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0,tzinfo=pytz.utc)
                     try:
                         targetPwr_kW = self.sundial_resources.schedule_vars["schedule_kW"][cur_time]
-                        expectedPwr_kW = self.pv_resources.schedule_vars["schedule_kW"][cur_time]
+                        expectedPwr_kW = self.pv_resources.schedule_vars["schedule_kW"][cur_time] + self.load_resources.schedule_vars["schedule_kW"][cur_time]
                         essTargetPwr_kW = self.ess_resources.schedule_vars["schedule_kW"][cur_time]
+                        expectedSOE_kWh = self.ess_resources.schedule_vars["schedule_kWh"][cur_time]
                         self.system_resources.state_vars["TgtPwr_kW"] = targetPwr_kW
                     except KeyError:
                         _log.info("Error generating target command for time stamp "+str(cur_time))
                         targetPwr_kW = 0
                         expectedPwr_kW = 0
                         essTargetPwr_kW = 0
+                        expectedSOE_kWh = 0
                 else:
                     ii = self.find_current_timestamp_index()
                     targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ii]
-                    expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][ii]
+                    expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][ii] + self.load_resources.schedule_vars["DemandForecast_kW"][ii]
                     essTargetPwr_kW = self.ess_resources.schedule_vars["DemandForecast_kW"][ii]
+                    expectedSOE_kWh = self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][ii]
             else:
                 ii = 0
                 cur_gs_time = get_gs_time(self.gs_start_time, timedelta(0))
@@ -722,12 +746,16 @@ class ExecutiveAgent(Agent):
                 _log.info(acc_load)
                 _log.info(cur_gs_time.hour)
                 targetPwr_kW = self.pv_resources.state_vars["AvgPwr_kW"] + acc_load
-                expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][0]
+                expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][0] + self.load_resources.schedule_vars["DemandForecast_kW"][0]
                 essTargetPwr_kW = 0
+                expectedSOE_kWh = self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][0]
 
-            _log.debug("Regulator: Forecast solar power is " + str(expectedPwr_kW))
+            forecastError_kW = expectedPwr_kW - curPwr_kW
+            _log.debug("Regulator: Forecast Power is " + str(expectedPwr_kW))
             _log.debug("Regulator: Scheduled power output is " + str(targetPwr_kW))
             _log.debug("Regulator: Current PV+Load is "+str(curPwr_kW))
+            _log.debug("Regulator: Forecast Error "+str(forecastError_kW))
+            _log.debug("Regulator: Expected SOE "+str(expectedSOE_kWh))
 
             SOE_kWh = self.ess_resources.state_vars["SOE_kWh"]
             min_SOE_kWh = self.ess_resources.state_vars["MinSOE_kWh"]
@@ -793,6 +821,8 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["targetPwr_kW"] = targetPwr_kW
             self.optimizer_info["curPwr_kW"] = curPwr_kW
             self.optimizer_info["expectedPwr_kW"] = expectedPwr_kW
+            self.optimizer_info["expectedSOE_kWh"] = expectedSOE_kWh
+            self.optimizer_info["forecastError_kW"] = forecastError_kW
             self.optimizer_info["netDemand_kW"]   = netDemand_kW
             self.optimizer_info["netDemandAvg_kW"] = netDemandAvg_kW
 
@@ -838,7 +868,6 @@ class ExecutiveAgent(Agent):
         devices.
         :return: None
         """
-
         if self.OptimizerEnable == ENABLED:
             # check to make sure that resources have been updated
             # if they have not - ... - request an update and go into a waiting state.
@@ -916,6 +945,12 @@ class ExecutiveAgent(Agent):
         publishes schedule data to the database
         :return: None
         """
+        HistorianTools.publish_data(self,
+                                    "SystemResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "MaxDemand_kW",
+                                    max(self.system_resources.schedule_vars["DemandForecast_kW"].tolist()))
+
         HistorianTools.publish_data(self,
                                     "SystemResource/Schedule",
                                     default_units["DemandForecast_kW"],
@@ -1012,12 +1047,39 @@ class ExecutiveAgent(Agent):
                                     TimeStamp_str=self.ess_resources.schedule_vars["timestamp"][23].strftime(
                                         "%Y-%m-%dT%H:%M:%S"))
 
-
         HistorianTools.publish_data(self,
                                     "PVResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_kW",
                                     self.pv_resources.schedule_vars["DemandForecast_kW"].tolist())
+
+        HistorianTools.publish_data(self,
+                                    "PVResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "MaxDemand_kW",
+                                    min(self.pv_resources.schedule_vars["DemandForecast_kW"].tolist()))
+
+        HistorianTools.publish_data(self,
+                                    "PVResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_tPlus1_kW",
+                                    self.pv_resources.schedule_vars["DemandForecast_kW"][1],
+                                    TimeStamp_str=self.pv_resources.schedule_vars["timestamp"][1].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
+        HistorianTools.publish_data(self,
+                                    "PVResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_tPlus5_kW",
+                                    self.pv_resources.schedule_vars["DemandForecast_kW"][5],
+                                    TimeStamp_str=self.pv_resources.schedule_vars["timestamp"][5].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
+        HistorianTools.publish_data(self,
+                                    "PVResource/Schedule",
+                                    default_units["DemandForecast_kW"],
+                                    "DemandForecast_tPlus23_kW",
+                                    self.pv_resources.schedule_vars["DemandForecast_kW"][23],
+                                    TimeStamp_str=self.pv_resources.schedule_vars["timestamp"][23].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"))
         HistorianTools.publish_data(self,
                                     "PVResource/Schedule",
                                     default_units["timestamp"],
@@ -1029,6 +1091,34 @@ class ExecutiveAgent(Agent):
                                         default_units["DemandForecast_kW"],
                                         "DemandForecast_kW",
                                         self.load_resources.schedule_vars["DemandForecast_kW"].tolist())
+
+            HistorianTools.publish_data(self,
+                                        "LoadResource/Schedule",
+                                        default_units["DemandForecast_kW"],
+                                        "MaxDemand_kW",
+                                        max(self.load_resources.schedule_vars["DemandForecast_kW"].tolist()))
+
+            HistorianTools.publish_data(self,
+                                        "LoadResource/Schedule",
+                                        default_units["DemandForecast_kW"],
+                                        "DemandForecast_tPlus1_kW",
+                                        self.load_resources.schedule_vars["DemandForecast_kW"][1],
+                                        TimeStamp_str=self.load_resources.schedule_vars["timestamp"][1].strftime(
+                                            "%Y-%m-%dT%H:%M:%S"))
+            HistorianTools.publish_data(self,
+                                        "LoadResource/Schedule",
+                                        default_units["DemandForecast_kW"],
+                                        "DemandForecast_tPlus5_kW",
+                                        self.load_resources.schedule_vars["DemandForecast_kW"][5],
+                                        TimeStamp_str=self.load_resources.schedule_vars["timestamp"][5].strftime(
+                                            "%Y-%m-%dT%H:%M:%S"))
+            HistorianTools.publish_data(self,
+                                        "LoadResource/Schedule",
+                                        default_units["DemandForecast_kW"],
+                                        "DemandForecast_tPlus23_kW",
+                                        self.load_resources.schedule_vars["DemandForecast_kW"][23],
+                                        TimeStamp_str=self.load_resources.schedule_vars["timestamp"][23].strftime(
+                                            "%Y-%m-%dT%H:%M:%S"))
             HistorianTools.publish_data(self,
                                         "LoadResource/Schedule",
                                         default_units["timestamp"],

@@ -410,6 +410,7 @@ class SundialResource():
                                                                            SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
                                                                            SSA_SCHEDULE_RESOLUTION)],
                          "schedule_kW": {},
+                         "schedule_kWh": {},
                          "total_cost": 0.0}
         return schedule_vars
 
@@ -601,6 +602,7 @@ class SundialResource():
 
         if cont == True:
             ts_ind = None # stale data!
+            scale_factor = 0.0
         else:
             _log.debug('ts ind is ' + str(ts_ind))
         return ts_ind, scale_factor
@@ -1280,6 +1282,10 @@ def export_schedule(profile, timestamps, update=True):
             profile.sundial_resources.schedule_vars["schedule_kW"].update({
                 profile.sundial_resources.schedule_vars["timestamp"][ii]:
                     profile.sundial_resources.schedule_vars["DemandForecast_kW"][ii]})
+
+            profile.sundial_resources.schedule_vars["schedule_kWh"].update({
+                profile.sundial_resources.schedule_vars["timestamp"][ii]:
+                    profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"][ii]})
         #pprint.pprint(profile.sundial_resources.schedule_vars["schedule_kW"])
 
 

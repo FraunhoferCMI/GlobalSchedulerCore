@@ -51,7 +51,7 @@ from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
 from volttron.platform.agent import utils
 from volttron.platform.messaging import headers as headers_mod
 
-from gs_identities import (INTERACTIVE, AUTO, SITE_IDLE, SITE_RUNNING, PMC_WATCHDOG_RESET)
+from gs_identities import TIME_FORMAT, SIM_HRS_PER_HR, USE_SIM
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -72,6 +72,13 @@ def publish_data(agent_object, base_topic, units, endpt_label, val, TimeStamp_st
     if TimeStamp_str == None:
         TimeStamp = utils.get_aware_utc_now() # datetime.now()
         TimeStamp_str = TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
+
+    elif USE_SIM == 1:
+        t = datetime.strptime(TimeStamp_str, TIME_FORMAT)
+        now = datetime.utcnow()
+        elapsed = (t - now) / SIM_HRS_PER_HR
+        t = now+elapsed
+        TimeStamp_str = t.strftime(TIME_FORMAT)
 
     # 2. build a datalogger-compatible msg:
     msg = {

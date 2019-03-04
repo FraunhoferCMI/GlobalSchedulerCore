@@ -83,7 +83,7 @@ MINUTES_PER_HR = 60
 MINUTES_PER_DAY = 24 * MINUTES_PER_HR
 MINUTES_PER_YR = 365 * MINUTES_PER_DAY
 
-FORCE_TIME = False  # for debugging - lets user force a start time.
+FORCE_TIME = USE_SIM  # for debugging - lets user force a start time.
 max_load_report_length = 60
 
 ### WEBSOCKET ###
@@ -208,7 +208,7 @@ class FLAMECommsAgent(Agent):
         except:
             _log.info("FLAME comms - gs_start_time not found.  Using current time as gs_start_time")
             # self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
-            self.gs_start_time = datetime.now().replace(microsecond=0, tzinfo=pytz.UTC)
+            self.gs_start_time = datetime.utcnow().replace(microsecond=0, tzinfo=pytz.UTC)
             # self.gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
             #self.gs_start_time = self.gs_start_time.replace(tzinfo=None)
             #self.gs_start_time = datetime.now().replace(microsecond=0)
@@ -217,14 +217,16 @@ class FLAMECommsAgent(Agent):
         self.initialization_complete = 1
 
         # for debugging - lets user force a start time for queries
-        self.force_start_time = datetime(year=2018,month=10,day=16,hour=2,minute=57,second=0) #'2018-10-16T02:00:00'
+        self.force_start_time = SIM_START_TIME #datetime(year=2018,month=10,day=16,hour=2,minute=57,second=0) #'2018-10-16T02:00:00'
         self.agent_start_time = datetime.utcnow()
 
         #self.get_load_report()   # do this first - pre-load with values for other fcns to reference
         self.publish_load_option_forecast()
         self.get_hi_res_load_report()
         self.query_baseline()
-        self.query_loadshift()
+
+        if SEARCH_LOADSHIFT_OPTIONS:
+            self.query_loadshift()
         #self.request_status()
 
 
@@ -253,7 +255,7 @@ class FLAMECommsAgent(Agent):
 
 
     ##############################################################################
-    @Core.periodic(period=LOADSHIFT_FORECAST_UPDATE_INTERVAL)
+    #@Core.periodic(period=LOADSHIFT_FORECAST_UPDATE_INTERVAL)
     def publish_load_option_forecast(self):
         """
 
@@ -376,14 +378,14 @@ class FLAMECommsAgent(Agent):
     ##############################################################################
     def get_forecast_request_start_time(self, hrs_offset=0):
         ###  convert GS time to local time #####
-        start_time = datetime.strptime(get_schedule(self.gs_start_time,
-                                                    resolution=SSA_SCHEDULE_RESOLUTION),
-                                       "%Y-%m-%dT%H:%M:%S.%f")
-
+        real_start_time = datetime.strptime(get_schedule(self.gs_start_time,
+                                                         resolution=SSA_SCHEDULE_RESOLUTION),
+                                            "%Y-%m-%dT%H:%M:%S.%f")
+        _log.info(real_start_time)
+        start_time = real_start_time
         if FORCE_TIME == True:
-            elapsed_time = datetime.utcnow() - self.agent_start_time
+            elapsed_time = (datetime.utcnow().replace(tzinfo=pytz.UTC) - self.gs_start_time)*SIM_HRS_PER_HR #self.agent_start_time
             start_time = (self.force_start_time + elapsed_time).replace(microsecond=0, second=0)
-
         ## need to convert the start time request to local time.  get_schedule returns a time stamp in UTC, but
         ## as a string, so it is time naive.  It needs to be recast as UTC and then changed to local time.
 
@@ -398,10 +400,9 @@ class FLAMECommsAgent(Agent):
     def query_baseline(self):
         "Queries the FLAME server for baseline message"
         if self.initialization_complete == 1:
-            _log.info("querying baseline")
             # Baseline
 
-            start_time = self. get_forecast_request_start_time()
+            start_time = self.get_forecast_request_start_time()
             ### Setting seconds = 3 in the forecast request scales the resulting forecast to a 750kW baseline
             #   Setting seconds = 7 scales to a 1,500kW baseline
             #   Any other value (typically 0) uses raw (unscaled) facility data
@@ -411,6 +412,7 @@ class FLAMECommsAgent(Agent):
                 start_time = start_time.replace(minute=0, second=0, microsecond=0)
 
             start_time_str = start_time.strftime("%Y-%m-%dT%H:%M:%S")
+            _log.info("Querying baseline at "+start_time_str)
             ws = create_connection(ws_url, sslopt=sslopt)
             baseline_kwargs = dict(
                 start =  start_time_str,
@@ -427,6 +429,8 @@ class FLAMECommsAgent(Agent):
             #### code for publishing to the volttron bus
             message_parts = bl.fo
             forecast = Forecast(**message_parts)
+            if FORCE_TIME == True:  # modify timestamps to match with GS time
+                forecast.shift_timestamps(self.gs_start_time)
             message = forecast.forecast_obj
             _log.info(message)
             # message = bl.forecast    # call to demand forecast object class thingie
@@ -726,15 +730,59 @@ class FLAMECommsAgent(Agent):
             # there is a bug on the FLAME server in which it seems to process hi res load report requests
             # as DST, not as local time.  So during standard time, it returns results that are offset by 
             # 1 hour from the request.
-            current_time += current_time.dst() - timedelta(hours=1)
+            request_time = None
+            # dst returns a timedelta required to move the time from dst to current time.
+            # what I want to do is the following:
+            #
+            # (1) get current time in eastern
+            # (2) figure out the time stamp that I want to query
+            # (3) During DST,
+            #     - offset the request by 1 hour.  request_time = current_time - 1 hr
+            #     - after the response comes in, we need to adjust the time stamps forward by 1 hr
+            # (4) During EST,
+            #     - offset by 0
+            #     - adjust time stamps by 0
+            #current_time += current_time.dst() - timedelta(hours=1)
 
-            utc_now_str = current_time.astimezone(pytz.timezone('UTC')).strftime(TIME_FORMAT)
-            time_delta = timedelta(minutes=HI_RES_DEMAND_REPORT_DURATION)
-            start_time = current_time - time_delta
+
+            # there are a few different values I need to track:
+            # (1) current time = now, in eastern time
+            # (2) then get the time that I want forecasts for
+            # (3) then get the time that I need to send forecast requests for
+            # (4) then get a correction factor, that accounts for both DST correction and the sim time correction
+
+            #utc_now_str = current_time.astimezone(pytz.timezone('UTC')).strftime(TIME_FORMAT)
+            time_delta     = timedelta(minutes=HI_RES_DEMAND_REPORT_DURATION)
+
+            #start_time      = current_time - time_delta
+            #orig_start_time = start_time
 
             if FORCE_TIME == True:
-                elapsed_time = datetime.utcnow()-self.agent_start_time
-                start_time   = (self.force_start_time+elapsed_time).replace(microsecond=0,second=0)-time_delta
+                now = datetime.utcnow().replace(tzinfo=pytz.UTC)
+                elapsed_time = (now-self.gs_start_time)*SIM_HRS_PER_HR    #self.agent_start_time
+
+                base_time = (self.force_start_time+elapsed_time).replace(microsecond=0,second=0)
+                base_time = base_time.replace(tzinfo=pytz.UTC)
+                base_time = base_time.astimezone(pytz.timezone('US/Eastern'))
+
+                #start_time   = (self.force_start_time+elapsed_time).replace(microsecond=0,second=0)-time_delta
+                #start_time = start_time.replace(tzinfo=pytz.UTC)
+                #start_time = start_time.astimezone(pytz.timezone('US/Eastern'))
+                #dst_correction = start_time.dst() - timedelta(hours=1)
+
+                sim_time_correction = self.gs_start_time - self.force_start_time.replace(tzinfo=pytz.UTC)
+            else:
+                #start_time = current_time - time_delta
+                base_time = current_time
+                #dst_correction = current_time.dst() - timedelta(hours=1)
+                sim_time_correction = timedelta(0)
+
+            #dst_correction = start_time.dst() - timedelta(hours=1)
+            dst_correction = base_time.dst() - timedelta(hours=1)
+            start_time     = base_time - time_delta + dst_correction
+            ts_correction  = sim_time_correction
+            #ts_correction = orig_start_time-start_time
+            print(ts_correction)
 
             dstart = start_time.strftime(TIME_FORMAT)
             _log.info("requesting load report starting at time "+dstart)
@@ -757,6 +805,8 @@ class FLAMECommsAgent(Agent):
                 # Generate load reports for the individual facilities
                 for yy in range(0, len(lr.loadSchedules)):
                     #_log.info("length of ls is "+str(len(lr.loadSchedules[yy])))
+                    lr.loadSchedules[yy].index = (pandas.to_datetime(lr.loadSchedules[yy].index)+ts_correction).strftime(TIME_FORMAT)
+                    lr.loadSchedules_scaled[yy].index = (pandas.to_datetime(lr.loadSchedules_scaled[yy].index)+ts_correction).strftime(TIME_FORMAT)
                     for xx in range(0, len(lr.loadSchedules[yy])):
                         msg = {"Load": {"Readings": [lr.loadSchedules[yy].index[xx],
                                                  float(lr.loadSchedules[yy]["value"][xx])],
@@ -785,6 +835,9 @@ class FLAMECommsAgent(Agent):
                             message=msg)
 
                 # now generate a load report for the aggregate of all facilities
+                lr.loadSchedule_scaled.index = (pandas.to_datetime(lr.loadSchedule_scaled.index)+ts_correction).strftime(TIME_FORMAT)
+                lr.loadSchedule.index = (pandas.to_datetime(lr.loadSchedule.index)+ts_correction).strftime(TIME_FORMAT)
+
                 for xx in range(0, len(lr.loadSchedule_scaled)):
                     msg = {"ScaledLoad": {"Readings": [lr.loadSchedule_scaled.index[xx],
                                                        float(lr.loadSchedule_scaled["value"][xx])],

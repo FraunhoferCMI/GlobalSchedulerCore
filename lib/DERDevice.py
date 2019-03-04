@@ -55,10 +55,12 @@ from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC, Unreac
 from volttron.platform.agent import utils
 from volttron.platform.jsonrpc import RemoteError
 import gevent
+import pytz
 
 from volttron.platform.messaging import headers as headers_mod
 
 from gs_identities import *
+from gs_utilities import get_gs_time
 import UnitConversion
 
 utils.setup_logging()
@@ -188,23 +190,23 @@ ess_state_vars_update_rate = {"CommStatus": 720,
                               "OrigDemandForecast_t_str": None}
 
 
-site_lookup = {"Shirley":"ShirleySite(site_info, None, data_map_dir)",
-               "ShirleyDeviceLevelCtrl":"ShirleySiteDeviceLevelCtrl(site_info, None, data_map_dir)",
-               "ShirleyEmulator": "ShirleySiteEmulator(site_info, None, data_map_dir)",
-               "FLAME": "FLAMESite(site_info, None, data_map_dir)",
-               "ModbusSite": "DERModbusSite(site_info, None, data_map_dir)",
-               "Site": "DERSite(site_info, None, data_map_dir)"}
+site_lookup = {"Shirley":"ShirleySite(site_info, None, data_map_dir, gs_start_time)",
+               "ShirleyDeviceLevelCtrl":"ShirleySiteDeviceLevelCtrl(site_info, None, data_map_dir, gs_start_time)",
+               "ShirleyEmulator": "ShirleySiteEmulator(site_info, None, data_map_dir, gs_start_time)",
+               "FLAME": "FLAMESite(site_info, None, data_map_dir, gs_start_time)",
+               "ModbusSite": "DERModbusSite(site_info, None, data_map_dir, gs_start_time)",
+               "Site": "DERSite(site_info, None, data_map_dir, gs_start_time)"}
 
-device_keys = {"ESS": "ESSDevice(device, parent_device=self)",
-               "Tesla": "TeslaPowerPack(device, parent_device=self)",
-               "Solectria": "SolectriaInverter(device, parent_device=self)",
-               "PV": "PVDevice(device, parent_device=self)",
-               "ESSCtrlNode": "ESSCtrlNode(device, parent_device=self)",
-               "TeslaCtrlNode": "TeslaCtrlNode(device, parent_device=self)",
-               "SolectriaPVCtrlNode": "SolectriaPVCtrlNode(device, parent_device=self)",
-               "PVCtrlNode": "PVCtrlNode(device, parent_device=self)",
-               "LoadShiftCtrlNode": "LoadShiftCtrlNode(device, parent_device=self)",
-               "Load": "LoadNode(device, parent_device=self)"}
+device_keys = {"ESS": "ESSDevice(device, parent_device=self, gs_start_time=gs_start_time)",
+               "Tesla": "TeslaPowerPack(device, parent_device=self, gs_start_time=gs_start_time)",
+               "Solectria": "SolectriaInverter(device, parent_device=self, gs_start_time=gs_start_time)",
+               "PV": "PVDevice(device, parent_device=self, gs_start_time=gs_start_time)",
+               "ESSCtrlNode": "ESSCtrlNode(device, parent_device=self, gs_start_time=gs_start_time)",
+               "TeslaCtrlNode": "TeslaCtrlNode(device, parent_device=self, gs_start_time=gs_start_time)",
+               "SolectriaPVCtrlNode": "SolectriaPVCtrlNode(device, parent_device=self, gs_start_time=gs_start_time)",
+               "PVCtrlNode": "PVCtrlNode(device, parent_device=self, gs_start_time=gs_start_time)",
+               "LoadShiftCtrlNode": "LoadShiftCtrlNode(device, parent_device=self, gs_start_time=gs_start_time)",
+               "Load": "LoadNode(device, parent_device=self, gs_start_time=gs_start_time)"}
 
 # bit maps for Solectria status, control, and trigger registers per Modbus 9 spec
 SOLECTRIA_RAMP_BITMAP = {"Q_RAMP": 0x0008,
@@ -229,7 +231,7 @@ PMC_REACTIVE_CONTROL_MODES = {"PF":0,
 
 
 ##############################################################################
-def get_site_handle(site_info, data_map_dir):
+def get_site_handle(site_info, data_map_dir, gs_start_time):
     if (1): #try:
         _log.info("Site instance is: "+site_lookup[site_info["SiteModel"]])
         site_handle =eval(site_lookup[site_info["SiteModel"]])
@@ -243,7 +245,7 @@ def get_site_handle(site_info, data_map_dir):
 class DERDevice():
 
     ##############################################################################
-    def __init__(self, device_info, parent_device=None):
+    def __init__(self, device_info, parent_device=None, gs_start_time=None):
 
         self.DGPlant = ["ESSCtrlNode", "PVCtrlNode", "LoadShiftCtrlNode", "TeslaCtrlNode"]
 
@@ -310,6 +312,8 @@ class DERDevice():
         self.writeError = {}
 
         self.publish_cnt = 0
+        self.gs_start_time = gs_start_time.replace(tzinfo=pytz.UTC)
+
         _log.info(self.device_id+" Init complete")
 
     ##############################################################################
@@ -744,7 +748,7 @@ class DERDevice():
 
 
     ##############################################################################
-    def convert_units_from_endpt2(self, k, endpt_units, cur_topic_name, raw_val):
+    def convert_units_from_endpt2(self, k, endpt_units, cur_topic_name, raw_val, incoming_msg=None):
         """
         """
         cur_device = self.extpt_to_device_dict[cur_topic_name+"_"+k]
@@ -756,9 +760,9 @@ class DERDevice():
 
         try:
             if type(raw_val) is list:
-                tmplist = [eval(self.unit_conversion_table[conversionKey]) for val in raw_val]
-                del cur_attribute.data_dict[keyval][:]
-                cur_attribute.data_dict[keyval] = tmplist[:]
+                #tmplist = [eval(self.unit_conversion_table[conversionKey]) for val in raw_val]
+                #del cur_attribute.data_dict[keyval][:]
+                cur_attribute.data_dict[keyval] = [eval(self.unit_conversion_table[conversionKey]) for val in raw_val] #tmplist[:]
                 _log.debug("PopEndpts: converted " + k + "from " + endpt_units +
                            " to " + cur_attribute.units[keyval] + ". New val = " + str(cur_attribute.data_dict[keyval]))
             else:
@@ -801,7 +805,7 @@ class DERDevice():
         return converted_val
 
     ##############################################################################
-    def populate_endpts(self, incoming_msg, SiteMgr, meta_data = None, cur_topic_name=None, topic=None):
+    def populate_endpts2(self, incoming_msg, SiteMgr, meta_data = None, cur_topic_name=None, topic=None):
         """
         This populates DERDevice variables based on the topic list
         """
@@ -833,6 +837,67 @@ class DERDevice():
                     self.convert_units_from_endpt2(k, meta_data[k]["units"], cur_topic_name, raw_val)
                 except TypeError:
                     self.convert_units_from_endpt2(k, cur_attribute.endpt_units[k], cur_topic_name, raw_val)
+                    # endpt_units.update({row[1]: row[2]}
+                except KeyError as e:
+                    cur_attribute.data_dict[keyval] = raw_val
+                    _log.info("Skipping: Key " + k + " not found.  Vals are " + str(raw_val))
+
+            except KeyError as e:
+                _log.debug("Warning: Key "+k+" not found")
+                skip_cnt += 1
+                pass
+
+            try:
+                cur_attribute = self.extpt_to_device_dict[cur_topic_name + "_" + k].datagroup_dict[k]
+                keyval = cur_attribute.data_mapping_dict[k]
+
+                if cur_attribute.log_to_db[keyval] == "Y":
+                    cur_device = self.extpt_to_device_dict[cur_topic_name+"_"+k].device_id
+                    device_path_str = cur_device.replace('-', '/')+"/"+cur_attribute.name
+                    HistorianTools.publish_data(SiteMgr,
+                                                device_path_str,
+                                                cur_attribute.units[keyval],
+                                                keyval,
+                                                cur_attribute.data_dict[keyval])
+            except KeyError:
+                pass
+
+        _log.info("PopEndpts: Topic "+topic+" read "+str(cnt)+" data pts; skipped: "+str(skip_cnt))
+        self.update_status()
+
+    ##############################################################################
+    def populate_endpts(self, incoming_msg, SiteMgr, meta_data = None, cur_topic_name=None, topic=None):
+        """
+        This populates DERDevice variables based on the topic list
+        """
+        cnt = 0
+        skip_cnt = 0
+        for k in incoming_msg:
+            try:
+                cur_device = self.extpt_to_device_dict[cur_topic_name+"_"+k].device_id
+                cur_attribute = self.extpt_to_device_dict[cur_topic_name+"_"+k].datagroup_dict[k]
+                cur_attribute_name = cur_attribute.name
+                keyval = cur_attribute.data_mapping_dict[k]
+                raw_val = incoming_msg[k]
+
+                # TODO  correct for units!!!
+                # if cur_attribute.units_dict[k] != incoming_msg[k] units then call convert_units....
+
+                _log.debug("PopEndpts: "+cur_device + "." + cur_attribute_name + "." + keyval + "= " + str(
+                    raw_val))
+
+                if meta_data is not None:
+                    #_log.info("PopEndpts: Units - "+meta_data[k]["units"])
+                    cur_attribute.endpt_units.update({k: meta_data[k]["units"]})
+                else:
+                    _log.info("PopEndpts: No Meta data found!")
+
+                cnt += 1
+
+                try:
+                    self.convert_units_from_endpt2(k, meta_data[k]["units"], cur_topic_name, raw_val, incoming_msg)
+                except TypeError:
+                    self.convert_units_from_endpt2(k, cur_attribute.endpt_units[k], cur_topic_name, raw_val, incoming_msg)
                     # endpt_units.update({row[1]: row[2]}
                 except KeyError as e:
                     cur_attribute.data_dict[keyval] = raw_val
@@ -1055,7 +1120,7 @@ class DERSite(DERDevice):
     """
     Defines a DERSite object.
     """
-    def __init__(self, site_info, parent_device, data_map_dir):
+    def __init__(self, site_info, parent_device, data_map_dir, gs_start_time):
         """
         calls generic init for DERDevice class, then initializes a data map associated with the site based on an
         external data mapping file
@@ -1064,7 +1129,7 @@ class DERSite(DERDevice):
         :param parent_device: should always none....
         """
         _log.info("Initializing a Site....")
-        DERDevice.__init__(self, site_info, parent_device) #device_id, device_type, parent_device)
+        DERDevice.__init__(self, site_info, parent_device, gs_start_time) #device_id, device_type, parent_device)
         # need to change how this is called.....
         #device_id = "site1", device_type = "Site", parent_device = None
 
@@ -1221,8 +1286,8 @@ class DERModbusDevice(DERDevice):
 ##############################################################################
 class FLAMESite(DERSite):
     ##############################################################################
-    def __init__(self, site_info, parent_device, data_map_dir):
-        DERSite.__init__(self, site_info, parent_device, data_map_dir)
+    def __init__(self, site_info, parent_device, data_map_dir, gs_start_time):
+        DERSite.__init__(self, site_info, parent_device, data_map_dir, gs_start_time)
         self.state_vars_update_rate = flame_site_state_vars_update_rate
         _log.info(self.device_id)
         _log.info(self.state_vars_update_rate)
@@ -1231,8 +1296,8 @@ class FLAMESite(DERSite):
 class ShirleySite(DERSite, DERModbusDevice):
 
     ##############################################################################
-    def __init__(self, site_info, parent_device, data_map_dir):
-        DERSite.__init__(self, site_info, parent_device, data_map_dir)
+    def __init__(self, site_info, parent_device, data_map_dir, gs_start_time):
+        DERSite.__init__(self, site_info, parent_device, data_map_dir, gs_start_time)
 
         # Each writeable register within this object should have an entry in chkReg
         # For each writeable register - identify which register(s) should change based on a write to that
@@ -1617,8 +1682,8 @@ class DERCtrlNode(DERDevice):
 class LoadNode(DERDevice):
 
     ##############################################################################
-    def __init__(self, device_info, parent_device=None):
-        DERDevice.__init__(self, device_info, parent_device)  # device_id, device_type, parent_device)
+    def __init__(self, device_info, parent_device=None, gs_start_time=None):
+        DERDevice.__init__(self, device_info, parent_device, gs_start_time)  # device_id, device_type, parent_device)
         _log.info(self.device_id)
         self.state_vars_update_rate = flame_load_state_vars_update_rate
         _log.info(self.state_vars_update_rate)
@@ -1638,8 +1703,8 @@ class LoadNode(DERDevice):
 class LoadShiftCtrlNode(DERCtrlNode):
 
     ##############################################################################
-    def __init__(self, device_info, parent_device=None):
-        DERDevice.__init__(self, device_info, parent_device)  # device_id, device_type, parent_device)
+    def __init__(self, device_info, parent_device=None, gs_start_time=None):
+        DERDevice.__init__(self, device_info, parent_device, gs_start_time)  # device_id, device_type, parent_device)
         self.state_vars.update({"OrigLoadShiftOptions_kW": [[0.0] * SSA_PTS_PER_SCHEDULE],
                                 "OrigLoadShiftOptions_t_str": None,
                                 "IDList": [],
@@ -1765,8 +1830,8 @@ class DERModbusCtrlNode(DERModbusDevice, DERCtrlNode):
 class ESSCtrlNode(DERModbusCtrlNode):
 
     ##############################################################################
-    def __init__(self, device_info, parent_device=None):
-        DERDevice.__init__(self, device_info, parent_device)  # device_id, device_type, parent_device)
+    def __init__(self, device_info, parent_device=None, gs_start_time=None):
+        DERDevice.__init__(self, device_info, parent_device, gs_start_time)  # device_id, device_type, parent_device)
         self.state_vars.update({"SetPt": 0,
                                 "SetPtCmd": 0})
         self.state_vars_update_list = ess_update_list
@@ -1804,7 +1869,10 @@ class ESSCtrlNode(DERModbusCtrlNode):
         DERCtrlNode.update_state_vars(self)
 
         #fixme - should use get_gs_time
-        now = utils.get_aware_utc_now()
+        if USE_SIM == 1:
+            now = get_gs_time(self.gs_start_time,timedelta(0))
+        else:
+            now = utils.get_aware_utc_now()
         self.state_vars["OrigDemandForecast_t_str"] = [(now.replace(minute=0, second=0)  +
                                                         timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%S")
                                                        for t in range(0,
@@ -1874,8 +1942,8 @@ class TeslaCtrlNode(ESSCtrlNode):
 class PVCtrlNode(DERModbusCtrlNode):
 
     ##############################################################################
-    def __init__(self, device_info, parent_device=None):
-        DERDevice.__init__(self, device_info, parent_device)  # device_id, device_type, parent_device)
+    def __init__(self, device_info, parent_device=None, gs_start_time=None):
+        DERDevice.__init__(self, device_info, parent_device, gs_start_time)  # device_id, device_type, parent_device)
 
         self.state_vars.update({"SetPt": 0,
                                 "SetPtCmd": 0})
@@ -1969,9 +2037,9 @@ class SolectriaPVCtrlNode(PVCtrlNode):
 class ESSDevice(DERDevice):
 
     ##############################################################################
-    def __init__(self, device_info, parent_device=None):
+    def __init__(self, device_info, parent_device=None, gs_start_time=None):
 
-        DERDevice.__init__(self, device_info, parent_device) #device_id, device_type, parent_device)
+        DERDevice.__init__(self, device_info, parent_device, gs_start_time) #device_id, device_type, parent_device)
 
         _log.info("Device info is ="+str(device_info))
 
@@ -2068,9 +2136,9 @@ class TeslaPowerPack(ESSDevice):
 class PVDevice(DERDevice):
 
     ##############################################################################
-    def __init__(self, device_info, parent_device=None):
+    def __init__(self, device_info, parent_device=None, gs_start_time=None):
 
-        DERDevice.__init__(self, device_info, parent_device) #device_id, device_type, parent_device)
+        DERDevice.__init__(self, device_info, parent_device, gs_start_time) #device_id, device_type, parent_device)
         self.state_vars.update({"Nameplate_kW": float(device_info["nameplate_rating_kW"]) if("nameplate_rating_kW" in device_info) else 0.0})
 
 ##############################################################################
