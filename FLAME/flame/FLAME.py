@@ -569,7 +569,7 @@ def create_baseline_request(start, granularity, duration):
 
 def parse_Baseline_response(result):
     forecast_values = pd.DataFrame(result['msg']['loadSchedule'])
-    #forecast_values = forecast_values * DEMAND_ADJUST
+    forecast_values['value'] = forecast_values['value'] * DEMAND_ADJUST
     forecast_values.set_index('dstart', inplace=True)
     forecast_values.index = convert_FLAME_time_to_UTC(forecast_values.index)
     return forecast_values
