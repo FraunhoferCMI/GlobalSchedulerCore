@@ -86,6 +86,7 @@ default_units = {"setpoint":"kW",
                  "curPwr_kW": "kW",
                  "expectedPwr_kW": "kW",
                  "forecastError_kW": "kW",
+                 "predPwr_kW": "kW",
                  "DemandForecast_kW": "kW",
                  "EnergyAvailableForecast_kWh": "kWh",
                  "expectedSOE_kWh": "kWh",
@@ -215,6 +216,7 @@ class ExecutiveAgent(Agent):
         self.optimizer_info.update({"forecastError_kW": 0.0})
         self.optimizer_info.update({"netDemand_kW": 0.0})
         self.optimizer_info.update({"netDemandAvg_kW": 0.0})
+        self.optimizer_info.update({"predPwr_kW": 0.0})
 
         self.run_optimizer_cnt     = 0
         self.send_ess_commands_cnt = 0
@@ -823,10 +825,9 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["expectedPwr_kW"] = expectedPwr_kW
             self.optimizer_info["expectedSOE_kWh"] = expectedSOE_kWh
             self.optimizer_info["forecastError_kW"] = forecastError_kW
+            self.optimizer_info["predPwr_kW"] = predPwr_kW
             self.optimizer_info["netDemand_kW"]   = netDemand_kW
             self.optimizer_info["netDemandAvg_kW"] = netDemandAvg_kW
-
-            _log.info("ExecutiveStatus: Predicted Power="+ (str(predPwr_kW)))
             self.publish_ess_cmds()
 
     ##############################################################################
@@ -914,8 +915,9 @@ class ExecutiveAgent(Agent):
                 ## queue up time-differentiated cost data
                 _log.info("THESE ARE THE TARIFFS: {}".format(self.tariffs))
                 self.sundial_resources.cfg_cost(schedule_timestamps,
-                                                tariffs = self.tariffs)
-                                                # system_tariff = self.tariffs)
+                                                system_tariff=self.tariffs)
+                                                #tariffs = self.tariffs)
+
 
                 ## generate a cost map - for testing
                 #tiers = self.generate_cost_map()
