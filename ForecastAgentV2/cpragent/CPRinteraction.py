@@ -24,8 +24,8 @@ def create_xml_query(start, end, TimeResolution_Minutes):
                                Name="SHINES-Shirley, MA",
                                Description="Shirley site in MA, higher resolution")
     Location = ET.SubElement(EnergySite, "Location",
-                             Latitude="42.5604788",
-                             Longitude="-71.6331026")
+                             Latitude="42.5553",
+                             Longitude="-71.6246")
 
     PvSystems = ET.SubElement(EnergySite, "PvSystems")
     PvSystem = ET.SubElement(PvSystems, "PvSystem",
@@ -45,7 +45,7 @@ def create_xml_query(start, end, TimeResolution_Minutes):
                              NameplateDCRating_kW="0.310000",
                              PtcRating_kW="0.284800",
                              PowerTemperatureCoefficient_PercentPerDegreeC="0.43",
-                             NominalOArrayperatingCellTemperature_DegreesC="45")
+                             NominalArrayOperatingCellTemperature_DegreesC="45")
     ArrayConfiguration = ET.SubElement(PvArray, "ArrayConfiguration",
                                        Azimuth_Degrees="232",
                                        Tilt_Degrees="20.000",
@@ -83,7 +83,6 @@ def parse_query(query):
     """ Function to parse XML response from API"""
     xmldoc = minidom.parseString(query)
     SimPd = xmldoc.getElementsByTagName('SimulationPeriod')
-
     time = []
     forecast = []
     ghi      = []
@@ -92,7 +91,7 @@ def parse_query(query):
         time.append(iso_datetime.astimezone(pytz.UTC).strftime("%Y-%m-%dT%H:%M:%S"))
         try:
             #print(sim.attributes['StartTime'].value + ": " + sim.attributes['PowerAC_kW'].value)
-            forecast.append(-1.0*float(sim.attributes['PowerAC_kW'].value)*PV_ADJUST)
+            forecast.append(-1.0*float(sim.attributes['PowerAC_kW'].value))
         except KeyError:
             #print(sim.attributes['StartTime'].value + ": " + "synthesized 0.0")
             forecast.append(0.0)
@@ -122,7 +121,7 @@ def get_date(query_interval, duration):
         dt_end  = datetime.isoformat(dt_now + timedelta(minutes=duration*60+5))
     else:
         dt_strt = datetime.isoformat(dt_now.replace(minute=0))  # align to top of the hour
-        dt_end  = datetime.isoformat(dt_now + timedelta(hours=duration))
+        dt_end  = datetime.isoformat(dt_now.replace(minute=0) + timedelta(hours=duration))
 
     return dt_strt, dt_end
 
@@ -157,7 +156,7 @@ if __name__ == "__main__":
                         auth = HTTPBasicAuth(userName, password)
                         )
     parsed_response = parse_query(data.content)
-    parsed_response
+    print(parsed_response)
     ##
     # review the generated
     import xml.dom.minidom
