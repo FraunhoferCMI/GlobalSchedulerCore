@@ -1132,6 +1132,7 @@ class SundialSystemResource(SundialResource):
                          #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_data_load.xlsx"),
                          #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_prices.xlsx", vble_price=True),
                          DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0, threshold = 0, tariff_key='system_tariff'),
+                         #PeakerPlantObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0, threshold=250, tariff_key='peaker_tariff'),
                          dkWObjectiveFunction(desc="dkW")]
 
 
