@@ -96,6 +96,10 @@ class ObjectiveFunction():
 
         cur_data = self.obj_fcn_data.iloc[start_ind:start_ind + SSA_PTS_PER_SCHEDULE]
         cur_data.index = schedule_timestamps
+        #cur_data['Cost'] = [0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
+        #                    0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
+        #                    0.05, 0.05, 0.25, 0.25, 0.25, 0.25,
+        #                    0.80, 0.80, 0.80, 0.80, 0.80, 0.05]
 
         #indices = [numpy.argmin(
         #    numpy.abs(
@@ -158,10 +162,19 @@ class ISONECostObjectiveFunction(EnergyCostObjectiveFunction):
         init_params = {'fname': None}
         EnergyCostObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
         self.init_params = {'fname': None,
+                            'isone': [0.0]*SSA_PTS_PER_SCHEDULE,
                        'tariff_key': 'tariffs'}
 
     ##############################################################################
     def obj_fcn_cfg(self, **kwargs):
+
+        for k, v in self.init_params.iteritems():
+            try:
+                self.init_params.update({k: kwargs['tariffs'][k]})
+                # print(str(k)+": "+str(kwargs[self.init_params['tariff_key'][k]]))
+            except:
+                pass
+
         self.init_params["cur_cost"] = kwargs[self.init_params['tariff_key']]["isone"]
 
     ##############################################################################
@@ -170,6 +183,50 @@ class ISONECostObjectiveFunction(EnergyCostObjectiveFunction):
         # cost = numpy.array(self.init_params["cur_cost"].to_records(index=False))
 
         return cost
+
+##############################################################################
+class PeakerPlantObjectiveFunction(ObjectiveFunction):
+    def __init__(self, desc="", init_params=None, **kwargs):
+        init_params = {'threshold': 250,
+                       'cost_per_kW': 10,
+                       'safety_buffer': 0.0,
+                       'hrs': [18, 19, 20, 21, 22],
+                       'hrs_index': [],
+                       'tariff_key': 'tariffs'}
+        ObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
+
+    ##############################################################################
+    def obj_fcn_cfg(self, **kwargs):
+
+        # list of time stamps
+        # need to generate the indices that are associated with the given hours
+
+        self.init_params["hrs_index"] = []
+
+        for ii in range(0,len(kwargs["schedule_timestamps"])-1):
+            if kwargs['schedule_timestamps'][ii].hour in self.init_params['hrs']:
+                self.init_params['hrs_index'].append(ii)
+
+    ##############################################################################
+    def obj_fcn_cost(self, profile):
+        """
+        placeholder for a function that calculates a demand charge for a given net demand profile
+        :return: cost of executing the profile, in $
+        """
+        #demand = numpy.array(profile)
+        max_demand = max(profile["DemandForecast_kW"][self.init_params['hrs_index']])
+        threshold  = self.init_params["threshold"]*(1-self.init_params["safety_buffer"])
+        if max_demand > threshold: #self.threshold:
+            cost = self.init_params["cost_per_kW"] * (max_demand - threshold)
+        else:
+            cost = 0.0
+        return cost
+
+
+    ##############################################################################
+    def get_obj_fcn_data(self):
+        return self.init_params["threshold"]
+
 
 ##############################################################################
 class StoredEnergyValueObjectiveFunction(ObjectiveFunction):
@@ -198,10 +255,10 @@ class dkWObjectiveFunction(ObjectiveFunction):
     """
     def __init__(self, desc="", init_params=None, **kwargs):
         ObjectiveFunction.__init__(self, desc=desc, init_params={}, **kwargs)
-        self.init_params["cost_per_dkW"] = 0.005
+        self.init_params["cost_per_dkW"] = 0 #0.005**2
 
     def obj_fcn_cost(self, profile):
-        return sum(abs(numpy.ediff1d(profile["DemandForecast_kW"])))*self.init_params["cost_per_dkW"]
+        return (sum(abs(numpy.ediff1d(profile["DemandForecast_kW"]))**2))*self.init_params["cost_per_dkW"]
 
     def get_obj_fcn_data(self):
         return self.init_params["cost_per_dkW"]
@@ -250,8 +307,9 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
         #demand = numpy.array(profile)
 
         max_demand = max(profile["DemandForecast_kW"])
-        if max_demand > self.init_params["threshold"]*(1-self.init_params["safety_buffer"]): #self.threshold:
-            cost = self.init_params["cost_per_kW"] * (max_demand - self.init_params["threshold"])
+        threshold  = self.init_params["threshold"]*(1-self.init_params["safety_buffer"])
+        if max_demand > threshold: #self.threshold:
+            cost = self.init_params["cost_per_kW"] * (max_demand - threshold)
         else:
             cost = 0.0
         return cost
@@ -379,21 +437,33 @@ class BatteryLossModelObjectiveFunction(ObjectiveFunction):
     ##############################################################################
     def obj_fcn_cost(self, profile):
         cost = 0.0
+        #cost = 0.10*profile['DemandForecast_kW'][profile['DemandForecast_kW']>0].sum()
 
-        for ii in (0,len(profile["DemandForecast_kW"])-1):
-            if profile["DemandForecast_kW"][ii] > 0.0:
-                if profile["DemandForecast_kW"][ii] < 20.0:
-                    cost += profile["DemandForecast_kW"][ii] * 0.1
-                elif profile["DemandForecast_kW"][ii] < 50.0:
-                    cost += profile["DemandForecast_kW"][ii] * 0.05
-                elif profile["DemandForecast_kW"][ii] < 100.0:
-                    cost += profile["DemandForecast_kW"][ii] * 0.025
-                elif profile["DemandForecast_kW"][ii] < 200.0:
-                    cost += profile["DemandForecast_kW"][ii] * 0.015
-                elif profile["DemandForecast_kW"][ii] < 300.0:
-                    cost += profile["DemandForecast_kW"][ii] * 0.01
-                elif profile["DemandForecast_kW"][ii] >= 300.0:
-                    cost += profile["DemandForecast_kW"][ii] * 0.0
+
+        prices = [-0.05, -0.05, -0.05, -0.05, -0.05, -0.05,
+                            -0.05, -0.05, -0.05, -0.05, -0.05, -0.05,
+                            -0.05, -0.05, 0.0, 0.0, 0.0, 0.0,
+                            0.0, 0.0, 0.0, 0.0, 0.0, -0.05]
+
+        vals = (prices*profile['DemandForecast_kW'])
+
+        #cost+=vals[vals>0].sum()
+
+        if 0:
+            for ii in (0,len(profile["DemandForecast_kW"])-1):
+                if profile["DemandForecast_kW"][ii] > 0.0:
+                    if profile["DemandForecast_kW"][ii] < 20.0:
+                        cost += profile["DemandForecast_kW"][ii] * 0.1
+                    elif profile["DemandForecast_kW"][ii] < 50.0:
+                        cost += profile["DemandForecast_kW"][ii] * 0.05
+                    elif profile["DemandForecast_kW"][ii] < 100.0:
+                        cost += profile["DemandForecast_kW"][ii] * 0.025
+                    elif profile["DemandForecast_kW"][ii] < 200.0:
+                        cost += profile["DemandForecast_kW"][ii] * 0.015
+                    elif profile["DemandForecast_kW"][ii] < 300.0:
+                        cost += profile["DemandForecast_kW"][ii] * 0.01
+                    elif profile["DemandForecast_kW"][ii] >= 300.0:
+                        cost += profile["DemandForecast_kW"][ii] * 0.0
         return cost
 
     ##############################################################################
