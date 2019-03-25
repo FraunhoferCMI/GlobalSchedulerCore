@@ -420,6 +420,28 @@ class LoadShapeObjectiveFunction(ObjectiveFunction):
     def get_obj_fcn_data(self):
         return self.init_params["cur_cost"][0].tolist()
 
+
+##############################################################################
+class DynamicLoadShapeObjectiveFunction(LoadShapeObjectiveFunction):
+
+    def load_data_file(self, fname):
+        return None
+
+    ##############################################################################
+    def lookup_data(self, schedule_timestamps, sim_offset=timedelta(0)):
+        """
+        looks up cost data from a time-series dataframe for a time window defined by schedule_timestamps
+        :param schedule_timestamps:
+        :param sim_offset:
+        :return:
+        """
+        fname_fullpath = get_gs_path("GS_Optimizer/", self.init_params["fname"])
+        self.obj_fcn_data = pandas.read_csv(fname_fullpath, header=0, index_col=0)
+        pandas.options.display.float_format = '{:,.2f}'.format
+        print(self.obj_fcn_data)
+
+        return numpy.array(self.obj_fcn_data.transpose())
+
 ##############################################################################
 class BatteryLossModelObjectiveFunction(ObjectiveFunction):
     ## place holder that corrects for efficiency as a function of battery chg / discharge rate
