@@ -56,7 +56,8 @@ from volttron.platform.messaging import headers as headers_mod
 from volttron.platform.vip.agent import RPC, compat
 # from volttron.platform.vip.agent import Agent, Core, PubSub, compat
 # from ISONE import isog, getnest
-
+import json
+import pandas as pd
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -246,7 +247,10 @@ Example datum:
         def get_dayahead(self):
             da_data = self.get_ISONE("hourly_da")
             _log.info("HERE'S DAY AHEAD DATA!!!")
-            _log.info(da_data)
+            print(json.dumps(da_data, indent=4, sort_keys=True))
+            df = pd.DataFrame(da_data)
+            print(df)
+            #_log.info(da_data)
             self.vip.pubsub.publish(
                 peer="pubsub",
                 topic=self._config['da_topic'],
@@ -285,7 +289,6 @@ def isog(api_url):
     r = requests.get(base_url + api_url, **rkwargs)
     if r.status_code == 200:
         data = r.json()
-
         # easy manage redundant nesting
         try:
             data = getnest(data)
@@ -312,7 +315,8 @@ def create_menu():
         "lmp_today" : datetime.datetime.strftime(today, "/hourlylmp/da/final/day/%Y%m%d/location/4332"),
         "lmp_yesterday" : datetime.datetime.strftime(today - datetime.timedelta(days=1), "/hourlylmp/da/final/day/%Y%m%d/location/4332"),
         "lmp_tomorrow" : datetime.datetime.strftime(today - datetime.timedelta(days=1), "/hourlylmp/da/final/day/%Y%m%d/location/4332"),
-        "hourly_da": "/hourlylmp/da/final/current/location/4332",
+        #"hourly_da": "/hourlylmp/da/final/current/location/4332",
+        "hourly_da": "/hourlylmp/da/final/day/20190306/location/4332",
         "lmp_now":"/fiveminutelmp/current/location/4332",
     }
 
