@@ -88,6 +88,8 @@ default_units = {"setpoint":"kW",
                  "forecastError_kW": "kW",
                  "predPwr_kW": "kW",
                  "DemandForecast_kW": "kW",
+                 "AvgPwr_kW": "kW",
+                 "Pwr_kW": "kW",
                  "EnergyAvailableForecast_kWh": "kWh",
                  "expectedSOE_kWh": "kWh",
                  "netDemand_kW": "kW",
@@ -225,7 +227,7 @@ class ExecutiveAgent(Agent):
 
         self.prevPwr_kW = None
         #initializes queue for rolling average, maxlen of 600 elements, recommend assigning a variable to this
-        self.queuePwr = deque([0], maxlen=600)
+        self.queuePwr = deque([0], maxlen=2)
         self.last_forecast_start   = datetime(1900, 1, 1, tzinfo=pytz.UTC)
 
 
@@ -553,6 +555,17 @@ class ExecutiveAgent(Agent):
             self.sundial_resources.update_sundial_resource()  # propagates new data to non-terminal nodes
             self.update_tariffs()
 
+            HistorianTools.publish_data(self,
+                                        "SystemResource/",
+                                        default_units["AvgPwr_kW"],
+                                        "AvgPwr_kW",
+                                        self.system_resources.state_vars["AvgPwr_kW"])
+
+            HistorianTools.publish_data(self,
+                                        "SystemResource/",
+                                        default_units["Pwr_kW"],
+                                        "Pwr_kW",
+                                        self.system_resources.state_vars["Pwr_kW"])
 
 
     ##############################################################################
@@ -710,7 +723,10 @@ class ExecutiveAgent(Agent):
             #Push latest calculated slope value into end of queue(FIFO)
             self.queuePwr.append(predchangePwr_kW)
             #Predicted power is equal to the current Power + rolling average of slope
-            predPwr_kW = curPwr_kW + (sum(self.queuePwr) / len(self.queuePwr))
+            if SMOOTH_RAMP == True:
+                predPwr_kW = curPwr_kW + (sum(self.queuePwr) / len(self.queuePwr))
+            else:
+                predPwr_kW = curPwr_kW #+ (sum(self.queuePwr) / len(self.queuePwr))
             #Updates previous power holding variable
             self.prevPwr_kW = curPwr_kW
 
