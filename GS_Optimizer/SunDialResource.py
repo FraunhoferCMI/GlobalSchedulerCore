@@ -276,10 +276,26 @@ class SundialResource():
 
         self.resource_type = resource_cfg["ResourceType"]
         self.resource_id   = resource_cfg["ID"]
+
+        # constructor for any applicable objective functions
+        try:
+            obj_str = "["
+            ii=0
+            for obj in resource_cfg["Objectives"]:
+                if obj["Use"] == "Y":
+                    obj_str += obj["FcnName"]+"("+obj["params"]+")"
+                    ii+=1
+                    if ii!=len(resource_cfg["Objectives"]):
+                        obj_str+=","
+            obj_str += "]"
+            _log.info(obj_str)
+            self.obj_fcns = eval(obj_str)
+        except KeyError:
+            _log.info("No Objectives specified for "+str(self.resource_id))
+            self.obj_fcns = []
+
         self.update_required      = 0 # Flag that indicates if the resource profile needs to be updated between SSA iterations
                                       # Set to one for any resource types whose schedule is affected by changes to control signal
-
-        self.obj_fcns     = []  # constructor for any applicable objectibve functions
 
         # initialize dictionaries for mapping from DERDevice keys to SundialResource keys.
         self.end_pt_update_list    = ["Pwr_kW",
@@ -787,8 +803,9 @@ class ESSResource(SundialResource):
                                         "Nameplate"])
 
         # set up the specific set of objective functions to apply for the system
-        self.obj_fcns = [StoredEnergyValueObjectiveFunction(desc="StorageValue")]#,
-                         #BatteryLossModelObjectiveFunction(desc="LossModel")]
+        if USE_CONFIGURABLE_OBJ_FCNS == False:
+            self.obj_fcns = [StoredEnergyValueObjectiveFunction(desc="StorageValue")]#,
+                             #BatteryLossModelObjectiveFunction(desc="LossModel")]
 
     ##############################################################################
     def init_state_vars(self):
@@ -1127,27 +1144,14 @@ class SundialSystemResource(SundialResource):
         self.update_required = 1  # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         # set up the specific set of objective functions to apply for the system
-        self.obj_fcns = [EnergyCostObjectiveFunction(desc="EnergyPrice", fname="energy_price_data.xlsx"),
-                        #ISONECostObjectiveFunction(desc="ISONEPrice", fname="energy_price_data.xlsx"),
-                         #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_data_load.xlsx"),
-                         #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_prices.xlsx", vble_price=True),
-                         DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0, threshold = 0, tariff_key='system_tariff'),
-                         #PeakerPlantObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0, threshold=250, tariff_key='peaker_tariff'),
-                         dkWObjectiveFunction(desc="dkW")]
-
-
-
-        #self.obj_fcn_init = ['EnergyCostObjectiveFunction(desc="EnergyPrice", fname="energy_price_data.xlsx")',
-        #                     #'LoadShapeObjectiveFunction("loadshape_data_load.xlsx", schedule_timestamps, self.sundial_resources.sim_offset, "LoadShape")']#,
-        #                     #'LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_data_load.xlsx")',
-        #                     'DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0, threshold=self.tariffs["demand_charge_threshold"])',
-        #                     'dkWObjectiveFunction(desc="dkW")']
-        #self.obj_fcns = []
-
-        # instantiate objective functions -
-        # this should load any data files, etc.
-        # , schedule_timestamps, self.sundial_resources.sim_offset
-
+        if USE_CONFIGURABLE_OBJ_FCNS == False:
+            self.obj_fcns = [EnergyCostObjectiveFunction(desc="EnergyPrice", fname="energy_price_data.xlsx"),
+                             #ISONECostObjectiveFunction(desc="ISONEPrice", fname="energy_price_data.xlsx"),
+                             #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_data_load.xlsx"),
+                             #LoadShapeObjectiveFunction(desc="LoadShape", fname="loadshape_prices.xlsx", vble_price=True),
+                             DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0, threshold = 0, tariff_key='system_tariff'),
+                             #PeakerPlantObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0, threshold=250, tariff_key='peaker_tariff'),
+                             dkWObjectiveFunction(desc="dkW")]
 
     ############################
     def load_scenario(self):
@@ -1172,7 +1176,8 @@ class SolarPlusStorageResource(SundialResource):
         self.update_required = 1  # Temporary fix.  flag that indicates if the resource profile needs to be updated between SSA iterations
 
         # set up the specific set of objective functions to apply for the this resource type
-        self.obj_fcns = [] #[DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=1000.0, threshold=0.0, tariff_key="solarPlusStorage_tariff")]
+        if USE_CONFIGURABLE_OBJ_FCNS == False:
+            self.obj_fcns = [] #[DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=1000.0, threshold=0.0, tariff_key="solarPlusStorage_tariff")]
 
     ############################
     def load_scenario(self):
