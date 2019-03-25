@@ -1007,7 +1007,8 @@ class DERDevice():
 
             _log.debug("device - "+ self.device_id+"; k= "+k+"; pub cnt = "+str(self.publish_cnt)+"; update=" +str(self.state_vars_update_rate[k]))
             if self.state_vars_update_rate[k] is not None:
-                if self.publish_cnt % self.state_vars_update_rate[k] == 0:
+                update_rate = max(int(self.state_vars_update_rate[k] / SIM_HRS_PER_HR),1)
+                if self.publish_cnt % update_rate == 0:
                     units = default_units[k]
 
                     HistorianTools.publish_data(SiteMgr,
