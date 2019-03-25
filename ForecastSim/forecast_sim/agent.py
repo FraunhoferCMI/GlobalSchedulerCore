@@ -164,7 +164,7 @@ class CPRAgent(Agent):
 
         #### Initialize data input files
         # get solar forecast data
-        if SIM_SCENARIO == 2:
+        if USE_MATRIX == True:
             self.ghi_forecast = StoredMatrixForecast(SSA_PTS_PER_SCHEDULE,
                                                      "W/m2",
                                                      "float",
