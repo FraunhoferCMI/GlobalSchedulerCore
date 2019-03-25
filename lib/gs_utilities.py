@@ -203,7 +203,8 @@ class Forecast():
     def __init__(self, forecast, time, units, datatype, ghi = None,
                  duration =  SSA_SCHEDULE_DURATION,
                  resolution = SSA_SCHEDULE_RESOLUTION,
-                 labels = None):
+                 labels = None,
+                 use_correction = False):
         assert isinstance(forecast, list)
         assert isinstance(time, list)
         self.time = time
@@ -214,7 +215,10 @@ class Forecast():
         self.ghi      = ghi
 
         ts = [datetime.strptime(v, TIME_FORMAT) for v in time]
-        self.forecast = get_pv_correction_factors(forecast, ts, ghi)
+        if use_correction == True:
+            self.forecast = get_pv_correction_factors(forecast, ts, ghi)
+        else:
+            self.forecast = forecast
 
         if labels == None:
             self.labels = {"Forecast": "Forecast",
