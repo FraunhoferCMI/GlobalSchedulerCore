@@ -566,7 +566,7 @@ class DERDevice():
             cur_device.print_site_status()
 
     ##############################################################################
-    def calc_avg_pwr(self, val):
+    def calc_avg_pwr(self, SiteMgr):
         """
         maintains a circular buffer of length defined by MODBUS_PTS_PER_WINDOW
         and calculates the average power output over that time window
@@ -574,20 +574,27 @@ class DERDevice():
         :param val: most recent power reading
         :return: average power over the last MODBUS_PTS_PER_WINDOW duration
         """
-        if len(self.avg_pwr_buffer) < MODBUS_PTS_PER_WINDOW:
-            # buffer is not fully populated (when process first starts), so
-            # append values until buffer is fully populated
-            self.avg_pwr_buffer.append(val)
-        else:
-            # buffer is fully populated, so treat as a circular buffer -
-            # remove oldest value from the list
-            self.avg_pwr_buffer.append(val)
-            self.avg_pwr_buffer = self.avg_pwr_buffer[1:]
 
-        return sum(self.avg_pwr_buffer) / float(len(self.avg_pwr_buffer))
+        #for cur_device in self.devices:
+        #    cur_device.calc_avg_pwr(SiteMgr)
+
+        if SiteMgr is not None:
+            end = datetime.utcnow()
+            st = end - timedelta(seconds=AVERAGING_WINDOW)
+
+            st_str = st.strftime(TIME_FORMAT)
+            end_str = end.strftime(TIME_FORMAT)
+
+            device_path_str = self.device_id.replace('-', '/')+'/OpStatus/Pwr_kW'
+            topic_name = 'datalogger/'+device_path_str
+            avg_pwr = HistorianTools.calc_avg(SiteMgr, topic_name, st_str, end_str)
+            _log.info("Calc Avg: "+str(avg_pwr))
+            return avg_pwr
+        else: # still initializing, no actual data
+            return 0
 
     ##############################################################################
-    def update_state_vars(self):
+    def update_state_vars(self, SiteMgr):
         """
         updates external holding registers
 
@@ -611,7 +618,7 @@ class DERDevice():
         try:
             if self.op_status.data_dict["Pwr_kW"] is not None:
                 self.state_vars.update({"Pwr_kW": self.op_status.data_dict["Pwr_kW"]})
-                self.state_vars.update({"AvgPwr_kW": self.calc_avg_pwr(self.op_status.data_dict["Pwr_kW"])})
+                self.state_vars.update({"AvgPwr_kW": self.calc_avg_pwr(SiteMgr)})
         except KeyError:
             pass
 
@@ -673,7 +680,7 @@ class DERDevice():
                         _log.info("Timeout!!")
 
     ##############################################################################
-    def update_status(self):
+    def update_status(self, SiteMgr):
         """
         Called after populate end points has completed.  Traverses the site tree to do the following:
         (1) checks the latest modbus scrape to interpret the current status of the site and all its devices.
@@ -720,7 +727,7 @@ class DERDevice():
 
         # call this routine for each child:
         for cur_device in self.devices:
-            cur_device.update_status()
+            cur_device.update_status(SiteMgr)
 
         # FIXME: check reg_mismatch - (either check specific registers associated with a derDevice, or
         # make a descriptor that links ctrl --> status registers in the datamap file)
@@ -742,7 +749,7 @@ class DERDevice():
             self.isControlAvailable = 0
 
         # update registers for exporting to other agents
-        self.update_state_vars()
+        self.update_state_vars(SiteMgr)
 
         #_log.info("UpdateStatus: "+self.device_id+": data valid = "+str(self.isDataValid)+"; ControlAvailable = "+str(self.isControlAvailable))
 
@@ -863,7 +870,7 @@ class DERDevice():
                 pass
 
         _log.info("PopEndpts: Topic "+topic+" read "+str(cnt)+" data pts; skipped: "+str(skip_cnt))
-        self.update_status()
+        self.update_status(SiteMgr)
 
     ##############################################################################
     def populate_endpts(self, incoming_msg, SiteMgr, meta_data = None, cur_topic_name=None, topic=None):
@@ -924,7 +931,7 @@ class DERDevice():
                 pass
 
         _log.info("PopEndpts: Topic "+topic+" read "+str(cnt)+" data pts; skipped: "+str(skip_cnt))
-        self.update_status()
+        self.update_status(SiteMgr)
 
     ##############################################################################
     def write_cmd(self, attribute, pt, val, sitemgr):
@@ -1622,12 +1629,12 @@ class ShirleySiteDeviceLevelCtrl(ShirleySite):
 class DERCtrlNode(DERDevice):
 
     ##############################################################################
-    def update_state_vars(self):
+    def update_state_vars(self, SiteMgr):
         """
         updates the external registers for DERCtrlNode instance by summing child devices
         :return:
         """
-        DERDevice.update_state_vars(self)
+        DERDevice.update_state_vars(self, SiteMgr)
 
         if "ChgEff" in self.state_vars_update_list:
             self.state_vars.update({"ChgEff": 1.0})
@@ -1690,7 +1697,7 @@ class LoadNode(DERDevice):
         _log.info(self.state_vars_update_rate)
 
     ##############################################################################
-    def calc_avg_pwr(self, val):
+    def deprecated_calc_avg_pwr(self, val):
         """
         low rate data capture - power reading is already an average
         TODO - Note - does not currently address missed readings.  Not sure if this matters.
@@ -1730,8 +1737,8 @@ class LoadShiftCtrlNode(DERCtrlNode):
 
 
     ##############################################################################
-    def update_state_vars(self):
-        DERCtrlNode.update_state_vars(self)
+    def update_state_vars(self, SiteMgr):
+        DERCtrlNode.update_state_vars(self, SiteMgr)
 
         #fixme - should use get_gs_time
         #now = utils.get_aware_utc_now()
@@ -1758,7 +1765,7 @@ class LoadShiftCtrlNode(DERCtrlNode):
 
 
     ##############################################################################
-    def calc_avg_pwr(self, val):
+    def deprecated_calc_avg_pwr(self, val):
         """
         low rate data capture - power reading is already an average
         TODO - Note - does not currently address missed readings.  Not sure if this matters.
@@ -1860,14 +1867,14 @@ class ESSCtrlNode(DERModbusCtrlNode):
         _log.info(self.state_vars_update_rate)
 
 
-        self.update_state_vars()
+        self.update_state_vars(None)
 
         self.state_vars["OrigDemandForecast_t_str"] = [0.0]*SSA_PTS_PER_SCHEDULE
 
 
     ##############################################################################
-    def update_state_vars(self):
-        DERCtrlNode.update_state_vars(self)
+    def update_state_vars(self, SiteMgr):
+        DERCtrlNode.update_state_vars(self, SiteMgr)
 
         #fixme - should use get_gs_time
         if USE_SIM == 1:
@@ -1969,7 +1976,7 @@ class PVCtrlNode(DERModbusCtrlNode):
 
         _log.info("Device is:"+self.device_id)
         _log.info(str(self.state_vars_update_list))
-        self.update_state_vars()
+        self.update_state_vars(None)
 
         #self.state_vars.update({"Nameplate_kW": 0.0})
 
@@ -1977,8 +1984,8 @@ class PVCtrlNode(DERModbusCtrlNode):
         #    self.state_vars["Nameplate_kW"] += device.state_vars["Nameplate_kW"]
 
     ##############################################################################
-    def update_state_vars(self):
-        DERCtrlNode.update_state_vars(self)
+    def update_state_vars(self, SiteMgr):
+        DERCtrlNode.update_state_vars(self, SiteMgr)
 
 ##############################################################################
 class SolectriaPVCtrlNode(PVCtrlNode):
@@ -2063,12 +2070,12 @@ class ESSDevice(DERDevice):
 class TeslaPowerPack(ESSDevice):
 
     ##############################################################################
-    def update_state_vars(self):
+    def update_state_vars(self, SiteMgr):
         """
         updates external registers with ESS-specific fields
         :return:
         """
-        DERDevice.update_state_vars(self)
+        DERDevice.update_state_vars(self, SiteMgr)
 
         if self.op_status.data_dict["FullChargeEnergy_kWh"] is not None:
             self.state_vars.update({"MaxSOE_kWh": self.op_status.data_dict["FullChargeEnergy_kWh"] * ESS_MAX,
