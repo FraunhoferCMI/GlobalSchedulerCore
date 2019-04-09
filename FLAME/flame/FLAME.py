@@ -806,19 +806,19 @@ if __name__ == '__main__':
 
     ws = create_connection(ws_url, sslopt=sslopt)
 
-    TEST_BASELINE   = False
+    TEST_BASELINE   = True
     TEST_STATUS     = False
-    TEST_LOADSHIFT  = False
+    TEST_LOADSHIFT  = True
     TEST_STATUS     = False
     TEST_LOADSELECT = False
     TEST_LOADREPORT = False
-    STORE_FORECASTS = True
+    STORE_FORECASTS = False
 
 
     # Baseline
     def test_Baseline():
         print("running Baseline")
-        start =  '2018-10-25T00:00:00'
+        start =  '2019-03-27T00:00:00'
         granularity = 1
         # granularity =  'PT1H'
         duration = 'PT24H'
@@ -835,7 +835,7 @@ if __name__ == '__main__':
         print("running LoadShift")
         # LoadShift
         current_tz = pytz.timezone('US/Eastern')
-        start_time = current_tz.localize(datetime(year=2018,month=11,day=20,hour=0))
+        start_time = current_tz.localize(datetime(year=2019,month=03,day=27,hour=0))
         ls = LoadShift(websocket = ws,
                        start_time = start_time)
         ls.process()
