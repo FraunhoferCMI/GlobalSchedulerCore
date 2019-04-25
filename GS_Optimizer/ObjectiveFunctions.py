@@ -25,6 +25,7 @@ class ObjectiveFunction():
         :return:
         """
         print(desc)
+        print(kwargs)
         self.desc   = desc
         self.init_params = {'tariff_key': None}
 
@@ -124,6 +125,12 @@ class ObjectiveFunction():
     def get_obj_fcn_data(self):
         return self.init_params["cur_cost"]
 
+    ##############################################################################
+    def get_objfcn_weights(self, schedule_timestamps):
+        weights = numpy.array([0.0]*SSA_PTS_PER_SCHEDULE) #pandas.DataFrame(data=[0.0]*SSA_PTS_PER_SCHEDULE, index = schedule_timestamps)
+        return weights
+
+
 ##############################################################################
 class EnergyCostObjectiveFunction(ObjectiveFunction):
 
@@ -187,10 +194,10 @@ class ISONECostObjectiveFunction(EnergyCostObjectiveFunction):
 ##############################################################################
 class PeakerPlantObjectiveFunction(ObjectiveFunction):
     def __init__(self, desc="", init_params=None, **kwargs):
-        init_params = {'threshold': 250,
+        init_params = {'threshold': 100,
                        'cost_per_kW': 10,
                        'safety_buffer': 0.0,
-                       'hrs': [18, 19, 20, 21, 22],
+                       'hrs': [17,18,19,20],   # [18,19,20,21,22],
                        'hrs_index': [],
                        'tariff_key': 'tariffs'}
         ObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
@@ -203,9 +210,17 @@ class PeakerPlantObjectiveFunction(ObjectiveFunction):
 
         self.init_params["hrs_index"] = []
 
-        for ii in range(0,len(kwargs["schedule_timestamps"])-1):
-            if kwargs['schedule_timestamps'][ii].hour in self.init_params['hrs']:
+        #print(kwargs['schedule_timestamps'])
+        timestamps = [v + kwargs['sim_offset'] for v in kwargs['schedule_timestamps']]
+        #print(self.init_params['hrs'])
+        #print(timestamps)
+        for ii in range(0,len(timestamps)):
+            if timestamps[ii].hour in self.init_params['hrs']:
                 self.init_params['hrs_index'].append(ii)
+
+        #print('hr index: ')
+        #print(self.init_params['hrs_index'])
+
 
     ##############################################################################
     def obj_fcn_cost(self, profile):
@@ -226,6 +241,12 @@ class PeakerPlantObjectiveFunction(ObjectiveFunction):
     ##############################################################################
     def get_obj_fcn_data(self):
         return self.init_params["threshold"]
+
+    ##############################################################################
+    def get_objfcn_weights(self, schedule_timestamps):
+        weights = numpy.array([0.0] * SSA_PTS_PER_SCHEDULE)  #pandas.DataFrame(data=[0.0]*SSA_PTS_PER_SCHEDULE, index = schedule_timestamps)
+        weights[self.init_params['hrs_index']] = 10.0
+        return weights
 
 
 ##############################################################################
@@ -397,6 +418,9 @@ class LoadShapeObjectiveFunction(ObjectiveFunction):
         self.init_params["cur_cost"] = self.lookup_data(kwargs["schedule_timestamps"],
                                                         kwargs["sim_offset"])
 
+        print("Target Load Shape is:")
+        print(self.init_params['cur_cost'])
+
     ##############################################################################
     def obj_fcn_cost(self, profile):
         """
@@ -437,10 +461,25 @@ class DynamicLoadShapeObjectiveFunction(LoadShapeObjectiveFunction):
         """
         fname_fullpath = get_gs_path("GS_Optimizer/", self.init_params["fname"])
         self.obj_fcn_data = pandas.read_csv(fname_fullpath, header=0, index_col=0)
+        self.obj_fcn_data.index = pandas.to_datetime(self.obj_fcn_data.index)
         pandas.options.display.float_format = '{:,.2f}'.format
-        print(self.obj_fcn_data)
 
-        return numpy.array(self.obj_fcn_data.transpose())
+        start_ind = schedule_timestamps[0].hour
+
+        tmp = numpy.array([[0.0]*len(self.obj_fcn_data.columns)]*len(self.obj_fcn_data))
+        for ii in range(0,len(schedule_timestamps)):
+            for jj in range(0,len(self.obj_fcn_data.columns)):
+                v = self.obj_fcn_data[str(jj)].loc[self.obj_fcn_data.index.hour == schedule_timestamps[ii].hour]
+                try:
+                    tmp[ii][jj] = v
+                except:
+                    pass
+
+        #print(tmp)
+        #print('Target Load Shape: ')
+        #print(self.obj_fcn_data)
+
+        return tmp.transpose() #numpy.array(self.obj_fcn_data.transpose())
 
 ##############################################################################
 class BatteryLossModelObjectiveFunction(ObjectiveFunction):
