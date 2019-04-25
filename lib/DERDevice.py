@@ -568,18 +568,13 @@ class DERDevice():
     ##############################################################################
     def calc_avg_pwr(self, SiteMgr):
         """
-        maintains a circular buffer of length defined by MODBUS_PTS_PER_WINDOW
-        and calculates the average power output over that time window
-        TODO - Note - does not currently address missed readings.  Not sure if this matters.
-        :param val: most recent power reading
+        Calculates average power for the device over a window of time defined by AVERAGING_WINDOW seconds
+        If no points are available, returns the previous AvgPwr. 
+        :param SiteMgr: ptr to a Site Manager VOLTTRON agent (to enable database access)
         :return: average power over the last MODBUS_PTS_PER_WINDOW duration
         """
-
-        #for cur_device in self.devices:
-        #    cur_device.calc_avg_pwr(SiteMgr)
-
         if SiteMgr is not None:
-            end = datetime.utcnow()
+            end = datetime.utcnow()+timedelta(seconds=1)
             st = end - timedelta(seconds=AVERAGING_WINDOW)
 
             st_str = st.strftime(TIME_FORMAT)
@@ -587,9 +582,12 @@ class DERDevice():
 
             device_path_str = self.device_id.replace('-', '/')+'/OpStatus/Pwr_kW'
             topic_name = 'datalogger/'+device_path_str
-            avg_pwr = HistorianTools.calc_avg(SiteMgr, topic_name, st_str, end_str)
-            _log.info("Calc Avg: "+str(avg_pwr))
-            return avg_pwr
+            avg_pwr, n_pts = HistorianTools.calc_avg(SiteMgr, topic_name, st_str, end_str)
+            #_log.info("Calc Avg: "+str(avg_pwr)+"; n pts = "+str(n_pts))
+            if n_pts == 0:
+                return self.state_vars['AvgPwr_kW']
+            else:
+                return avg_pwr
         else: # still initializing, no actual data
             return 0
 
