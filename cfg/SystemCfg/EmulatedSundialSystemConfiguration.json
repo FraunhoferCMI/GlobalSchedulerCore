@@ -25,8 +25,13 @@
       },
       {
         "FcnName": "DynamicLoadShapeObjectiveFunction",
-        "params": "desc='LoadShape', fname='myloadshape.csv'",
+        "params": "desc='LoadShape', fname='myloadshape.csv', vble_price=True",
         "Use": "Y"
+      },
+      {
+        "FcnName": "PeakerPlantObjectiveFunction",
+        "params": "desc='DemandCharge', cost_per_kW=10.0, threshold=250, tariff_key='peaker_tariff'",
+        "Use": "N"
       }
     ],
     "VirtualPlantList": [
