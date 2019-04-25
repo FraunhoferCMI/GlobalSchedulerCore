@@ -453,21 +453,24 @@ class FLAMECommsAgent(Agent):
                          forecast.forecast_meta_data["Forecast"]["units"],
                          "tPlus1",
                          forecast.forecast_values["Forecast"][1],
-                         TimeStamp_str=forecast.forecast_values["Time"][1])
+                         TimeStamp_str=forecast.forecast_values["Time"][1],
+                         ref_time=self.gs_start_time)
 
             publish_data(self,
                          "flame/forecast",
                          forecast.forecast_meta_data["Forecast"]["units"],
                          "tPlus5",
                          forecast.forecast_values["Forecast"][5],
-                         TimeStamp_str=forecast.forecast_values["Time"][5])
+                         TimeStamp_str=forecast.forecast_values["Time"][5],
+                         ref_time=self.gs_start_time)
 
             publish_data(self,
                          "flame/forecast",
                          forecast.forecast_meta_data["Forecast"]["units"],
                          "tPlus23",
                          forecast.forecast_values["Forecast"][23],
-                         TimeStamp_str=forecast.forecast_values["Time"][23])
+                         TimeStamp_str=forecast.forecast_values["Time"][23],
+                         ref_time=self.gs_start_time)
 
             self.vip.pubsub.publish(
                 peer="pubsub",
