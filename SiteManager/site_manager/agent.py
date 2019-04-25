@@ -123,6 +123,7 @@ class SiteManagerAgent(Agent):
         self.updating  = 0
         self.write_error_count = 0
         self.devices_to_display = []
+        self.initialization_complete = False
 
 
     ##############################################################################
@@ -141,6 +142,12 @@ class SiteManagerAgent(Agent):
         self.topics = cursite["Topics"]
         for topics in self.topics:
             self.vip.pubsub.subscribe(peer='pubsub', prefix=topics["TopicPath"], callback=self.parse_IEB_msgs) #+'/all'
+
+            #device_prefix = "devices/"  # was /devices/
+            #if topics["TopicPath"].startswith(device_prefix) == True:
+            #    get_pt_path = topics["TopicPath"][len(device_prefix):]
+            #self.vip.pubsub.subscribe(peer='pubsub', prefix='devices/actuators/value/'+get_pt_path, callback=self.parse_IEB_msgs)
+
             topics.update({"isValid": "N"})
             topics.update({"last_read_time": utils.get_aware_utc_now()})
             topics.update({"SCRAPE_TIMEOUT": eval(topics["TopicScrapeTimeout"])})
@@ -167,12 +174,51 @@ class SiteManagerAgent(Agent):
                 pass
             topics.update({"endpt_units": endpt_units})
             _log.info("SiteManagerConfig: Subscribing to new topic: "+topics["TopicPath"]+'/all')
+                    #'devices/actuators/get/<full device path>/<actuation point>'
 
-        self.site = DERDevice.get_site_handle(cursite, self.data_map_dir)
-        self.vip.pubsub.publish('pubsub', 
+        try:
+            v1 = self.vip.rpc.call("executiveagent-1.0_1", "get_gs_start_time").get(timeout=5)
+            gs_start_time = datetime.strptime(v1, "%Y-%m-%dT%H:%M:%S")  # .replace()  # was .%f
+        except:
+            _log.info("SiteMgr - gs_start_time not found.  Using current time as gs_start_time")
+            gs_start_time = utils.get_aware_utc_now().replace(microsecond=0)
+            gs_start_time = gs_start_time.replace(tzinfo=None)
+            _log.info("GS STart time is "+str(gs_start_time))
+
+        self.site = DERDevice.get_site_handle(cursite, self.data_map_dir, gs_start_time)
+        self.vip.pubsub.publish('pubsub',
                                 'data/NewSite/all', 
                                 headers={}, 
                                 message=[self.site.device_id]).get(timeout=10.0)
+
+
+        #self.vip.pubsub.publish('pubsub',
+        #                        'devices/actuators/get/Site1low/all',  #ess.tesla_status.Status_FullChargeEnergy
+                                #'devices/actuators/get/' + topics["TopicPath"] + '/all',
+        #                        headers={},
+        #                        message={}).get(timeout=10.0)
+
+
+
+        #get_list = ['Site1low/ess.tesla_status.Status_FullChargeEnergy',
+        #            'Site1low/ess.tesla_status.Status_MaxDischargePower']
+
+        #val = self.vip.rpc.call("platform.actuator",
+        #                           "get_multiple_points",
+        #                           get_list).get()
+
+        #_log.info(val)
+
+        #new_val = {}
+        #for k,v in val[0].items():
+        #    new_key = k[len('Site1low/'):]
+        #    new_val.update({new_key: v})
+        #_log.info(new_val)
+
+        #self.updating = 1  # indicates that data is updating - do not trust until populate end pts is complete
+        #self.site.populate_endpts(new_val, self, None, 'Modbus', 'devices/Site1low/all')
+        #self.dirtyFlag = 0  # clear dirtyFlag on new read
+        #self.updating = 0
 
 
         if 0:
@@ -225,7 +271,8 @@ class SiteManagerAgent(Agent):
             #                    trigger_callback=True).get(timeout=5)
             #set_config(self, config_name, contents, trigger_callback=False, send_update=True):
 
-        self.mode = AUTO # site is initialized - transition to auto        
+        self.mode = AUTO # site is initialized - transition to auto
+        self.initialization_complete = True
 
     ##############################################################################
     def configure(self,config_name, action, contents):
@@ -266,7 +313,8 @@ class SiteManagerAgent(Agent):
         parses message on IEB published to the SiteManager's specified path, and 
         populates endpts (populate_endpts) based on message contents
         """
-        _log.debug("SiteManagerStatus: Topic found - "+str(topic))
+        _log.info("SiteManagerStatus: Topic found - "+str(topic))
+
         if sender == 'pubsub.compat':
             message = compat.unpack_legacy_message(headers, message)
 
@@ -294,12 +342,12 @@ class SiteManagerAgent(Agent):
                 _log.debug("SiteManagerStatus: Topic "+topic+" read at "+datetime.strftime(topic_obj["last_read_time"], "%Y-%m-%dT%H:%M:%S"))
                 break
 
-        try:
+        if (1): #try:
             self.updating = 1  # indicates that data is updating - do not trust until populate end pts is complete
             self.site.populate_endpts(data, self, meta_data, cur_topic_name, topic)
             self.dirtyFlag = 0 # clear dirtyFlag on new read
             self.updating = 0
-        except:
+        else: #except:
             #FIXME - this should probably look for specific error to trap, right now this is
             # a catch-all for any errors in parsing incoming msg
             _log.info("Exception: in populate end_pts!!!")
