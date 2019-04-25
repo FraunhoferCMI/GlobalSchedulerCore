@@ -178,6 +178,15 @@ class SundialResourceProfile():
         return total_cost
 
     ##############################################################################
+    def get_objfcn_weights(self, schedule_timestamps):
+        objfcn_weights = numpy.array([0.0]*SSA_PTS_PER_SCHEDULE) #pandas.DataFrame(data=[0.0]*SSA_PTS_PER_SCHEDULE, index = schedule_timestamps)
+        for virtual_plant in self.virtual_plants:
+            objfcn_weights += virtual_plant.get_objfcn_weights(schedule_timestamps)
+
+        objfcn_weights += self.sundial_resources.get_objfcn_weights(schedule_timestamps)
+        return objfcn_weights
+
+    ##############################################################################
     def update_sundial_resource(self):
         """
         propagates data from children to non-terminal parent nodes in the SundialResource tree
@@ -468,6 +477,16 @@ class SundialResource():
                         self.state_vars[k] += virtual_plant.state_vars[k]
 
     ##############################################################################
+    def get_tariff_list(self, tariff_list):
+
+        for virtual_plant in self.virtual_plants:
+            tariff_list = virtual_plant.get_tariff_list(tariff_list)
+        for obj_fcn in self.obj_fcns:
+            if obj_fcn.init_params['tariff_key'] is not None:
+                tariff_list.append(obj_fcn.init_params['tariff_key'])
+        return tariff_list
+
+    ##############################################################################
     def cfg_cost(self, schedule_timestamps, **kwargs):
         """
         configures cost information for all applicable cost functions in preparation for an optimization pass
@@ -479,6 +498,9 @@ class SundialResource():
             virtual_plant.cfg_cost(schedule_timestamps, **kwargs)
         for obj_fcn in self.obj_fcns:
             try:
+                #_log.info(kwargs)
+                #_log.info(obj_fcn.init_params['tariff_key'])
+
                 obj_fcn.obj_fcn_cfg(schedule_timestamps=schedule_timestamps,
                                     tariffs=kwargs[obj_fcn.init_params['tariff_key']],
                                     sim_offset=self.sim_offset,
@@ -773,6 +795,15 @@ class SundialResource():
         #for fcn in self.obj_fcns:
         #    cost += fcn()
         return cost
+
+    ############################
+    def get_objfcn_weights(self, schedule_timestamps):
+        weights = numpy.array([0.0]*SSA_PTS_PER_SCHEDULE) #pandas.DataFrame(data=[0.0]*SSA_PTS_PER_SCHEDULE, index = schedule_timestamps)
+        for obj_fcn in self.obj_fcns:
+            weights += obj_fcn.get_objfcn_weights(schedule_timestamps) # cost.append(obj_fcn.obj_fcn_cost(profile))
+        return weights
+
+
 
 ##############################################################################
 class ESSResource(SundialResource):
@@ -1152,6 +1183,9 @@ class SundialSystemResource(SundialResource):
                              DemandChargeObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0, threshold = 0, tariff_key='system_tariff'),
                              #PeakerPlantObjectiveFunction(desc="DemandCharge", cost_per_kW=10.0, threshold=250, tariff_key='peaker_tariff'),
                              dkWObjectiveFunction(desc="dkW")]
+        self.tariff_list = self.get_tariff_list([])
+        _log.info(self.tariff_list)
+
 
     ############################
     def load_scenario(self):
@@ -1283,6 +1317,7 @@ def export_schedule(profile, timestamps, update=True):
         profile.sundial_resources.schedule_vars["DeltaEnergy_kWh"] = profile.state_vars["DeltaEnergy_kWh"]
         profile.sundial_resources.schedule_vars["timestamp"] = copy.deepcopy(timestamps)
         profile.sundial_resources.schedule_vars["total_cost"] = profile.total_cost
+        profile.sundial_resources.schedule_vars["weights"] = profile.get_objfcn_weights(profile.sundial_resources.schedule_vars["timestamp"])
 
         for ii in range(0,len(profile.sundial_resources.schedule_vars["timestamp"])):
             profile.sundial_resources.schedule_vars["schedule_kW"].update({
@@ -1292,26 +1327,30 @@ def export_schedule(profile, timestamps, update=True):
             profile.sundial_resources.schedule_vars["schedule_kWh"].update({
                 profile.sundial_resources.schedule_vars["timestamp"][ii]:
                     profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"][ii]})
+
+
         #pprint.pprint(profile.sundial_resources.schedule_vars["schedule_kW"])
 
 
         for obj_fcn in profile.sundial_resources.obj_fcns:
             profile.sundial_resources.schedule_vars[obj_fcn.desc] = obj_fcn.get_obj_fcn_data()
     else:
-	rejected_df = pandas.DataFrame(data=[profile.state_vars["DemandForecast_kW"],
+        rejected_df = pandas.DataFrame(data=[profile.state_vars["DemandForecast_kW"],
                                        profile.state_vars["EnergyAvailableForecast_kWh"]]).transpose()
-    	rejected_df.columns = ["Demand-"+profile.sundial_resources.resource_id, "Energy-"+profile.sundial_resources.resource_id]
-    	rejected_df.index = pandas.Series(profile.sundial_resources.schedule_vars["timestamp"])
-    	pandas.options.display.float_format = '{:,.1f}'.format
-    	print(rejected_df)
+        rejected_df.columns = ["Demand-"+profile.sundial_resources.resource_id, "Energy-"+profile.sundial_resources.resource_id]
+        rejected_df.index = pandas.Series(profile.sundial_resources.schedule_vars["timestamp"])
+        pandas.options.display.float_format = '{:,.1f}'.format
+        print(rejected_df)
 
     demand_df = pandas.DataFrame(data=[profile.sundial_resources.schedule_vars["DemandForecast_kW"],
-                                       profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"]]).transpose()
-    demand_df.columns = ["Demand-"+profile.sundial_resources.resource_id, "Energy-"+profile.sundial_resources.resource_id]
+                                       profile.sundial_resources.schedule_vars["EnergyAvailableForecast_kWh"],
+                                       profile.sundial_resources.schedule_vars["weights"]]).transpose()
+    demand_df.columns = ["Demand-"+profile.sundial_resources.resource_id,
+                         "Energy-"+profile.sundial_resources.resource_id,
+                         "Weights-" + profile.sundial_resources.resource_id]
     demand_df.index = pandas.Series(profile.sundial_resources.schedule_vars["timestamp"])
     pandas.options.display.float_format = '{:,.1f}'.format
     print(demand_df)
-    pass
 
 if __name__ == "__main__":
 
