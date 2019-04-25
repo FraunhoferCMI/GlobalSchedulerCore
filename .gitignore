@@ -21,7 +21,7 @@ __pycache__/
 FLAME/flame/Example*
 ssa_results.csv
 GS_Optimizer/myloadshape*
-
+GS_Optimizer/SSA_Optimization_04252019.py
 # C extensions
 *.so
 
