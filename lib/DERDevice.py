@@ -569,7 +569,7 @@ class DERDevice():
     def calc_avg_pwr(self, SiteMgr):
         """
         Calculates average power for the device over a window of time defined by AVERAGING_WINDOW seconds
-        If no points are available, returns the previous AvgPwr. 
+        If no points are available, returns the previous AvgPwr.
         :param SiteMgr: ptr to a Site Manager VOLTTRON agent (to enable database access)
         :return: average power over the last MODBUS_PTS_PER_WINDOW duration
         """
