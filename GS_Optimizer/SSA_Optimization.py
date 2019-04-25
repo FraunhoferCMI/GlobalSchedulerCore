@@ -273,7 +273,7 @@ class SimulatedAnnealer():
         ## need to have least_cost_soln - global, and least_cost_soln - for the current load shift profile
 
         if run_optimization == True:
-            # set initial tempearture
+            # set initial temperature
             T0   = abs(self.O2T*init_soln.cost)
             T    = T0;
 
@@ -338,7 +338,7 @@ class SimulatedAnnealer():
                 # Then: check for constraints.
                 # TODO - right now, just checking for battery limit violations.  Eventually put in ability to include
                 # TODO - additional constraints
-                self.ess.state_vars    = self.ess.sundial_resources.check_constraints2(self.ess.state_vars, ind)
+                self.ess.state_vars    = self.ess.sundial_resources.check_constraints(self.ess.state_vars, ind)
 
                 # then: update resources.
                 if use_recursive == True:
@@ -498,161 +498,22 @@ class SimulatedAnnealer():
         loadshift_resources.schedule_vars["SelectedProfile"] = loadshift_resources.state_vars["IDList"][lcs_ind]
 
 
-
-if __name__ == '__main__':
-    # Entry point for script
-
-    ##### This section replicates the initialization of the system (done one time, when system starts up) ######
-
-    # the following is a rough demo of how a system gets constructed.
-    # this is a hard-coded version of what might happen in the executive
-    # would eventually do all this via external configuration files, etc.
-    shift_to_start_of_day = False
-
-    _log.setLevel(logging.INFO)
-    msgs = logging.StreamHandler(stream=sys.stdout)
-    #msgs.setLevel(logging.INFO)
-    #_log.addHandler(msgs)
-
-    _log.info("Getting variables ready for SundialSystemResource")
-    SundialCfgFile = "../cfg/SystemCfg/SundialSystemConfiguration2.json"#"SundialSystemConfiguration2.json"
-    sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
-
-    gs_start_time = datetime.utcnow().replace(microsecond=0)
+def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=45, nIterations=1):
     if shift_to_start_of_day == True:
         gs_start_time = gs_start_time.replace(hour=0, minute=0, second=0)
     gs_start_time_str = gs_start_time.strftime("%Y-%m-%dT%H:%M:%S")
-
     _log.info("Initializing SundialSystemResource with start time: {}".format(gs_start_time_str))
-    sundial_resources = SundialSystemResource(sundial_resource_cfg_list, gs_start_time_str)
 
-
-    _log.info("Breaking out resources from main SundialSystemResource")
-    ess_resources = sundial_resources.find_resource_type("ESSCtrlNode")[0]
-    pv_resources = sundial_resources.find_resource_type("PVCtrlNode")[0]
-
-    try:
-        solarPlusStorage_resources = sundial_resources.find_resource_type("SolarPlusStorageCtrlNode")[0]
-        _log.info("solarPlusStorage found!")
-    except:
-        solarPlusStorage_resources = []
-
-    system_resources = sundial_resources.find_resource_type("System")[0]
-    try:
-        loadshift_resources = sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
-    except:
-        loadshift_resources = []
-    try:
-        load_resources = sundial_resources.find_resource_type("Load")[0]
-    except:
-        load_resources = []
-
-
-    _log.info("initializing variables")
-    forecast_timestamps = [(gs_start_time.replace(minute=0, second=0) +
-                           timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%S") for t in range(0,
-                                                                                              SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
-                                                                                              SSA_SCHEDULE_RESOLUTION)]
-
-    #### Just load with example values - ######
-    ess_forecast = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
-    #ess_forecast = [-51.35175009, -51.37987963, -52.40495415, -55.7941499,
-    #                -70.15320262, -193.91606361,   15.24561777, -13.75917004,
-    #                63.47416001,  247.63232283, 350.72528327,  426.73011525,
-    #                417.92689915,  357.44332889, 224.46714951, 16.86389897,
-    #                0.0, 0.0, -136.28581942, -96.68917457,
-    #                49.07769182, 97.72753814, 111.3388077, 0.0]
-
-    ess_resources.load_scenario(init_SOE=500.0,
-                                max_soe=1000.0*ESS_MAX,
-                                min_soe=1000.0*ESS_MIN,
-                                max_chg=500.0,
-                                max_discharge=500.0,
-                                chg_eff=0.9,
-                                dischg_eff=0.9,
-                                demand_forecast=ess_forecast,
-                                t=forecast_timestamps)
-
-    #pv_forecast = [0.0, 0.0, 0.0, 0.0,
-    #               0.0, -5.769, -93.4666, -316.934,
-    #               -544.388, -716.663, -822.318, -888.916,
-    #               -898.478, -839.905, -706.972, -512.013,
-    #               -265.994, -74.6933, -2.0346, 0.0,
-    #               0.0, 0.0, 0.0, 0]
-
-    # forecast, indexed to 00:00
-    pv_forecast_base = [0,0,0,0,0,0,0,0,-5.25, -19.585, -95.39, -169.4, -224,-255, -276, -278, -211, -124, -94, -61, -15, -0.45, 0,0]
-
-    #pv_forecast = [0.5 * v for v in [0.0, 0.0, 0.0, 0.0,
-    #                                 0.0, -5.769, -93.4666, -316.934,
-    #                                 -544.388, -716.663, -822.318, -888.916,
-    #                                 -898.478, -839.905, -706.972, -512.013,
-    #                                 -265.994, -74.6933, -2.0346, 0.0,
-    #                                 0.0, 0.0, 0.0, 0]]
-
-    demand_forecast_base = [142.4973, 142.4973, 142.4973, 145.9894,
-                            160.094, 289.5996, 339.7752, 572.17,
-                            658.6025, 647.2883, 650.1958, 639.7053,
-                            658.044, 661.158, 660.3772, 673.1098,
-                            640.9227, 523.3306, 542.7008, 499.3727,
-                            357.9398, 160.0936, 145.9894, 142.4973]
-
-
-    if shift_to_start_of_day == False:
-        # shift starting point to match up to current hour
-        forecast_start_hour = datetime.strptime(forecast_timestamps[0], "%Y-%m-%dT%H:%M:%S").hour
-        pv_forecast = pv_forecast_base[forecast_start_hour:len(pv_forecast_base)]
-        pv_forecast.extend(pv_forecast_base[0:forecast_start_hour])
-
-        demand_forecast = demand_forecast_base[forecast_start_hour:len(demand_forecast_base)]
-        demand_forecast.extend(demand_forecast_base[0:forecast_start_hour])
-
-    else:  # start sim at start of day.
-        pv_forecast     = pv_forecast_base
-        demand_forecast = demand_forecast_base
-
-    _log.info("Load scenarios")
-    pv_resources.load_scenario(demand_forecast = pv_forecast,
-                               pk_capacity = 1000.0,
-                               t=forecast_timestamps)
-    print(pv_forecast)
-
-    if load_resources != []:
-        load_resources.load_scenario(demand_forecast = demand_forecast,
-                                     pk_capacity = 1000.0,
-                                     t=forecast_timestamps)
-
-    try:
-        if loadshift_resources != []:
-            ls = pandas.read_excel("loadshift_example.xlsx", header=None)
-            print(ls)
-            load_shift_options = [ls[ii].tolist() for ii in range(0,13)]
-            loadshift_resources.load_scenario(load_options=load_shift_options,
-                                              t=forecast_timestamps)
-    except:
-        pass
-
-    #if solarPlusStorage_resources != []:
-    #    solarPlusStorage_resources.load_scenario()
-
-    system_resources.load_scenario()
-
-
+    resource_cfg_list = json.load(open(cfg_file, 'r'))
+    sundial_resources = SundialSystemResource(resource_cfg_list, gs_start_time_str)
+    load_scenarios(sundial_resources, gs_start_time)
     system_tariff = {"threshold": 500} #DEMAND_CHARGE_THRESHOLD}
     solarPlusStorage_tariff = {"threshold": 150}
-
-    #########
-
 
     ##### This section replicates the periodic call of the optimizer ######
     # calls the actual optimizer.
     _log.info("Initializing optimizer")
     toffset = 0
-    nIterations = 1
     optimizer = SimulatedAnnealer()
     last_forecast_start = datetime(1900, 1, 1, tzinfo=pytz.UTC)
 
@@ -672,22 +533,14 @@ if __name__ == '__main__':
                                timedelta(minutes=t) for t in range(0,
                                                                    SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
                                                                    SSA_SCHEDULE_RESOLUTION)]
-
-        #pv_resources.state_vars["Pwr_kW"] = pv_forecast[0]
-        #pv_resources.state_vars["AvgPwr_kW"] = pv_forecast[0]
-
-        #for ii in range(0,13):
-        #    loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii]
-        #    ess_resources.state_vars["DemandForecast_t"] = forecast_timestamps
-        #    pv_resources.state_vars["DemandForecast_t"] = forecast_timestamps
-        #    system_resources.state_vars["DemandForecast_t"] = forecast_timestamps
-        #    load_resources.state_vars["DemandForecast_t"] = forecast_timestamps
-        #    loadshift_resources.state_vars["DemandForecast_t"] = forecast_timestamps
-
-        #    sundial_resources.interpolate_forecast(schedule_timestamps)
-        #    optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps, tariffs)
+        print(schedule_timestamps)
 
         try:
+            try:
+                loadshift_resources = sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
+            except:
+                loadshift_resources = []
+
             print("load shift options")
             print(loadshift_resources.state_vars["LoadShiftOptions_kW"])
             print(loadshift_resources.state_vars["OrigLoadShiftOptions_t_str"])
@@ -700,6 +553,7 @@ if __name__ == '__main__':
             if ALIGN_SCHEDULES == True:
                 forecast_start = schedule_timestamps[0]
             else:
+                pv_resources = sundial_resources.find_resource_type("PVCtrlNode")[0]
                 forecast_start = datetime.strptime(pv_resources.state_vars["OrigDemandForecast_t_str"][0],
                                                    "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)
 
@@ -712,11 +566,157 @@ if __name__ == '__main__':
             sundial_resources.cfg_cost(schedule_timestamps,
                                        system_tariff = system_tariff,
                                        solarPlusStorage_tariff = solarPlusStorage_tariff)
-            optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
-            #optimizer.search_single_option(sundial_resources, schedule_timestamps)
-            #optimizer.run_ssa_optimization(sundial_resources,schedule_timestamps)
+            #optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
+            optimizer.search_single_option(sundial_resources, schedule_timestamps)
         else:
             _log.info("No valid forecasts found - skipping")
 
 
-        toffset += 45
+        toffset += tstep
+
+    return sundial_resources
+
+
+def load_scenarios(cur_resource, gs_start_time):
+    ess_resources = cur_resource.find_resource_type("ESSCtrlNode")[0]
+    pv_resources = cur_resource.find_resource_type("PVCtrlNode")[0]
+
+    try:
+        solarPlusStorage_resources = cur_resource.find_resource_type("SolarPlusStorageCtrlNode")[0]
+    except:
+        solarPlusStorage_resources = []
+
+    system_resources = cur_resource.find_resource_type("System")[0]
+    try:
+        loadshift_resources = cur_resource.find_resource_type("LoadShiftCtrlNode")[0]
+    except:
+        loadshift_resources = []
+    try:
+        load_resources = cur_resource.find_resource_type("Load")[0]
+    except:
+        load_resources = []
+
+    ALIGN_SCHEDULES = True
+    _log.info("initializing variables")
+    forecast_timestamps = [(gs_start_time.replace(minute=0, second=0) +
+                            timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%S") for t in range(0,
+                                                                                               SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                                                               SSA_SCHEDULE_RESOLUTION)]
+
+    #### Just load with example values - ######
+    ess_forecast = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+    ess_resources.load_scenario(init_SOE=500.0,
+                                max_soe=1000.0 * ESS_MAX,
+                                min_soe=1000.0 * ESS_MIN,
+                                max_chg=500.0,
+                                max_discharge=500.0,
+                                chg_eff=0.93,
+                                dischg_eff=0.93,
+                                demand_forecast=ess_forecast,
+                                t=forecast_timestamps)
+
+    # forecast, indexed to 00:00
+    # pv_forecast_base = [0,0,0,0,0,0,0,0,-5.25, -19.585, -95.39, -169.4, -224,-255, -276, -278, -211, -124, -94, -61, -15, -0.45, 0,0]
+    scale = 1.0
+    pv_forecast_base = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -2.49, -11.39, -7.21, -12.04, -21.49, -29.84, -29.07, -18.27,
+                        -7.69, -2.71, -0.37, 0, 0, 0]
+    pv_forecast_base = [scale * v for v in pv_forecast_base]
+
+
+    # demand_forecast_base = [142.4973, 142.4973, 142.4973, 145.9894,
+    #                        160.094, 289.5996, 339.7752, 572.17,
+    #                        658.6025, 647.2883, 650.1958, 639.7053,
+    #                        658.044, 661.158, 660.3772, 673.1098,
+    #                        640.9227, 523.3306, 542.7008, 499.3727,
+    #                        357.9398, 160.0936, 145.9894, 142.4973]
+
+    demand_forecast_base = [467, 436, 450, 341, 326, 321,
+                            317, 319, 391, 487, 551, 574,
+                            579, 584, 580, 551, 535, 535,
+                            513, 486, 454, 445, 446, 393]
+    # demand_forecast_base = [0.0]*24
+    demand_forecast_base = [scale * v for v in demand_forecast_base]
+
+    if shift_to_start_of_day == False:
+        # shift starting point to match up to current hour
+        forecast_start_hour = datetime.strptime(forecast_timestamps[0], "%Y-%m-%dT%H:%M:%S").hour
+        pv_forecast = pv_forecast_base[forecast_start_hour:len(pv_forecast_base)]
+        pv_forecast.extend(pv_forecast_base[0:forecast_start_hour])
+
+        demand_forecast = demand_forecast_base[forecast_start_hour:len(demand_forecast_base)]
+        demand_forecast.extend(demand_forecast_base[0:forecast_start_hour])
+
+    else:  # start sim at start of day.
+        pv_forecast = pv_forecast_base
+        demand_forecast = demand_forecast_base
+
+    _log.info("Load scenarios")
+    scale = 1.1
+    pv_resources.load_scenario(demand_forecast=pv_forecast,
+                               pk_capacity=500.0,
+                               t=forecast_timestamps)
+    print(pv_forecast)
+
+    if load_resources != []:
+        load_resources.load_scenario(demand_forecast=demand_forecast,
+                                     pk_capacity=1000.0,
+                                     t=forecast_timestamps)
+
+    try:
+        if loadshift_resources != []:
+            ls = pandas.read_excel("loadshift_example.xlsx", header=None)
+            print(ls)
+            load_shift_options = [ls[ii].tolist() for ii in range(0, 13)]
+            loadshift_resources.load_scenario(load_options=load_shift_options,
+                                              t=forecast_timestamps)
+    except:
+        pass
+
+    # if solarPlusStorage_resources != []:
+    #    solarPlusStorage_resources.load_scenario()
+
+    system_resources.load_scenario()
+
+    #########
+
+if __name__ == '__main__':
+    # Entry point for script
+
+    ##### This section replicates the initialization of the system (done one time, when system starts up) ######
+
+    # the following is a rough demo of how a system gets constructed.
+    # this is a hard-coded version of what might happen in the executive
+    # would eventually do all this via external configuration files, etc.
+
+    shift_to_start_of_day = False
+
+    _log.setLevel(logging.INFO)
+    msgs = logging.StreamHandler(stream=sys.stdout)
+    #msgs.setLevel(logging.INFO)
+    #_log.addHandler(msgs)
+
+
+    gs_start_time = datetime.utcnow().replace(microsecond=0)
+    if shift_to_start_of_day == True:
+        gs_start_time = gs_start_time.replace(hour=0, minute=0, second=0)
+    gs_start_time_str = gs_start_time.strftime("%Y-%m-%dT%H:%M:%S")
+
+    day_ahead_resources = get_dispatch_schedule(gs_start_time,
+                                                "../cfg/SystemCfg/DayAheadSundialSystemConfiguration.json",
+                                                shift_to_start_of_day)
+
+    inds = [v.hour for v in day_ahead_resources.schedule_vars['timestamp']]
+    #pandas.DataFrame(data = day_ahead_resources.schedule_vars['DemandForecast_kW'], index = day_ahead_resources.schedule_vars['timestamp']).to_csv("myloadshape.csv")
+
+
+    pandas.DataFrame(data={'0': day_ahead_resources.schedule_vars['DemandForecast_kW'],
+                           '1': day_ahead_resources.schedule_vars['weights']},
+                             index=day_ahead_resources.schedule_vars['timestamp']).to_csv('myloadshape.csv')
+
+    sundial_resources   = get_dispatch_schedule(gs_start_time,
+                                                "../cfg/SystemCfg/EmulatedSundialSystemConfiguration.json",
+                                                shift_to_start_of_day)

@@ -59,7 +59,7 @@ from volttron.platform.messaging import topics
 from volttron.platform.messaging import headers as headers_mod
 import xml.etree.ElementTree as ET
 from gs_identities import *
-from gs_utilities import get_schedule, ForecastObject, Forecast
+from gs_utilities import *
 import csv
 import pandas
 from volttron.platform.messaging import headers as header_mod
@@ -164,19 +164,52 @@ class CPRAgent(Agent):
 
         #### Initialize data input files
         # get solar forecast data
-        self.ghi_series = self.load_forecast_file()
+        if USE_MATRIX == True:
+            self.ghi_forecast = StoredMatrixForecast(SSA_PTS_PER_SCHEDULE,
+                                                     "W/m2",
+                                                     "float",
+                                                     self.gs_start_time,
+                                                     forecast_fname=GHI_FORECAST_FILE,
+                                                     ts_fname=GHI_TS_FILE,
+                                                     scale = 1)
+
+            self.solar_forecast = StoredSolarMatrixForecast(SSA_PTS_PER_SCHEDULE,
+                                                            "NegPct",
+                                                            "float",
+                                                            self.gs_start_time,
+                                                            forecast_fname=PV_FORECAST_FILE,
+                                                            ts_fname=PV_TS_FILE)
+        else:
+            #self.ghi_series = self.load_forecast_file()
+            # initialize a ForecastObject for publishing data to the VOLTTRON message bus
+            #self.solar_forecast = ForecastObject(SSA_PTS_PER_SCHEDULE, "NegPct", "float")
+            self.solar_forecast = StoredSolarForecast(SSA_PTS_PER_SCHEDULE,
+                                                      "NegPct",
+                                                      "float",
+                                                      self.gs_start_time,
+                                                      forecast_fname=PV_FORECAST_FILE,
+                                                      scale = 1)
+
         _log.info("Loaded irradiance file")
-        # initialize a ForecastObject for publishing data to the VOLTTRON message bus
-        self.solar_forecast = ForecastObject(SSA_PTS_PER_SCHEDULE, "NegPct", "float")
+
+
 
         # get demand forecast data
-        self.demand_series = self.load_forecast_file(forecast_file = DEMAND_FORECAST_FILE,
-                                                     csv_time_resolution_min = DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN)
-        self.demand_forecast = ForecastObject(SSA_PTS_PER_SCHEDULE, "kW", "float")
+        self.demand_forecast = StoredDemandForecast(SSA_PTS_PER_SCHEDULE,
+                                              "kW",
+                                              "float",
+                                              self.gs_start_time,
+                                              forecast_fname = DEMAND_FORECAST_FILE,
+                                              time_resolution_min = DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN)
+
+        #self.demand_series = self.load_forecast_file(forecast_file = DEMAND_FORECAST_FILE,
+        #                                             csv_time_resolution_min = DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN)
+        #self.demand_forecast = ForecastObject(SSA_PTS_PER_SCHEDULE, "kW", "float")
 
         # indicates that forecast data is ready to be published
         self.initialization_complete = 1
 
+        self.query_solar_forecast()
 
 
 
@@ -314,77 +347,7 @@ class CPRAgent(Agent):
         return msg, header
 
     ##############################################################################
-    def parse_demand_query(self):
-        """
-        Retrieves a demand forecast in units of "kW"
-            - start time of the forecast is defined by calling get_schedule()
-            - Forecast duration is defined by SSA_SCHEDULE_DURATION
-            - Forecast time step is defined by SSA_SCHEDULE_RESOLUTION
-        """
-        next_forecast_timestamps = self.get_timestamps(self.sim_time_corr)
-        next_forecast            = self.demand_series.get(next_forecast_timestamps)
-
-        # Convert irradiance to a percentage
-        self.demand_forecast.forecast_values["Forecast"] = [v for v in next_forecast]
-        self.demand_forecast.forecast_values["Time"]     = [datetime.strftime(ts, "%Y-%m-%dT%H:%M:%S") for ts in next_forecast_timestamps]
-        _log.info("Demand forecast is:"+str(self.demand_forecast.forecast_values["Forecast"]))
-        _log.info("timestamps are:"+str(self.demand_forecast.forecast_values["Time"]))
-
-        # for publication to IEB:
-        return self.demand_forecast.forecast_obj
-
-
-    ##############################################################################
-    def parse_solar_query(self):
-        """
-        Retrieves a solar forecast in units of "Pct"
-            - start time of the forecast is defined by calling get_schedule()
-            - Forecast duration is defined by SSA_SCHEDULE_DURATION
-            - Forecast time step is defined by SSA_SCHEDULE_RESOLUTION
-        """
-
-        # get the start time of the forecast
-
-        # to do so: (1) check if we went to sleep since the last forecast retrieved.  If so, use a correction to
-        # make it look like no time has elapsed; (2) if accelerated time is being used, translate actual elapsed time
-        # into accelerated time
-
-        now = utils.get_aware_utc_now()
-
-        if self.last_query != None:
-            delta = now - self.last_query
-            expected_delta = timedelta(seconds=CPR_QUERY_INTERVAL)
-            if delta > expected_delta*2:
-                # maybe we went to sleep?
-                _log.info("Expected Delta = "+str(expected_delta))
-                _log.info("Delta = "+str(delta))
-                self.sim_time_corr += delta-expected_delta
-                _log.info("CPR: Found a time correction!!!!")
-                _log.info("Cur time: "+now.strftime("%Y-%m-%dT%H:%M:%S")+"; prev time= "+ self.last_query.strftime("%Y-%m-%dT%H:%M:%S"))
-
-        self.last_query = now
-        _log.info("ForecastSim time correction: "+str(self.sim_time_corr))
-
-        next_forecast_timestamps = self.get_timestamps(sim_time_corr = self.sim_time_corr)
-        next_forecast            = self.ghi_series.get(next_forecast_timestamps)
-
-        print("NEXT FORECAST SOLAR")
-
-        minute_next_forecast = next_forecast.resample('min').mean().interpolate()
-        print(minute_next_forecast)
-
-        # Convert irradiance to a percentage
-        self.solar_forecast.forecast_values["Forecast"] = [100 * v / 1000 for v in next_forecast]
-        self.solar_forecast.forecast_values["Time"]     = [datetime.strftime(ts, "%Y-%m-%dT%H:%M:%S") for ts in next_forecast_timestamps]  # was .%f
-        _log.info("Solar forecast is:"+str(self.solar_forecast.forecast_values["Forecast"]))
-        _log.info("timestamps are:"+str(self.solar_forecast.forecast_values["Time"]))
-
-        # for publication to IEB:
-        return self.solar_forecast.forecast_obj
-
-
-    ##############################################################################
-    @Core.periodic(period = DEMAND_FORECAST_QUERY_INTERVAL)
+    #@Core.periodic(period = DEMAND_FORECAST_QUERY_INTERVAL)
     def query_demand_forecast(self):
         """
         called at interval defined in DEMAND_FORECAST_QUERY_INTERVAL (gs_identities)
@@ -393,7 +356,7 @@ class CPRAgent(Agent):
         if USE_DEMAND_SIM == 1:
             if self.initialization_complete == 1:
                 _log.info("querying for demand forecast from database")
-                message = self.parse_demand_query()
+                message, self.sim_time_corr = self.demand_forecast.parse_demand_query(self.sim_time_corr)
                 self.vip.pubsub.publish(
                     peer="pubsub",
                     topic=self._config['demand_forecast_topic'],
@@ -410,7 +373,7 @@ class CPRAgent(Agent):
 
 
     ##############################################################################
-    @Core.periodic(period = LOADSHIFT_QUERY_INTERVAL)
+    #@Core.periodic(period = LOADSHIFT_QUERY_INTERVAL)
     def query_loadshift_forecast(self):
         """
         called at interval defined in LOADSHIFT_QUERY_INTERVAL (gs_identities)
@@ -477,7 +440,7 @@ class CPRAgent(Agent):
         return formatted_forecast
 
     ##############################################################################
-    @Core.periodic(period = DEMAND_REPORT_SCHEDULE)
+    #@Core.periodic(period = DEMAND_REPORT_SCHEDULE)
     def query_load_report(self):
         """
         called at interval defined in DEMAND_REPORT_SCHEDULE  (gs_identities)
@@ -486,7 +449,7 @@ class CPRAgent(Agent):
         if USE_DEMAND_SIM == 1:
             if self.initialization_complete == 1:
                 _log.info("querying for load report from database")
-                message, header = self.parse_load_report()
+                message, header = self.demand_forecast.parse_load_report(self.sim_time_corr)
                 self.vip.pubsub.publish(
                     peer="pubsub",
                     topic=self._config['demand_report_topic'],
@@ -513,13 +476,17 @@ class CPRAgent(Agent):
         """
         if USE_SOLAR_SIM == 1:
             if self.initialization_complete == 1:
+                _log.info("querying for GHI forecast from database")
+                message, self.sim_time_corr = self.ghi_forecast.parse_query(self.sim_time_corr)
                 _log.info("querying for production forecast from database")
-                message = self.parse_solar_query()
-                self.vip.pubsub.publish(
-                    peer="pubsub",
-                    topic=self._config['solar_forecast_topic'],
-                    headers={},
-                    message=message)
+                message, self.sim_time_corr = self.solar_forecast.parse_query(self.sim_time_corr,
+                                                                              reference_forecast = self.ghi_forecast.forecast_values["Forecast"])
+                if message is not None:
+                    self.vip.pubsub.publish(
+                        peer="pubsub",
+                        topic=self._config['solar_forecast_topic'],
+                        headers={},
+                        message=message)
             else:
                 _log.info("initialization incomplete!!")
 
