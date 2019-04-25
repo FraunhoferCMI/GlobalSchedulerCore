@@ -173,6 +173,10 @@ def get_pv_correction_factors(forecast, ts, reference_forecast):
             forecast[ii] = corr_factors[k][ts[ii].hour] * forecast[ii]
             #_log.info("Corr: "+str(corr_factors[k][ts[ii].hour])+" - "+str(forecast[ii]))
 
+    elif USE_PV_ADJUST == 2: # Machine-learning based approach
+        fname_fullpath = get_gs_path('lib/', 'pv_training_data.csv')
+        #get_solar_predictions(forecast, reference_forecast, ts, fname_fullpath)
+        pass
     return forecast
     # return corr_factors[k]
 
