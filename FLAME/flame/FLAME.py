@@ -404,31 +404,35 @@ class LoadReport(IPKeys):
             # assert facility is self.response['msg']['facility'],\
             #     'facility response does not match requested facility'
 
-            if scale_values == True:
-                try:
-                    sf = scale_factors[self.response['msg']["facility"]]
-                except KeyError:
+            if self.response['msg']['loadSchedule'] != []:
+
+                if scale_values == True:
+                    try:
+                        sf = scale_factors[self.response['msg']["facility"]]
+                    except KeyError:
+                        sf = 1.0
+                else:
                     sf = 1.0
+                _log.info('Facility Scale Factor = '+str(sf))
+                try:
+                    facility_loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
+                    facility_loadSchedule["value"] = facility_loadSchedule["value"] * sf
+                    #_log.info(facility_loadSchedule)
+                    #_log.info("loadSchedule:\n" + str(facility_loadSchedule))
+                except KeyError:
+                    _log.warn('previous request yielded no response')
+
+                # set the index to the time stamp
+                facility_loadSchedule.index        = facility_loadSchedule["dstart"]
+                facility_loadSchedule.index        = convert_FLAME_time_to_UTC(facility_loadSchedule.index)
+
+                for ii in range(0, len(facility_loadSchedule)):
+                    if facility_loadSchedule["value"][ii] == -1:
+                        missing_vals.append(facility_loadSchedule.index[ii])
+
+                loadSchedules.append(facility_loadSchedule)
             else:
-                sf = 1.0
-            _log.info(sf)
-            try:
-                facility_loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
-                facility_loadSchedule["value"] = facility_loadSchedule["value"] * sf
-                #_log.info(facility_loadSchedule)
-                #_log.info("loadSchedule:\n" + str(facility_loadSchedule))
-            except KeyError:
-                _log.warn('previous request yielded no response')
-
-            # set the index to the time stamp
-            facility_loadSchedule.index        = facility_loadSchedule["dstart"]
-            facility_loadSchedule.index        = convert_FLAME_time_to_UTC(facility_loadSchedule.index)
-
-            for ii in range(0, len(facility_loadSchedule)):
-                if facility_loadSchedule["value"][ii] == -1:
-                    missing_vals.append(facility_loadSchedule.index[ii])
-
-            loadSchedules.append(facility_loadSchedule)
+                _log.info("FLAME - Warning - No schedule data returned")
 
         return loadSchedules, missing_vals
 
