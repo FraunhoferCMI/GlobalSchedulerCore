@@ -28,6 +28,7 @@ scale_factors = {"School": 1.0,
                  "Mill": 0.1}
 
 USE_STATIC = False
+SAVE_LS_FORECAST = False
 
 # Classes
 class IPKeys(object):
@@ -192,6 +193,9 @@ class LoadShift(IPKeys):
             absolute_forecast, costs = parse_LoadShift_response(self.response)
             ### FIXME - just have hard coded column name - needs to be fixed. ###
             #print(bl.forecast)
+
+            absolute_forecast = absolute_forecast.loc[:, ~absolute_forecast.columns.duplicated()]
+
             #absolute_forecast.loc[:,"2018-10-12--ZERO"] = bl.forecast #[:,"value"]
             #print(absolute_forecast["2018-10-12--ZERO"])
 
@@ -228,6 +232,8 @@ class LoadShift(IPKeys):
 
             forecast = forecast.combine_first(padding)
             print(forecast)
+            if SAVE_LS_FORECAST == True:
+                forecast.to_csv('LSForecast.csv')
 
             forecast_lst = []
             forecast_id  = []
@@ -577,9 +583,9 @@ def parse_Baseline_response(result):
 def create_load_request(duration='PT1H', start_time = None, nLoadOptions=12, price_map=None):
 
     # # OLD STATIC WAY
-    gs_root_dir = os.environ['GS_ROOT_DIR']
+    gs_root_dir = os.environ['GS_ROOT_DIR'] #'/Users/mkromer/PycharmProjects/GlobalSchedulerCore/'
     flame_path  = "FLAME/flame/"
-    fname       = 'Example4A.json' #''defaultLoadRequest.json'
+    fname       = 'Example4A.json' #'Example4A.json' #''defaultLoadRequest.json'
     filepath    = os.path.join(gs_root_dir, flame_path, fname)
     with open(filepath) as f:
         old_msg = json.load(f)
@@ -641,7 +647,10 @@ def parse_LoadShift_response(response):
     response_options = response['msg']['options']
     ind_options = []
     costs = {}
+    #print(response['msg'])
+    #print(response_options)
     for option in response_options:
+        #print(option)
         implementationCost = option['implementationCost']
         optionID = option['optionID']
         costs[optionID] = implementationCost
@@ -725,6 +734,7 @@ def store_forecasts(start_time, end_time, res=24):
             except:
                 print("query failed - skipping!")
         except:
+            print('query failed - no connection?')
             pass
 
         # 3. increment query_start
@@ -808,17 +818,17 @@ if __name__ == '__main__':
 
     TEST_BASELINE   = False
     TEST_STATUS     = False
-    TEST_LOADSHIFT  = False
+    TEST_LOADSHIFT  = True
     TEST_STATUS     = False
     TEST_LOADSELECT = False
     TEST_LOADREPORT = False
-    STORE_FORECASTS = True
+    STORE_FORECASTS = False
 
 
     # Baseline
     def test_Baseline():
         print("running Baseline")
-        start =  '2018-10-25T00:00:00'
+        start =  '2019-03-29T00:00:00'
         granularity = 1
         # granularity =  'PT1H'
         duration = 'PT24H'
@@ -835,7 +845,7 @@ if __name__ == '__main__':
         print("running LoadShift")
         # LoadShift
         current_tz = pytz.timezone('US/Eastern')
-        start_time = current_tz.localize(datetime(year=2018,month=11,day=20,hour=0))
+        start_time = current_tz.localize(datetime(year=2019,month=04,day=26,hour=15))
         ls = LoadShift(websocket = ws,
                        start_time = start_time)
         ls.process()
@@ -899,7 +909,7 @@ if __name__ == '__main__':
     ##
 
     if STORE_FORECASTS == True:
-        start_time = "2018-06-24T00:00:04"
-        end_time   = "2019-12-24T00:00:04"
+        start_time = "2019-01-03T00:00:04"
+        end_time   = "2019-03-29T00:00:04"
         store_forecasts(start_time, end_time, res=1)
         #store_loadreports(start_time, end_time)
