@@ -50,8 +50,9 @@ import csv
 from volttron.platform.vip.agent import Agent, Core, PubSub, compat, RPC
 from volttron.platform.agent import utils
 from volttron.platform.messaging import headers as headers_mod
-
+import pandas as pd
 from gs_identities import TIME_FORMAT, SIM_HRS_PER_HR, USE_SIM
+import pytz
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -59,7 +60,7 @@ __version__ = '1.0'
 
 
 ##############################################################################
-def publish_data(agent_object, base_topic, units, endpt_label, val, TimeStamp_str=None):
+def publish_data(agent_object, base_topic, units, endpt_label, val, TimeStamp_str=None, ref_time = None):
     """
     method for publishing database topics.  
     Input is a timestamp that has been converted to a string
@@ -74,10 +75,11 @@ def publish_data(agent_object, base_topic, units, endpt_label, val, TimeStamp_st
         TimeStamp_str = TimeStamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
 
     elif USE_SIM == 1:
-        t = datetime.strptime(TimeStamp_str, TIME_FORMAT)
-        now = datetime.utcnow()
-        elapsed = (t - now) / SIM_HRS_PER_HR
-        t = now+elapsed
+        t = datetime.strptime(TimeStamp_str, TIME_FORMAT).replace(tzinfo=pytz.UTC)
+        if ref_time is None:
+            ref_time = datetime.utcnow().replace(tzinfo=pytz.UTC)
+        elapsed = (t - ref_time) / SIM_HRS_PER_HR
+        t = ref_time+elapsed
         TimeStamp_str = t.strftime(TIME_FORMAT)
 
     # 2. build a datalogger-compatible msg:
@@ -97,3 +99,38 @@ def publish_data(agent_object, base_topic, units, endpt_label, val, TimeStamp_st
                                     headers={}, 
                                     message=msg).get(timeout=10.0)
 
+
+##############################################################################
+def query_data(agent_object, topic_name, query_start, query_end, max_count=1000):
+    #topic_name = "datalogger/ShirleySouth/PVPlant/Inverter1/OpStatus/Pwr_kW"
+    #query_start = "2019-03-13T21:00:00"
+    #query_end   = "2019-03-13T23:00:00"
+    data = agent_object.vip.rpc.call("platform.historian",
+                                     "query",
+                                     topic_name,
+                                     start=query_start,
+                                     end=query_end,
+                                     count=max_count).get(timeout=5)
+    return data
+
+##############################################################################
+def calc_avg(agent_object, topic ,st, end):
+    #_log.info(st + " "+end)
+    data = query_data(agent_object, topic, st, end)
+    #_log.info(data)
+    if len(data) != 0:
+        vals = [float(v[1]) for v in data['values']]
+        ts   = [pd.to_datetime(v[0]) for v in data['values']]
+        df = pd.DataFrame(data=vals,index=ts)
+        n_pts = len(df)
+        if len(df) != 0:
+            avg = df[0].mean()
+            #avg  = sum(vals) / float(n_pts)
+        else:
+            avg = 0
+            n_pts = 0
+    else:
+        avg = 0
+        n_pts = 0
+    #_log.info("avg value is "+str(avg)+" over "+ str(n_pts)+" points")
+    return avg, n_pts

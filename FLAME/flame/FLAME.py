@@ -27,7 +27,6 @@ scale_factors = {"School": 1.0,
                  "Canner": 0.2,
                  "Mill": 0.1}
 
-USE_STATIC = False
 SAVE_LS_FORECAST = False
 
 # Classes
@@ -157,14 +156,20 @@ class LoadShift(IPKeys):
 
         self.type = u'LoadOptions'
 
-        self.price_map  = price_map
-        self.start_time = start_time
+        if price_map is None:
+            self.request, self.start_time = read_load_request()
+            req_start_time = self.start_time
+        else:
+            self.price_map  = price_map
+            self.start_time = start_time
 
-        # set the load shift request for the start of the next day:
-        req_start_time = start_time.replace(hour=0) + timedelta(days=1)
-        dstart         = req_start_time.strftime(TIME_FORMAT)
+            # set the load shift request for the start of the next day:
+            req_start_time = start_time.replace(hour=0) + timedelta(days=1)
+            dstart         = req_start_time.strftime(TIME_FORMAT)
+            self.request = create_load_request(price_map=price_map, start_time=dstart, nLoadOptions=nLoadOptions)
 
         print(req_start_time)
+
         if start_time is None:
             self.base_index = "2018-10-19"
         else:
@@ -172,7 +177,6 @@ class LoadShift(IPKeys):
 
         #self.baseline_index = start_time.strftime("%Y-%m-d")+"--ZERO"
         print(self.base_index)
-        self.request = create_load_request(price_map=price_map, start_time = dstart, nLoadOptions=nLoadOptions)
 
         _log.info("REQUEST LENGTH!!!")
         _log.info(len(self.request))
@@ -410,31 +414,35 @@ class LoadReport(IPKeys):
             # assert facility is self.response['msg']['facility'],\
             #     'facility response does not match requested facility'
 
-            if scale_values == True:
-                try:
-                    sf = scale_factors[self.response['msg']["facility"]]
-                except KeyError:
+            if self.response['msg']['loadSchedule'] != []:
+
+                if scale_values == True:
+                    try:
+                        sf = scale_factors[self.response['msg']["facility"]]
+                    except KeyError:
+                        sf = 1.0
+                else:
                     sf = 1.0
+                _log.info('Facility Scale Factor = '+str(sf))
+                try:
+                    facility_loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
+                    facility_loadSchedule["value"] = facility_loadSchedule["value"] * sf
+                    #_log.info(facility_loadSchedule)
+                    #_log.info("loadSchedule:\n" + str(facility_loadSchedule))
+                except KeyError:
+                    _log.warn('previous request yielded no response')
+
+                # set the index to the time stamp
+                facility_loadSchedule.index        = facility_loadSchedule["dstart"]
+                facility_loadSchedule.index        = convert_FLAME_time_to_UTC(facility_loadSchedule.index)
+
+                for ii in range(0, len(facility_loadSchedule)):
+                    if facility_loadSchedule["value"][ii] == -1:
+                        missing_vals.append(facility_loadSchedule.index[ii])
+
+                loadSchedules.append(facility_loadSchedule)
             else:
-                sf = 1.0
-            _log.info(sf)
-            try:
-                facility_loadSchedule = pd.DataFrame(self.response['msg']['loadSchedule'])
-                facility_loadSchedule["value"] = facility_loadSchedule["value"] * sf
-                #_log.info(facility_loadSchedule)
-                #_log.info("loadSchedule:\n" + str(facility_loadSchedule))
-            except KeyError:
-                _log.warn('previous request yielded no response')
-
-            # set the index to the time stamp
-            facility_loadSchedule.index        = facility_loadSchedule["dstart"]
-            facility_loadSchedule.index        = convert_FLAME_time_to_UTC(facility_loadSchedule.index)
-
-            for ii in range(0, len(facility_loadSchedule)):
-                if facility_loadSchedule["value"][ii] == -1:
-                    missing_vals.append(facility_loadSchedule.index[ii])
-
-            loadSchedules.append(facility_loadSchedule)
+                _log.info("FLAME - Warning - No schedule data returned")
 
         return loadSchedules, missing_vals
 
@@ -575,20 +583,33 @@ def create_baseline_request(start, granularity, duration):
 
 def parse_Baseline_response(result):
     forecast_values = pd.DataFrame(result['msg']['loadSchedule'])
-    #forecast_values = forecast_values * DEMAND_ADJUST
+    forecast_values['value'] = forecast_values['value'] * DEMAND_ADJUST
     forecast_values.set_index('dstart', inplace=True)
     forecast_values.index = convert_FLAME_time_to_UTC(forecast_values.index)
     return forecast_values
 
-def create_load_request(duration='PT1H', start_time = None, nLoadOptions=12, price_map=None):
-
+def read_load_request():
+    # use a price map stored from a file
     # # OLD STATIC WAY
     gs_root_dir = os.environ['GS_ROOT_DIR'] #'/Users/mkromer/PycharmProjects/GlobalSchedulerCore/'
-    flame_path  = "FLAME/flame/"
-    fname       = 'Example4A.json' #'Example4A.json' #''defaultLoadRequest.json'
-    filepath    = os.path.join(gs_root_dir, flame_path, fname)
+    flame_path = "FLAME/flame/"
+    fname = 'Example4A_04262019.json'  # 'Example4A.json' #''defaultLoadRequest.json'
+    filepath = os.path.join(gs_root_dir, flame_path, fname)
     with open(filepath) as f:
-        old_msg = json.load(f)
+        msg = json.load(f)
+
+    start_time = datetime.strptime(msg['marginalCostCurve'][0]['dstart'],TIME_FORMAT).replace(tzinfo=pytz.timezone('US/Eastern'))
+
+    payload_request = json.dumps(
+        {"type": "LoadRequest",
+         "msg": msg
+         }
+    )
+    return payload_request, start_time
+
+
+
+def create_load_request(duration='PT1H', start_time = None, nLoadOptions=12, price_map=None):
 
     if start_time is None:
         # get set of times
@@ -601,7 +622,7 @@ def create_load_request(duration='PT1H', start_time = None, nLoadOptions=12, pri
 
     if price_map:
         priceMaps = price_map
-    else:
+    else:   # deprecated, used for initial testing
         borders=[randint(10, 30) * 10 for i in range(24)]
         priceMaps =[build_priceMap(border) for border in borders]
 
@@ -611,16 +632,9 @@ def create_load_request(duration='PT1H', start_time = None, nLoadOptions=12, pri
     msg = {'nLoadOptions': unicode(nLoadOptions),
            'marginalCostCurve': marginalCostCurve}
 
-    if USE_STATIC == True:
-        msg_to_use = old_msg
-    else:
-        msg_to_use = msg
-
-    # print(msg_to_use)
-
     payload_request = json.dumps(
         {"type": "LoadRequest",
-         "msg": msg_to_use
+         "msg": msg
          }
     )
     return payload_request

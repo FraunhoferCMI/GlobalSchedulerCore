@@ -164,22 +164,31 @@ class CPRAgent(Agent):
 
         #### Initialize data input files
         # get solar forecast data
-        if SIM_SCENARIO == 2:
-            self.solar_forecast = StoredMatrixForecast(SSA_PTS_PER_SCHEDULE,
-                                                       "NegPct",
-                                                       "float",
-                                                       self.gs_start_time,
-                                                       forecast_fname=PV_FORECAST_FILE,
-                                                       ts_fname=PV_TS_FILE)
+        if USE_MATRIX == True:
+            self.ghi_forecast = StoredMatrixForecast(SSA_PTS_PER_SCHEDULE,
+                                                     "W/m2",
+                                                     "float",
+                                                     self.gs_start_time,
+                                                     forecast_fname=GHI_FORECAST_FILE,
+                                                     ts_fname=GHI_TS_FILE,
+                                                     scale = 1)
+
+            self.solar_forecast = StoredSolarMatrixForecast(SSA_PTS_PER_SCHEDULE,
+                                                            "NegPct",
+                                                            "float",
+                                                            self.gs_start_time,
+                                                            forecast_fname=PV_FORECAST_FILE,
+                                                            ts_fname=PV_TS_FILE)
         else:
             #self.ghi_series = self.load_forecast_file()
             # initialize a ForecastObject for publishing data to the VOLTTRON message bus
             #self.solar_forecast = ForecastObject(SSA_PTS_PER_SCHEDULE, "NegPct", "float")
             self.solar_forecast = StoredSolarForecast(SSA_PTS_PER_SCHEDULE,
-                                                 "NegPct",
-                                                 "float",
-                                                 self.gs_start_time,
-                                                 forecast_fname=PV_FORECAST_FILE)
+                                                      "NegPct",
+                                                      "float",
+                                                      self.gs_start_time,
+                                                      forecast_fname=PV_FORECAST_FILE,
+                                                      scale = 1)
 
         _log.info("Loaded irradiance file")
 
@@ -467,8 +476,11 @@ class CPRAgent(Agent):
         """
         if USE_SOLAR_SIM == 1:
             if self.initialization_complete == 1:
+                _log.info("querying for GHI forecast from database")
+                message, self.sim_time_corr = self.ghi_forecast.parse_query(self.sim_time_corr)
                 _log.info("querying for production forecast from database")
-                message, self.sim_time_corr = self.solar_forecast.parse_query(self.sim_time_corr)
+                message, self.sim_time_corr = self.solar_forecast.parse_query(self.sim_time_corr,
+                                                                              reference_forecast = self.ghi_forecast.forecast_values["Forecast"])
                 if message is not None:
                     self.vip.pubsub.publish(
                         peer="pubsub",

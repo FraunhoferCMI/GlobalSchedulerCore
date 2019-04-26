@@ -19,19 +19,9 @@
         "Use": "N"
       },
       {
-        "FcnName": "LoadShapeObjectiveFunction",
-        "params": "desc='LoadShape', fname='loadshape_prices.xlsx', vble_price=True",
-        "Use": "N"
-      },
-      {
-        "FcnName": "DynamicLoadShapeObjectiveFunction",
-        "params": "desc='LoadShape', fname='myloadshape.csv', vble_price=True",
-        "Use": "Y"
-      },
-      {
         "FcnName": "PeakerPlantObjectiveFunction",
-        "params": "desc='DemandCharge', cost_per_kW=10.0, threshold=250, tariff_key='peaker_tariff'",
-        "Use": "N"
+        "params": "desc='DemandCharge', cost_per_kW=10.0, threshold=50, tariff_key='peaker_tariff'",
+        "Use": "Y"
       }
     ],
     "VirtualPlantList": [

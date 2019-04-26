@@ -52,16 +52,9 @@ USE_VOLTTRON = 1
 USE_SOLAR_SIM  = 1
 USE_DEMAND_SIM = 1
 USE_SCALED_LOAD = True #False
-SIM_SCENARIO   = 2
-SIM_HRS_PER_HR = 15 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
-
-
-# Configuration File Locations
-#SITE_CFG_FILE   = "SiteConfiguration-PlantLevel-original.json" 
-#SITE_CFG_FILE   = "SiteConfiguration-PlantLevel.json"
-SITE_CFG_FILE   = "SiteConfiguration-Emulator.json"
-#SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json"
-SYSTEM_CFG_FILE = "EmulatedSundialSystemConfiguration.json"
+SIM_SCENARIO   = 5
+USE_CONFIGURABLE_OBJ_FCNS = True
+USE_STRATEGIC_SCHEDULE = True
 
 # Site Operating Modes
 SITE_IDLE    = 0
@@ -108,16 +101,41 @@ APPLICATION_CONTROL = 2
 EXEC_STARTING = 3
 
 EXECUTIVE_CLKTIME = 2 # period, in seconds, at which the executive polls system state
-DATA_LOG_SCHEDULE = 2  # period at which state vars are logged, in executive clock cycles
+DATA_LOG_SCHEDULE = 1  # period at which state vars are logged, in executive clock cycles
 ENDPT_UPDATE_SCHEDULE  = DATA_LOG_SCHEDULE # period at which sundial system resource objects are updated
-GS_SCHEDULE       = 2880/6  # GS optimizer period, in executive clock cycles
-ESS_SCHEDULE      = 4 # ess regulation period, in executive clock cycles
+GS_SCHEDULE       = 4*60 #2880/6  # GS optimizer period, in executive clock cycles
+ESS_SCHEDULE      = 1 # ess regulation period, in executive clock cycles
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
+STRATEGIC_SCHEDULE = 24*60*60/15 #240
+
+
+if USE_SIM == 0:
+    SIM_HRS_PER_HR = 1 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
+
+    # Configuration File Locations
+    #SITE_CFG_FILE   = "SiteConfiguration-PlantLevel-original.json"
+    #SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json"
+    SITE_CFG_FILE   = "SiteConfiguration-PlantLevel.json"
+    SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
+    DAY_AHEAD_SYSTEM_CFG_FILE = "DayAheadSundialSystemConfiguration.json"
+
+    pass
+
+else:
+    SIM_HRS_PER_HR = 15 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
+
+    # Configuration File Locations
+    SITE_CFG_FILE   = "SiteConfiguration-Emulator.json"
+    SYSTEM_CFG_FILE = "EmulatedSundialSystemConfiguration.json"
+    DAY_AHEAD_SYSTEM_CFG_FILE = "DayAheadSundialSystemConfiguration.json"
+
+
 
 #FIXME - Placeholder!
-MODBUS_SCRAPE_INTERVAL  = 4 # period in seconds for modbus device to post on the IEB bus
-MODBUS_AVERAGING_WINDOW = 15*60 / SIM_HRS_PER_HR # period in seconds over which to average instantaneous readings
-MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
+MODBUS_SCRAPE_INTERVAL  = 1 # period in seconds for modbus device to post on the IEB bus
+AVERAGING_WINDOW = int(15*60 / SIM_HRS_PER_HR) # period in seconds over which to average readings
+AVG_UPDATE_PD    = 30 # period, in seconds, over which to update average calculation
+#MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
 MODBUS_WRITE_ATTEMPTS  = 5  # number of modbus reads before a write error is thrown
 
 SSA_SCHEDULE_DURATION = 24 # Duration, in hours, over which SSA generates schedules
@@ -143,12 +161,49 @@ if SIM_SCENARIO == 1:
     PV_FORECAST_FILE_TIME_RESOLUTION_MIN = 60  # 1
     SIM_START_DAY = 202  # day 106 #2  # day 202, Hr = 5 # 200, Hr = 7
     SIM_START_HR  = 5
+    USE_MATRIX = False
 elif SIM_SCENARIO == 2:
+    USE_MATRIX = True
     PV_FORECAST_FILE = 'solar_forecast_matrix.csv'
     PV_TS_FILE       = 'solar_forecast_ts_matrix.csv'
+    GHI_FORECAST_FILE = 'ghi_forecast_matrix.csv'
+    GHI_TS_FILE       = 'ghi_forecast_ts_matrix_v2.csv'
     PV_FORECAST_FILE_TIME_RESOLUTION_MIN = 60  # 1
     #SIM_START_TIME = datetime(year=2018, month=10, day=5, hour=11, minute=0, second=0)
-    SIM_START_TIME = datetime(year=2018, month=10, day=11, hour=1, minute=0, second=0)
+    SIM_START_TIME = datetime(year=2018, month=10, day=11, hour=0, minute=0, second=0)
+    SIM_START_DAY = (SIM_START_TIME - START_OF_YR).days+1
+    SIM_START_HR  = SIM_START_TIME.hour
+elif SIM_SCENARIO == 3:
+    USE_MATRIX = True
+    PV_FORECAST_FILE = 'solar_forecast_matrix.csv'
+    PV_TS_FILE       = 'solar_forecast_ts_matrix.csv'
+    GHI_FORECAST_FILE = 'ghi_forecast_matrix.csv'
+    GHI_TS_FILE       = 'ghi_forecast_ts_matrix_v2.csv'
+    PV_FORECAST_FILE_TIME_RESOLUTION_MIN = 60  # 1
+    #SIM_START_TIME = datetime(year=2018, month=10, day=5, hour=11, minute=0, second=0)
+    SIM_START_TIME = datetime(year=2018, month=8, day=16, hour=0, minute=0, second=0)
+    SIM_START_DAY = (SIM_START_TIME - START_OF_YR).days+1
+    SIM_START_HR  = SIM_START_TIME.hour
+elif SIM_SCENARIO == 4:
+    USE_MATRIX = True
+    PV_FORECAST_FILE = 'solar_forecast_matrix.csv'
+    PV_TS_FILE       = 'solar_forecast_ts_matrix.csv'
+    GHI_FORECAST_FILE = 'ghi_forecast_matrix.csv'
+    GHI_TS_FILE       = 'ghi_forecast_ts_matrix_v2.csv'
+    PV_FORECAST_FILE_TIME_RESOLUTION_MIN = 60  # 1
+    #SIM_START_TIME = datetime(year=2018, month=10, day=5, hour=11, minute=0, second=0)
+    SIM_START_TIME = datetime(year=2018, month=8, day=18, hour=0, minute=0, second=0)
+    SIM_START_DAY = (SIM_START_TIME - START_OF_YR).days+1
+    SIM_START_HR  = SIM_START_TIME.hour
+elif SIM_SCENARIO == 5:
+    USE_MATRIX = True
+    PV_FORECAST_FILE = 'solar_forecast_matrix.csv'
+    PV_TS_FILE       = 'solar_forecast_ts_matrix.csv'
+    GHI_FORECAST_FILE = 'ghi_forecast_matrix.csv'
+    GHI_TS_FILE       = 'ghi_forecast_ts_matrix_v2.csv'
+    PV_FORECAST_FILE_TIME_RESOLUTION_MIN = 60  # 1
+    #SIM_START_TIME = datetime(year=2018, month=10, day=5, hour=11, minute=0, second=0)
+    SIM_START_TIME = datetime(year=2018, month=10, day=18, hour=0, minute=0, second=0)
     SIM_START_DAY = (SIM_START_TIME - START_OF_YR).days+1
     SIM_START_HR  = SIM_START_TIME.hour
 else:
@@ -156,6 +211,7 @@ else:
     PV_FORECAST_FILE_TIME_RESOLUTION_MIN = 1
     SIM_START_DAY = 200  # day 106 #2  # day 202, Hr = 5 # 200, Hr = 7
     SIM_START_HR  = 7
+    USE_MATRIX = False
 
 DEMAND_FORECAST_FILE = "NYC_demand.csv" #"NYC_forecast_interpolated.csv"
 DEMAND_FILE          = DEMAND_FORECAST_FILE #"NYC_demand_interpolated.csv"
@@ -164,20 +220,40 @@ DEMAND_FILE_TIME_RESOLUTION_MIN = DEMAND_FORECAST_FILE_TIME_RESOLUTION_MIN #1
 
 SIM_START_TIME = START_OF_YR + timedelta(hours=SIM_START_HR, days=SIM_START_DAY-1)
 
-DEMAND_CHARGE_THRESHOLD = 400 #250
+DEMAND_CHARGE_THRESHOLD = 475 #250
 UPDATE_THRESHOLD = True
 
 # FIXME - ESS_RESERVE_xx should be set in absoluate terms, not relative terms - won't work if ESS_MIN is 0
 ESS_MAX = 0.98
 ESS_MIN = 0.05
-ESS_RESERVE_HIGH = 0.85  # relative to ESS_MAX
-ESS_RESERVE_LOW  = 6.0   # relative to ESS_MIN
+ESS_RESERVE_HIGH = 0.95  # relative to ESS_MAX
+ESS_RESERVE_LOW  = 1.5   # relative to ESS_MIN
 
+USE_PV_ADJUST = 1 # 0 = no adjust; 1 = Use hour lookup adjust
 PV_ADJUST = 0.65
-DEMAND_ADJUST = 1.0
+DEMAND_ADJUST = 1.1
+#ERROR_MARGIN  = 1.1
 
 # SCHEDULES
 if USE_SIM == 1:   # schedules for simulated testing
+
+    if SIM_HRS_PER_HR == 1:
+        CPR_QUERY_INTERVAL = 20*60  # period in seconds for forecasts to arrive
+        CPR_1MIN_QUERY_INTERVAL = 300
+        DEMAND_FORECAST_QUERY_INTERVAL = 20*60  # seconds
+        DEMAND_FORECAST_RESOLUTION = SSA_SCHEDULE_RESOLUTION  # 60 minutes # MATT
+        LOADSHIFT_QUERY_INTERVAL = 10*60  # seconds
+        DEMAND_REPORT_SCHEDULE = 15*60  # SECONDS
+        DEMAND_REPORT_RESOLUTION = 60  # minutes Time resolution of load request report - ONLY SUPPORTS 60 MIN
+        DEMAND_REPORT_DURATION = 24 * 60  # minutes for load request
+        N_LOADSHIFT_PROFILES = 5
+        STATUS_REPORT_SCHEDULE = 60*60  # in seconds # Time interval at which the GS should poll the FLAME to check for status
+        LOADSHIFT_FORECAST_UPDATE_INTERVAL = 2 * 60  # # seconds
+
+        HI_RES_DEMAND_REPORT_DURATION = 60  # minutes
+        HI_RES_DEMAND_REPORT_RESOLUTION = 1  # minute
+        HI_RES_DEMAND_REPORT_SCHEDULE = 5*60 #DEMAND_REPORT_SCHEDULE  # seconds
+
     CPR_QUERY_INTERVAL = 60 # period in seconds for forecasts to arrive
     CPR_1MIN_QUERY_INTERVAL = 30
     DEMAND_FORECAST_QUERY_INTERVAL = 60 # seconds
@@ -188,7 +264,7 @@ if USE_SIM == 1:   # schedules for simulated testing
     DEMAND_REPORT_DURATION   = 24*60 # minutes for load request
     N_LOADSHIFT_PROFILES   = 5
     STATUS_REPORT_SCHEDULE = 60 # in seconds # Time interval at which the GS should poll the FLAME to check for status
-    LOADSHIFT_FORECAST_UPDATE_INTERVAL = 2*60 # # seconds
+    LOADSHIFT_FORECAST_UPDATE_INTERVAL = 30*60 # # seconds
 
     HI_RES_DEMAND_REPORT_DURATION   = 60 # minutes
     HI_RES_DEMAND_REPORT_RESOLUTION = 1 # minute

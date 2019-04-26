@@ -7,6 +7,8 @@ cp NYC_forecast_interpolated.csv  ~/.volttron/gs_cfg/NYC_forecast_interpolated.c
 cp irr_1min.csv  ~/.volttron/gs_cfg/irr_1min.csv
 cp solar_forecast_matrix.csv  ~/.volttron/gs_cfg/
 cp solar_forecast_ts_matrix.csv ~/.volttron/gs_cfg/
+cp ghi_forecast_matrix.csv  ~/.volttron/gs_cfg/
+cp ghi_forecast_ts_matrix_v2.csv ~/.volttron/gs_cfg/
 
 volttron-ctl remove  --tag cpr
 volttron-pkg package .

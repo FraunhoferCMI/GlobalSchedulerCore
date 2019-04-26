@@ -145,6 +145,7 @@ class CPRPub(Agent):
                                     **parsed_response)
                 #duration = self.duration,
                 #
+                print(parsed_response["forecast"])
                 try:
                     publish_data(self,
                                  "cpr/forecast"+str(self._conf['sim_interval']),

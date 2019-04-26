@@ -152,6 +152,33 @@ def get_gs_path(local_path, fname):
     gs_root_dir = os.environ['GS_ROOT_DIR']
     return os.path.join(gs_root_dir , local_path , fname)
 
+##############################################################################
+def get_pv_correction_factors(forecast, ts, reference_forecast):
+    if USE_PV_ADJUST == 1:
+        ghi_high_threshold = 5000
+        ghi_med_threshold = 3000
+        fname_fullpath = get_gs_path('lib/', 'pv_correction_factors_v2.csv')
+        corr_factors = pd.read_csv(fname_fullpath)
+        # reference_forecast = np.array(ref)
+        total_ghi = sum(reference_forecast)
+
+        if total_ghi > ghi_high_threshold:
+            k = 'High'
+        elif total_ghi > ghi_med_threshold:
+            k = 'Med'
+        else:
+            k = 'Low'
+
+        for ii in range(0, len(forecast) - 1):
+            forecast[ii] = corr_factors[k][ts[ii].hour] * forecast[ii]
+            #_log.info("Corr: "+str(corr_factors[k][ts[ii].hour])+" - "+str(forecast[ii]))
+
+    elif USE_PV_ADJUST == 2: # Machine-learning based approach
+        fname_fullpath = get_gs_path('lib/', 'pv_training_data.csv')
+        #get_solar_predictions(forecast, reference_forecast, ts, fname_fullpath)
+        pass
+    return forecast
+    # return corr_factors[k]
 
 ##############################################################################
 class ForecastObject():
@@ -180,16 +207,22 @@ class Forecast():
     def __init__(self, forecast, time, units, datatype, ghi = None,
                  duration =  SSA_SCHEDULE_DURATION,
                  resolution = SSA_SCHEDULE_RESOLUTION,
-                 labels = None):
+                 labels = None,
+                 use_correction = False):
         assert isinstance(forecast, list)
         assert isinstance(time, list)
-        self.forecast = forecast
         self.time = time
         self.units = units
         self.datatype = datatype
         self.duration = duration
         self.resolution = resolution
         self.ghi      = ghi
+
+        ts = [datetime.strptime(v, TIME_FORMAT) for v in time]
+        if use_correction == True:
+            self.forecast = get_pv_correction_factors(forecast, ts, ghi)
+        else:
+            self.forecast = forecast
 
         if labels == None:
             self.labels = {"Forecast": "Forecast",
@@ -265,7 +298,8 @@ class StoredForecast(ForecastObject):
                  forecast_fname = PV_FORECAST_FILE,
                  ts_fname = None,
                  time_resolution_min = PV_FORECAST_FILE_TIME_RESOLUTION_MIN,
-                 nForecasts = 1):
+                 nForecasts = 1,
+                 scale = -1*SOLAR_NAMEPLATE/100.0):
 
         ForecastObject.__init__(self, length, units, datatype, nForecasts)
 
@@ -284,7 +318,7 @@ class StoredForecast(ForecastObject):
         self.forecast_database = self.load_forecast_file(forecast_fname_full,
                                                          ts_fname_full,
                                                          time_resolution_min)
-
+        self.scale_factor   = scale
         return None
 
     ###################################################################
@@ -457,8 +491,12 @@ class StoredMatrixForecast(StoredForecast):
         print(ts_database['0'].iloc[0:100])
         return forecast_database, ts_database
 
+    ##############################################################################
+    def get_correction_factors(self, forecast, ts, reference_forecast):
+        return forecast
+
     ###################################################################
-    def parse_query(self, sim_time_corr):
+    def parse_query(self, sim_time_corr, reference_forecast = None):
         """
         parses a solar query from a pandas dataframe that is organized as ts x 24 data points (1 per hr)
         this lets us use historical forecasts as they are stored in the database.
@@ -501,11 +539,14 @@ class StoredMatrixForecast(StoredForecast):
             # only use if forecast is < 1 hr old
             most_recent_forecast = sl.index[len(sl) - 1]
             _log.info("Getting Solar forecast from: " + str(most_recent_forecast))
-
+            actual_timestamps = pd.to_datetime(time_sl.iloc[len(time_sl)-1])
             next_forecast_timestamps = self.get_timestamps(sim_time_corr)
 
             # Convert irradiance to a percentage
-            self.forecast_values["Forecast"] = [-1*100 * PV_ADJUST * v / SOLAR_NAMEPLATE for v in sl.iloc[len(sl) - 1]]
+            self.forecast_values["Forecast"] = [v / self.scale_factor for v in sl.iloc[len(sl) - 1]]
+            self.forecast_values["Forecast"] = self.get_correction_factors(self.forecast_values["Forecast"],
+                                                                           actual_timestamps,
+                                                                           reference_forecast)
             self.forecast_values["Time"] = [datetime.strftime(ts, "%Y-%m-%dT%H:%M:%S") for ts in
                                             next_forecast_timestamps]
 
@@ -521,6 +562,12 @@ class StoredMatrixForecast(StoredForecast):
 
         pass
 
+###################################################################
+class StoredSolarMatrixForecast(StoredMatrixForecast):
+
+    ##############################################################################
+    def get_correction_factors(self, forecast, ts, reference_forecast):
+        return get_pv_correction_factors(forecast, ts, reference_forecast)
 
 ###################################################################
 class StoredDemandForecast(StoredForecast):

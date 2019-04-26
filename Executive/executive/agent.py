@@ -86,7 +86,10 @@ default_units = {"setpoint":"kW",
                  "curPwr_kW": "kW",
                  "expectedPwr_kW": "kW",
                  "forecastError_kW": "kW",
+                 "predPwr_kW": "kW",
                  "DemandForecast_kW": "kW",
+                 "AvgPwr_kW": "kW",
+                 "Pwr_kW": "kW",
                  "EnergyAvailableForecast_kWh": "kWh",
                  "expectedSOE_kWh": "kWh",
                  "netDemand_kW": "kW",
@@ -195,13 +198,14 @@ class ExecutiveAgent(Agent):
         self.volttron_root = os.getcwd()
         self.volttron_root = self.volttron_root+"/../../../../"
 
-        # SiteCfgFile        = GS_ROOT_DIR+CFG_PATH+"SiteCfg/"+SITE_CFG_FILE
         SiteCfgFile        = os.path.join(GS_ROOT_DIR,CFG_PATH,"SiteCfg/",SITE_CFG_FILE)
-        # SundialCfgFile     = GS_ROOT_DIR+CFG_PATH+"SystemCfg/"+SYSTEM_CFG_FILE
         SundialCfgFile     = os.path.join(GS_ROOT_DIR,CFG_PATH,"SystemCfg/",SYSTEM_CFG_FILE)
+        DayAheadSundialCfgFile = os.path.join(GS_ROOT_DIR,CFG_PATH,"SystemCfg/",DAY_AHEAD_SYSTEM_CFG_FILE)
         self.packaged_site_manager_fname = os.path.join(self.volttron_root, "packaged/site_manageragent-1.0-py2-none-any.whl")
         self.SiteCfgList   = json.load(open(SiteCfgFile, 'r'))
         self.sundial_resource_cfg_list = json.load(open(SundialCfgFile, 'r'))
+        self.day_ahead_sundial_resource_cfg_list = json.load(open(DayAheadSundialCfgFile, 'r'))
+
         _log.info("SiteConfig is "+SiteCfgFile)
         _log.info("SundialConfig is"+SundialCfgFile)
 
@@ -215,6 +219,7 @@ class ExecutiveAgent(Agent):
         self.optimizer_info.update({"forecastError_kW": 0.0})
         self.optimizer_info.update({"netDemand_kW": 0.0})
         self.optimizer_info.update({"netDemandAvg_kW": 0.0})
+        self.optimizer_info.update({"predPwr_kW": 0.0})
 
         self.run_optimizer_cnt     = 0
         self.send_ess_commands_cnt = 0
@@ -223,7 +228,7 @@ class ExecutiveAgent(Agent):
 
         self.prevPwr_kW = None
         #initializes queue for rolling average, maxlen of 600 elements, recommend assigning a variable to this
-        self.queuePwr = deque([0], maxlen=600)
+        self.queuePwr = deque([0], maxlen=2)
         self.last_forecast_start   = datetime(1900, 1, 1, tzinfo=pytz.UTC)
 
 
@@ -255,6 +260,33 @@ class ExecutiveAgent(Agent):
         # Demonstrate accessing a value from the config file
         _log.info(self._message)
         self._agent_id = self._config.get('agentid')
+
+    ##############################################################################
+    def init_sdr_dict(self, sdr, lookup_table, tariffs, last_forecast, path):
+
+        ### This section retrieves direct references to specific resource types (avoids the need to traverse tree)
+        # There is an implicit assumption that there is only one SundialResource node per resource type.  (i.e. we are
+        # grabbing the 0th element in each list returned by find_resource_type
+        # Note - to handle multiple resources groupings of the same type, code will need to be modified
+        try:
+            loadshift_resources = sdr.find_resource_type("LoadShiftCtrlNode")[0]
+        except:
+            loadshift_resources = []
+        try:
+            load_resources = sdr.find_resource_type("Load")[0]
+        except:
+            load_resources = []
+        sdr_dict = {'SDR': sdr,
+                    'lookup_table': lookup_table,
+                    'tariffs': tariffs,
+                    'last_forecast': last_forecast,
+                    'System': sdr.find_resource_type("System")[0],
+                    'ESS': sdr.find_resource_type("ESSCtrlNode")[0],
+                    'PV': sdr.find_resource_type("PVCtrlNode")[0],
+                    'Load': load_resources,
+                    'LoadShift': loadshift_resources,
+                    'path': path}
+        return sdr_dict
 
     ##############################################################################
     @Core.receiver('onstart')
@@ -346,23 +378,31 @@ class ExecutiveAgent(Agent):
                                                                                         use_volttron=1)
         for entries in self.sdr_to_sm_lookup_table:
             _log.info("Setup: SundialResource Init: "+entries.sundial_resource.resource_id + ":" + str(entries.device_list))
+
+        self.real_time_sdr = self.init_sdr_dict(self.sundial_resources,
+                                                self.sdr_to_sm_lookup_table,
+                                                self.tariffs,
+                                                self.last_forecast_start,
+                                                '')
+
+        strategic_sundial_resources = SundialSystemResource(self.day_ahead_sundial_resource_cfg_list, self.get_gs_start_time())
+        strategic_sdr_to_sm_lookup_table = build_SundialResource_to_SiteManager_lookup_table(self.day_ahead_sundial_resource_cfg_list,
+                                                                                             strategic_sundial_resources,
+                                                                                             sitemgr_list=self.sitemgr_list,
+                                                                                             use_volttron=1)
+        self.strategic_sdr = self.init_sdr_dict(strategic_sundial_resources,
+                                                strategic_sdr_to_sm_lookup_table,
+                                                self.tariffs,
+                                                self.last_forecast_start,
+                                                'DayAhead/')
+
         self.optimizer = SimulatedAnnealer()
 
-        ### This section retrieves direct references to specific resource types (avoids the need to traverse tree)
-        # There is an implicit assumption that there is only one SundialResource node per resource type.  (i.e. we are
-        # grabbing the 0th element in each list returned by find_resource_type
-        # Note - to handle multiple resources groupings of the same type, code will need to be modified
-        self.ess_resources = self.sundial_resources.find_resource_type("ESSCtrlNode")[0]
-        self.pv_resources  = self.sundial_resources.find_resource_type("PVCtrlNode")[0]
-        self.system_resources = self.sundial_resources.find_resource_type("System")[0]
-        try:
-            self.loadshift_resources = self.sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
-        except:
-            self.loadshift_resources = []
-        try:
-            self.load_resources = self.sundial_resources.find_resource_type("Load")[0]
-        except:
-            self.load_resources = []
+        self.ess_resources = self.real_time_sdr['ESS']
+        self.pv_resources  = self.real_time_sdr['PV']
+        self.system_resources = self.real_time_sdr['System']
+        self.loadshift_resources = self.real_time_sdr['LoadShift']
+        self.load_resources = self.real_time_sdr['Load']
 
         # get a time stamp of start time to database
         HistorianTools.publish_data(self,
@@ -466,10 +506,7 @@ class ExecutiveAgent(Agent):
         #                         index = start_times)
         iso_data = numpy.array([random.random() / 10 for i in range(SSA_PTS_PER_SCHEDULE)])
         self.tariffs = {"threshold": DEMAND_CHARGE_THRESHOLD,
-                        "isone": iso_data
-                        }
-
-        #self.tariffs = {"energy_price": }
+                        "isone": iso_data}
 
         #indices = [numpy.argmin(
         #    numpy.abs(
@@ -516,7 +553,7 @@ class ExecutiveAgent(Agent):
             _log.info(devices["AgentID"] + "-" + devices["DeviceID"] + ": No Errors Found")
 
     ##############################################################################
-    def update_sundial_resources(self, sdr_to_sm_lookup_table, update_forecasts = False):
+    def update_sundial_resources(self, sdr_dict, update_forecasts = False):
         """
         This method updates the sundial resource data structure with the most recvent data from SiteManager
         agents.
@@ -524,7 +561,7 @@ class ExecutiveAgent(Agent):
         type SundialResource_to_SiteManager_lookup_table
         :return: None
         """
-        for entries in sdr_to_sm_lookup_table:
+        for entries in sdr_dict['lookup_table']:
             # for each SundialResource that maps to an end point device (i.e., terminal nodes in the
             # the resource tree)
 
@@ -548,9 +585,20 @@ class ExecutiveAgent(Agent):
                         except KeyError:
                             _log.debug("Key not found!!")
         if update_forecasts == False:
-            self.sundial_resources.update_sundial_resource()  # propagates new data to non-terminal nodes
+            sdr_dict['SDR'].update_sundial_resource()  # propagates new data to non-terminal nodes
             self.update_tariffs()
 
+            HistorianTools.publish_data(self,
+                                        "SystemResource/",
+                                        default_units["AvgPwr_kW"],
+                                        "AvgPwr_kW",
+                                        self.system_resources.state_vars["AvgPwr_kW"])
+
+            HistorianTools.publish_data(self,
+                                        "SystemResource/",
+                                        default_units["Pwr_kW"],
+                                        "Pwr_kW",
+                                        self.system_resources.state_vars["Pwr_kW"])
 
 
     ##############################################################################
@@ -708,7 +756,10 @@ class ExecutiveAgent(Agent):
             #Push latest calculated slope value into end of queue(FIFO)
             self.queuePwr.append(predchangePwr_kW)
             #Predicted power is equal to the current Power + rolling average of slope
-            predPwr_kW = curPwr_kW + (sum(self.queuePwr) / len(self.queuePwr))
+            if SMOOTH_RAMP == True:
+                predPwr_kW = curPwr_kW + (sum(self.queuePwr) / len(self.queuePwr))
+            else:
+                predPwr_kW = curPwr_kW #+ (sum(self.queuePwr) / len(self.queuePwr))
             #Updates previous power holding variable
             self.prevPwr_kW = curPwr_kW
 
@@ -823,10 +874,9 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["expectedPwr_kW"] = expectedPwr_kW
             self.optimizer_info["expectedSOE_kWh"] = expectedSOE_kWh
             self.optimizer_info["forecastError_kW"] = forecastError_kW
+            self.optimizer_info["predPwr_kW"] = predPwr_kW
             self.optimizer_info["netDemand_kW"]   = netDemand_kW
             self.optimizer_info["netDemandAvg_kW"] = netDemandAvg_kW
-
-            _log.info("ExecutiveStatus: Predicted Power="+ (str(predPwr_kW)))
             self.publish_ess_cmds()
 
     ##############################################################################
@@ -860,8 +910,36 @@ class ExecutiveAgent(Agent):
         return schedule_timestamps
 
     ##############################################################################
+    @Core.periodic(STRATEGIC_SCHEDULE)
+    def generate_strategic_schedule(self):
+        if (USE_STRATEGIC_SCHEDULE == True) & (self.OperatingMode != EXEC_STARTING):
+            _log.info('***********************************************************************************************')
+            _log.info('*** RUNNING STRATEGIC SCHEDULE ****')
+            self.run_optimizer(self.strategic_sdr)
+
+            fname_fullpath = get_gs_path("GS_Optimizer/","myloadshape.csv")
+            pandas.DataFrame(data={'0': self.strategic_sdr['SDR'].schedule_vars['DemandForecast_kW'],
+                                   '1': self.strategic_sdr['SDR'].schedule_vars['weights']},
+                             index=self.strategic_sdr['SDR'].schedule_vars['timestamp']).to_csv(fname_fullpath)
+
+            for ii in range(0,len(self.strategic_sdr['System'].schedule_vars["DemandForecast_kW"])):
+                ts = self.strategic_sdr['System'].schedule_vars["timestamp"][ii] #+ timedelta(minutes=SSA_SCHEDULE_RESOLUTION*ii/SIM_HRS_PER_HR)
+                ts_str = ts.strftime("%Y-%m-%dT%H:%M:%S")
+                HistorianTools.publish_data(self,
+                                            self.strategic_sdr['path']+"SystemResource/Schedule",
+                                            default_units["DemandForecast_kW"],
+                                            "StrategicSchedule_kW",
+                                            self.strategic_sdr['System'].schedule_vars["DemandForecast_kW"][ii],
+                                            TimeStamp_str=ts_str,
+                                            ref_time=self.gs_start_time)
+                _log.info(ts_str+": "+str(self.strategic_sdr['System'].schedule_vars["DemandForecast_kW"][ii]))
+
+
+
+
+    ##############################################################################
     #@Core.periodic(GS_SCHEDULE)
-    def run_optimizer(self):
+    def run_optimizer(self, sdr_dict):
         """
         runs optimizer on specified schedule
         assumes that self.sundial_resources has up to date information from end point
@@ -882,14 +960,14 @@ class ExecutiveAgent(Agent):
 
             ## update forecast information and interopolate from native forecast time to optimizer time
             ## (so that all forecasts are defined from t = now)
-            self.update_sundial_resources(self.sdr_to_sm_lookup_table,
+            self.update_sundial_resources(sdr_dict,
                                           update_forecasts=True)
-            self.sundial_resources.interpolate_forecast(schedule_timestamps)
+            sdr_dict['SDR'].interpolate_forecast(schedule_timestamps)
 
             cur_time = datetime.utcnow().replace(microsecond=0, second=0, tzinfo=pytz.UTC)
-            self.sundial_resources.interpolate_soe(schedule_timestamps, cur_time)
+            sdr_dict['SDR'].interpolate_soe(schedule_timestamps, cur_time)
 
-            if self.sundial_resources.state_vars["DemandForecast_kW"][0] == None:
+            if sdr_dict['SDR'].state_vars["DemandForecast_kW"][0] == None:
                 _log.info("Forecast(s) unavailable - Skipping optimization")
             else:
                 # work around to indicate to optimizer to use previous solution if cost was lower
@@ -900,249 +978,276 @@ class ExecutiveAgent(Agent):
                 if ALIGN_SCHEDULES == True:
                     forecast_start = schedule_timestamps[0]
                 else:
-                    forecast_start = datetime.strptime(self.pv_resources.state_vars["OrigDemandForecast_t_str"][0],
+                    forecast_start = datetime.strptime(sdr_dict['PV'].state_vars["OrigDemandForecast_t_str"][0],
                                                        "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)
 
-                if forecast_start == self.last_forecast_start:
+                try:
+                    predicted_energy_error =  abs(sdr_dict['ESS'].state_vars['EnergyAvailableForecast'][0]-
+                                                  sdr_dict['ESS'].state_vars['SOE_kWh'])/max(sdr_dict['ESS'].state_vars['MaxSOE_kWh'])
+                    _log.info('Predicted Energy error is: '+str(predicted_energy_error))
+                    _log.info('Actual Energy error is: ' + str(sdr_dict['ESS'].state_vars['SOE_kWh']) +
+                              '; predicted energy is: ' + str(sdr_dict['ESS'].state_vars['EnergyAvailableForecast'][0]))
+
+                except:
+                    predicted_energy_error = 0
+
+                if (forecast_start == sdr_dict['last_forecast']) & (predicted_energy_error<0.1):
                     self.optimizer.persist_lowest_cost = 1
                 else:
                     self.optimizer.persist_lowest_cost = 0
                 _log.info("persist lower cost = "+str(self.optimizer.persist_lowest_cost)+"; old time = "+self.last_forecast_start.strftime("%Y-%m-%dT%H:%M:%S")+"; new time = "+forecast_start.strftime("%Y-%m-%dT%H:%M:%S"))
 
-                self.last_forecast_start = forecast_start
+                sdr_dict['last_forecast_start'] = forecast_start
 
                 ## queue up time-differentiated cost data
-                _log.info("THESE ARE THE TARIFFS: {}".format(self.tariffs))
-                self.sundial_resources.cfg_cost(schedule_timestamps,
-                                                tariffs = self.tariffs)
-                                                # system_tariff = self.tariffs)
+                _log.info("THESE ARE THE TARIFFS: {}".format(sdr_dict['tariffs']))
+                sdr_dict['SDR'].cfg_cost(schedule_timestamps,
+                                         system_tariff=sdr_dict['tariffs'])
+                                                #tariffs = self.tariffs)
+
 
                 ## generate a cost map - for testing
                 #tiers = self.generate_cost_map()
                 #_log.info(json.dumps(tiers))
 
                 if SEARCH_LOADSHIFT_OPTIONS == True:
-                    if self.loadshift_resources.state_vars["OptionsPending"] == 1:
+                    if sdr_dict['LoadShift'].state_vars["OptionsPending"] == 1:
                         _log.info("*** New Optimization Pass: New load options pending - Search Multiple!! ****")
-                        self.optimizer.search_load_shift_options(self.sundial_resources,
-                                                                 self.loadshift_resources,
+                        self.optimizer.search_load_shift_options(sdr_dict['SDR'],
+                                                                 sdr_dict['loadshift'],
                                                                  schedule_timestamps) # SSA optimization - search load shift space
                         self.send_loadshift_commands()
                     else:
                         _log.info("*** New Optimization Pass: No New load options pending! ****")
-                        self.optimizer.search_single_option(self.sundial_resources,
+                        self.optimizer.search_single_option(sdr_dict['SDR'],
                                                             schedule_timestamps)  # SSA optimization - single pass
                 else:
                     _log.info("*** New Optimization Pass: Load Shift disabled! ****")
-                    self.optimizer.search_single_option(self.sundial_resources,
+                    self.optimizer.search_single_option(sdr_dict['SDR'],
                                                         schedule_timestamps)  # SSA optimization - single pass
-                self.publish_schedules()
+
+                self.publish_schedules(sdr_dict)
                 self.send_ess_commands()
 
     ##############################################################################
-    def publish_schedules(self):
+    def publish_schedules(self, sdr_dict):
         """
         publishes schedule data to the database
         :return: None
         """
         HistorianTools.publish_data(self,
-                                    "SystemResource/Schedule",
+                                    sdr_dict['path']+"SystemResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "MaxDemand_kW",
-                                    max(self.system_resources.schedule_vars["DemandForecast_kW"].tolist()))
+                                    max(sdr_dict['System'].schedule_vars["DemandForecast_kW"].tolist()))
 
         HistorianTools.publish_data(self,
-                                    "SystemResource/Schedule",
+                                    sdr_dict['path']+"SystemResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_kW",
-                                    self.system_resources.schedule_vars["DemandForecast_kW"].tolist())
+                                    sdr_dict['System'].schedule_vars["DemandForecast_kW"].tolist())
         HistorianTools.publish_data(self,
-                                    "SystemResource/Schedule",
+                                    sdr_dict['path']+"SystemResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_tPlus1_kW",
-                                    self.system_resources.schedule_vars["DemandForecast_kW"][1],
-                                    TimeStamp_str=self.system_resources.schedule_vars["timestamp"][1].strftime(
-                                        "%Y-%m-%dT%H:%M:%S"))
+                                    sdr_dict['System'].schedule_vars["DemandForecast_kW"][1],
+                                    TimeStamp_str=sdr_dict['System'].schedule_vars["timestamp"][1].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"),
+                                    ref_time=self.gs_start_time)
         HistorianTools.publish_data(self,
-                                    "SystemResource/Schedule",
+                                    sdr_dict['path']+"SystemResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_tPlus5_kW",
-                                    self.system_resources.schedule_vars["DemandForecast_kW"][5],
-                                    TimeStamp_str=self.system_resources.schedule_vars["timestamp"][5].strftime(
-                                        "%Y-%m-%dT%H:%M:%S"))
+                                    sdr_dict['System'].schedule_vars["DemandForecast_kW"][5],
+                                    TimeStamp_str=sdr_dict['System'].schedule_vars["timestamp"][5].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"),
+                                    ref_time=self.gs_start_time)
         HistorianTools.publish_data(self,
-                                    "SystemResource/Schedule",
+                                    sdr_dict['path']+"SystemResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_tPlus23_kW",
-                                    self.system_resources.schedule_vars["DemandForecast_kW"][23],
-                                    TimeStamp_str=self.system_resources.schedule_vars["timestamp"][23].strftime(
-                                        "%Y-%m-%dT%H:%M:%S"))
+                                    sdr_dict['System'].schedule_vars["DemandForecast_kW"][23],
+                                    TimeStamp_str=sdr_dict['System'].schedule_vars["timestamp"][23].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"),
+                                    ref_time=self.gs_start_time)
 
         HistorianTools.publish_data(self,
-                                    "SystemResource/Schedule",
+                                    sdr_dict['path']+"SystemResource/Schedule",
                                     default_units["timestamp"],
                                     "timestamp",
-                                    [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.system_resources.schedule_vars["timestamp"]])
+                                    [t.strftime("%Y-%m-%dT%H:%M:%S") for t in sdr_dict['System'].schedule_vars["timestamp"]])
         HistorianTools.publish_data(self,
-                                    "SystemResource/Schedule",
+                                    sdr_dict['path']+"SystemResource/Schedule",
                                     default_units["total_cost"],
                                     "total_cost",
-                                    self.system_resources.schedule_vars["total_cost"])
+                                    sdr_dict['System'].schedule_vars["total_cost"])
         HistorianTools.publish_data(self,
-                                    "ESSResource/Schedule",
+                                    sdr_dict['path']+"ESSResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_kW",
-                                    self.ess_resources.schedule_vars["DemandForecast_kW"].tolist())
+                                    sdr_dict['ESS'].schedule_vars["DemandForecast_kW"].tolist())
         HistorianTools.publish_data(self,
-                                    "ESSResource/Schedule",
+                                    sdr_dict['path']+"ESSResource/Schedule",
                                     default_units["EnergyAvailableForecast_kWh"],
                                     "EnergyAvailableForecast_kWh",
-                                    self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"].tolist())
+                                    sdr_dict['ESS'].schedule_vars["EnergyAvailableForecast_kWh"].tolist())
         HistorianTools.publish_data(self,
-                                    "ESSResource/Schedule",
+                                    sdr_dict['path']+"ESSResource/Schedule",
                                     default_units["timestamp"],
                                     "timestamp",
-                                    [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.ess_resources.schedule_vars["timestamp"]])
+                                    [t.strftime("%Y-%m-%dT%H:%M:%S") for t in sdr_dict['ESS'].schedule_vars["timestamp"]])
 
         HistorianTools.publish_data(self,
-                                    "ESSResource/Schedule",
+                                    sdr_dict['path']+"ESSResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_tPlus1_kW",
-                                    self.ess_resources.schedule_vars["DemandForecast_kW"][1],
-                                    TimeStamp_str=self.ess_resources.schedule_vars["timestamp"][1].strftime(
-                                        "%Y-%m-%dT%H:%M:%S"))
+                                    sdr_dict['ESS'].schedule_vars["DemandForecast_kW"][1],
+                                    TimeStamp_str=sdr_dict['ESS'].schedule_vars["timestamp"][1].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"),
+                                    ref_time=self.gs_start_time)
         HistorianTools.publish_data(self,
-                                    "ESSResource/Schedule",
+                                    sdr_dict['path']+"ESSResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_tPlus5_kW",
-                                    self.ess_resources.schedule_vars["DemandForecast_kW"][5],
-                                    TimeStamp_str=self.ess_resources.schedule_vars["timestamp"][5].strftime(
-                                        "%Y-%m-%dT%H:%M:%S"))
+                                    sdr_dict['ESS'].schedule_vars["DemandForecast_kW"][5],
+                                    TimeStamp_str=sdr_dict['ESS'].schedule_vars["timestamp"][5].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"),
+                                    ref_time=self.gs_start_time)
         HistorianTools.publish_data(self,
-                                    "ESSResource/Schedule",
+                                    sdr_dict['path']+"ESSResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_tPlus23_kW",
-                                    self.ess_resources.schedule_vars["DemandForecast_kW"][23],
-                                    TimeStamp_str=self.ess_resources.schedule_vars["timestamp"][23].strftime(
-                                        "%Y-%m-%dT%H:%M:%S"))
+                                    sdr_dict['ESS'].schedule_vars["DemandForecast_kW"][23],
+                                    TimeStamp_str=sdr_dict['ESS'].schedule_vars["timestamp"][23].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"),
+                                    ref_time=self.gs_start_time)
         HistorianTools.publish_data(self,
-                                    "ESSResource/Schedule",
+                                    sdr_dict['path']+"ESSResource/Schedule",
                                     default_units["EnergyAvailableForecast_kWh"],
                                     "EnergyAvailableForecast_tPlus1_kWh",
-                                    self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][1],
-                                    TimeStamp_str=self.ess_resources.schedule_vars["timestamp"][1].strftime(
-                                        "%Y-%m-%dT%H:%M:%S"))
+                                    sdr_dict['ESS'].schedule_vars["EnergyAvailableForecast_kWh"][1],
+                                    TimeStamp_str=sdr_dict['ESS'].schedule_vars["timestamp"][1].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"),
+                                    ref_time = self.gs_start_time)
         HistorianTools.publish_data(self,
-                                    "ESSResource/Schedule",
+                                    sdr_dict['path']+"ESSResource/Schedule",
                                     default_units["EnergyAvailableForecast_kWh"],
                                     "EnergyAvailableForecast_tPlus5_kWh",
-                                    self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][5],
-                                    TimeStamp_str=self.ess_resources.schedule_vars["timestamp"][5].strftime(
-                                        "%Y-%m-%dT%H:%M:%S"))
+                                    sdr_dict['ESS'].schedule_vars["EnergyAvailableForecast_kWh"][5],
+                                    TimeStamp_str=sdr_dict['ESS'].schedule_vars["timestamp"][5].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"),
+                                    ref_time=self.gs_start_time)
         HistorianTools.publish_data(self,
-                                    "ESSResource/Schedule",
+                                    sdr_dict['path']+"ESSResource/Schedule",
                                     default_units["EnergyAvailableForecast_kWh"],
                                     "EnergyAvailableForecast_tPlus23_kWh",
-                                    self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][23],
-                                    TimeStamp_str=self.ess_resources.schedule_vars["timestamp"][23].strftime(
-                                        "%Y-%m-%dT%H:%M:%S"))
+                                    sdr_dict['ESS'].schedule_vars["EnergyAvailableForecast_kWh"][23],
+                                    TimeStamp_str=sdr_dict['ESS'].schedule_vars["timestamp"][23].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"),
+                                    ref_time=self.gs_start_time)
 
         HistorianTools.publish_data(self,
-                                    "PVResource/Schedule",
+                                    sdr_dict['path']+"PVResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_kW",
-                                    self.pv_resources.schedule_vars["DemandForecast_kW"].tolist())
+                                    sdr_dict['PV'].schedule_vars["DemandForecast_kW"].tolist())
 
         HistorianTools.publish_data(self,
-                                    "PVResource/Schedule",
+                                    sdr_dict['path']+"PVResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "MaxDemand_kW",
-                                    min(self.pv_resources.schedule_vars["DemandForecast_kW"].tolist()))
+                                    min(sdr_dict['PV'].schedule_vars["DemandForecast_kW"].tolist()))
 
         HistorianTools.publish_data(self,
-                                    "PVResource/Schedule",
+                                    sdr_dict['path']+"PVResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_tPlus1_kW",
-                                    self.pv_resources.schedule_vars["DemandForecast_kW"][1],
-                                    TimeStamp_str=self.pv_resources.schedule_vars["timestamp"][1].strftime(
-                                        "%Y-%m-%dT%H:%M:%S"))
+                                    sdr_dict['PV'].schedule_vars["DemandForecast_kW"][1],
+                                    TimeStamp_str=sdr_dict['PV'].schedule_vars["timestamp"][1].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"),
+                                    ref_time=self.gs_start_time)
         HistorianTools.publish_data(self,
-                                    "PVResource/Schedule",
+                                    sdr_dict['path']+"PVResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_tPlus5_kW",
-                                    self.pv_resources.schedule_vars["DemandForecast_kW"][5],
-                                    TimeStamp_str=self.pv_resources.schedule_vars["timestamp"][5].strftime(
-                                        "%Y-%m-%dT%H:%M:%S"))
+                                    sdr_dict['PV'].schedule_vars["DemandForecast_kW"][5],
+                                    TimeStamp_str=sdr_dict['PV'].schedule_vars["timestamp"][5].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"),
+                                    ref_time=self.gs_start_time)
         HistorianTools.publish_data(self,
-                                    "PVResource/Schedule",
+                                    sdr_dict['path']+"PVResource/Schedule",
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_tPlus23_kW",
-                                    self.pv_resources.schedule_vars["DemandForecast_kW"][23],
-                                    TimeStamp_str=self.pv_resources.schedule_vars["timestamp"][23].strftime(
-                                        "%Y-%m-%dT%H:%M:%S"))
+                                    sdr_dict['PV'].schedule_vars["DemandForecast_kW"][23],
+                                    TimeStamp_str=sdr_dict['PV'].schedule_vars["timestamp"][23].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"),
+                                    ref_time=self.gs_start_time)
         HistorianTools.publish_data(self,
-                                    "PVResource/Schedule",
+                                    sdr_dict['path']+"PVResource/Schedule",
                                     default_units["timestamp"],
                                     "timestamp",
-                                    [t.strftime("%Y-%m-%dT%H:%M:%S") for t in self.pv_resources.schedule_vars["timestamp"]])
+                                    [t.strftime("%Y-%m-%dT%H:%M:%S") for t in sdr_dict['PV'].schedule_vars["timestamp"]])
         try:
             HistorianTools.publish_data(self,
-                                        "LoadResource/Schedule",
+                                        sdr_dict['path']+"LoadResource/Schedule",
                                         default_units["DemandForecast_kW"],
                                         "DemandForecast_kW",
-                                        self.load_resources.schedule_vars["DemandForecast_kW"].tolist())
+                                        sdr_dict['Load'].schedule_vars["DemandForecast_kW"].tolist())
 
             HistorianTools.publish_data(self,
-                                        "LoadResource/Schedule",
+                                        sdr_dict['path']+"LoadResource/Schedule",
                                         default_units["DemandForecast_kW"],
                                         "MaxDemand_kW",
-                                        max(self.load_resources.schedule_vars["DemandForecast_kW"].tolist()))
+                                        max(sdr_dict['Load'].schedule_vars["DemandForecast_kW"].tolist()))
 
             HistorianTools.publish_data(self,
-                                        "LoadResource/Schedule",
+                                        sdr_dict['path']+"LoadResource/Schedule",
                                         default_units["DemandForecast_kW"],
                                         "DemandForecast_tPlus1_kW",
-                                        self.load_resources.schedule_vars["DemandForecast_kW"][1],
-                                        TimeStamp_str=self.load_resources.schedule_vars["timestamp"][1].strftime(
-                                            "%Y-%m-%dT%H:%M:%S"))
+                                        sdr_dict['Load'].schedule_vars["DemandForecast_kW"][1],
+                                        TimeStamp_str=sdr_dict['Load'].schedule_vars["timestamp"][1].strftime(
+                                            "%Y-%m-%dT%H:%M:%S"),
+                                        ref_time=self.gs_start_time)
             HistorianTools.publish_data(self,
-                                        "LoadResource/Schedule",
+                                        sdr_dict['path']+"LoadResource/Schedule",
                                         default_units["DemandForecast_kW"],
                                         "DemandForecast_tPlus5_kW",
-                                        self.load_resources.schedule_vars["DemandForecast_kW"][5],
-                                        TimeStamp_str=self.load_resources.schedule_vars["timestamp"][5].strftime(
-                                            "%Y-%m-%dT%H:%M:%S"))
+                                        sdr_dict['Load'].schedule_vars["DemandForecast_kW"][5],
+                                        TimeStamp_str=sdr_dict['Load'].schedule_vars["timestamp"][5].strftime(
+                                            "%Y-%m-%dT%H:%M:%S"),
+                                        ref_time=self.gs_start_time)
             HistorianTools.publish_data(self,
-                                        "LoadResource/Schedule",
+                                        sdr_dict['path']+"LoadResource/Schedule",
                                         default_units["DemandForecast_kW"],
                                         "DemandForecast_tPlus23_kW",
-                                        self.load_resources.schedule_vars["DemandForecast_kW"][23],
-                                        TimeStamp_str=self.load_resources.schedule_vars["timestamp"][23].strftime(
-                                            "%Y-%m-%dT%H:%M:%S"))
+                                        sdr_dict['Load'].schedule_vars["DemandForecast_kW"][23],
+                                        TimeStamp_str=sdr_dict['Load'].schedule_vars["timestamp"][23].strftime(
+                                            "%Y-%m-%dT%H:%M:%S"),
+                                        ref_time=self.gs_start_time)
             HistorianTools.publish_data(self,
-                                        "LoadResource/Schedule",
+                                        sdr_dict['path']+"LoadResource/Schedule",
                                         default_units["timestamp"],
                                         "timestamp",
                                         [t.strftime("%Y-%m-%dT%H:%M:%S") for t in
-                                         self.load_resources.schedule_vars["timestamp"]])
+                                         sdr_dict['Load'].schedule_vars["timestamp"]])
         except:  # assume demand module is not implemented
             pass
 
         ii = self.find_current_timestamp_index()
 
-        for obj_fcn in self.system_resources.obj_fcns:
+        for obj_fcn in sdr_dict['System'].obj_fcns:
             try:
                 HistorianTools.publish_data(self,
-                                            "System/Cost",
+                                            sdr_dict['path']+"System/Cost",
                                             "",
                                             obj_fcn.desc,
-                                            self.system_resources.schedule_vars[obj_fcn.desc][ii])
+                                            sdr_dict['System'].schedule_vars[obj_fcn.desc][ii])
             except:
                 HistorianTools.publish_data(self,
-                                            "System/Cost",
+                                            sdr_dict['path']+"System/Cost",
                                             "",
                                             obj_fcn.desc,
-                                            self.system_resources.schedule_vars[obj_fcn.desc])
+                                            sdr_dict['System'].schedule_vars[obj_fcn.desc])
 
 
 
@@ -1188,7 +1293,7 @@ class ExecutiveAgent(Agent):
                     (self.send_ess_commands_cnt == ESS_SCHEDULE)):
                 self.update_endpt_cnt = 1
                 # update sundial_resources instance with the most recent data from end-point devices
-                self.update_sundial_resources(self.sdr_to_sm_lookup_table)
+                self.update_sundial_resources(self.real_time_sdr)
             else:
                 self.update_endpt_cnt += 1
 
@@ -1200,7 +1305,7 @@ class ExecutiveAgent(Agent):
 
             if self.run_optimizer_cnt == GS_SCHEDULE:
                 self.run_optimizer_cnt = 1
-                self.run_optimizer()
+                self.run_optimizer(self.real_time_sdr)
             else:
                 self.run_optimizer_cnt += 1
 
@@ -1227,8 +1332,9 @@ class ExecutiveAgent(Agent):
                 self.enable_site_interactive_mode()
                 self.OptimizerEnable = ENABLED
                 self.UICtrlEnable = DISABLED
-                self.update_sundial_resources(self.sdr_to_sm_lookup_table)
-                self.run_optimizer()
+                self.update_sundial_resources(self.real_time_sdr)
+                self.generate_strategic_schedule()
+                self.run_optimizer(self.real_time_sdr)
             elif self.OperatingMode == USER_CONTROL:
                 # change sites to interactive mode
                 self.enable_site_interactive_mode()
