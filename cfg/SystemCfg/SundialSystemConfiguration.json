@@ -2,17 +2,49 @@
     "ID": "SunDialSystem",
     "ResourceType": "System",
     "Use": "Y",
+    "Objectives": [
+      {
+        "FcnName": "EnergyCostObjectiveFunction",
+        "params": "desc='EnergyPrice', fname='energy_price_data.xlsx'",
+        "Use": "Y"
+      },
+      {
+        "FcnName": "DemandChargeObjectiveFunction",
+        "params": "desc='DemandCharge', cost_per_kW=10.0, threshold = 0, tariff_key='system_tariff'",
+        "Use": "N"
+      },
+      {
+        "FcnName": "dkWObjectiveFunction",
+        "params": "desc='dkW'",
+        "Use": "N"
+      },
+      {
+        "FcnName": "LoadShapeObjectiveFunction",
+        "params": "desc='LoadShape', fname='loadshape_prices.xlsx', vble_price=True",
+        "Use": "N"
+      },
+      {
+        "FcnName": "DynamicLoadShapeObjectiveFunction",
+        "params": "desc='LoadShape', fname='myloadshape.csv', vble_price=True",
+        "Use": "N"
+      },
+      {
+        "FcnName": "PeakerPlantObjectiveFunction",
+        "params": "desc='DemandCharge', cost_per_kW=10.0, threshold=250, tariff_key='peaker_tariff'",
+        "Use": "N"
+      }
+    ],
     "VirtualPlantList": [
       {
         "ID": "SystemLoadShift",
         "ResourceType": "LoadShiftCtrlNode",
-        "Use": "N",
+        "Use": "Y",
         "VirtualPlantList": [],
         "DeviceList": [
           {
             "AgentID": "FLAME",
             "DeviceID": "FLAME-LoadShift",
-            "Use": "N"
+            "Use": "Y"
           }
         ]
       },
@@ -51,6 +83,13 @@
         "ID": "SystemESS",
         "ResourceType": "ESSCtrlNode",
         "Use": "Y",
+        "Objectives": [
+          {
+            "FcnName": "StoredEnergyValueObjectiveFunction",
+            "params": "desc='StorageValue'",
+            "Use": "Y"
+          }
+        ],
         "VirtualPlantList": [],
         "DeviceList": [
           {
