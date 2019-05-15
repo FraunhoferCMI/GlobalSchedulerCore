@@ -1,0 +1,19 @@
+{
+    #"driver_config": {"device_address": "127.0.0.1", "port":5020, "slave_id":1},
+    #"driver_config": {"device_address": "10.29.57.55", "port":502, "slave_id":1},
+    #"driver_config": {"device_address": "10.211.55.4", "port":502, "slave_id":1},
+    #"driver_config": {"device_address": "192.168.10.195", "port":5020, "slave_id":1},
+    #"driver_config": {"device_address": "166.149.189.1", "port":502, "slave_id":1},
+    "driver_config": {"device_address": "172.29.30.30", "port":502, "slave_id":1},
+    #"driver_config": {"device_address": "127.0.0.1", "port":5020, "slave_id":1},
+    "campus": "",
+    "building": "",
+    "unit": "",
+    "interval": 10,
+    "driver_type": "modbus",
+    "registry_config": "config://registry_configs/site2_registry.csv",
+    "timezone": "UTC",
+    "publish_breadth_first_all":false,
+    "publish_depth_first":false,
+    "publish_breadth_first":false
+}

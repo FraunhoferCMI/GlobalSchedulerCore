@@ -75,6 +75,52 @@
       ]
    },
    {
+      "ID":"ShirleyNorth",
+      "SiteModel": "Shirley",
+      "Topics":[
+         {
+            "TopicName":"Modbus",
+            "TopicPath":"devices/Site2",
+            "TopicAgent":"MBNorth",
+            "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3",
+            "TopicDataMapFile": "ShirleyNorthEmulator-Modbus-data-map.csv"
+         },
+         {
+            "TopicName":"Forecast",
+            "TopicPath":"devices/cpr/forecast",
+            "TopicAgent":"cpr",
+            "TopicScrapeTimeout":"CPR_QUERY_INTERVAL*2"
+         }
+      ],
+      "Use" :"N",
+      "Metered": "Y",
+      "DeviceList":[
+         {
+            "ID":"PVPlant",
+            "ResourceType":"PVCtrlNode",
+            "Metered":"N",
+            "DeviceList":[
+               {
+                  "ID":"Inverter1",
+                  "ResourceType":"Solectria",
+                  "Mfr": "Solectria",
+                  "nameplate_rating_kW": "500",
+                  "Metered":"Y",
+                  "DeviceList":[]
+               },
+               {
+                  "ID":"Inverter2",
+                  "ResourceType":"Solectria",
+                  "Mfr": "Solectria",
+                  "nameplate_rating_kW": "500",
+                  "Metered":"Y",
+                  "DeviceList":[]
+               }
+            ]
+         }
+      ]
+   },
+   {
       "ID":"FLAME",
       "SiteModel": "FLAME",
       "Topics":[
