@@ -27,7 +27,7 @@ scale_factors = {"School": 1.0,
                  "Canner": 0.2,
                  "Mill": 0.1}
 
-USE_STATIC = False
+SAVE_LS_FORECAST = False
 
 # Classes
 class IPKeys(object):
@@ -156,14 +156,20 @@ class LoadShift(IPKeys):
 
         self.type = u'LoadOptions'
 
-        self.price_map  = price_map
-        self.start_time = start_time
+        if price_map is None:
+            self.request, self.start_time = read_load_request()
+            req_start_time = self.start_time
+        else:
+            self.price_map  = price_map
+            self.start_time = start_time
 
-        # set the load shift request for the start of the next day:
-        req_start_time = start_time.replace(hour=0) + timedelta(days=1)
-        dstart         = req_start_time.strftime(TIME_FORMAT)
+            # set the load shift request for the start of the next day:
+            req_start_time = start_time.replace(hour=0) + timedelta(days=1)
+            dstart         = req_start_time.strftime(TIME_FORMAT)
+            self.request = create_load_request(price_map=price_map, start_time=dstart, nLoadOptions=nLoadOptions)
 
         print(req_start_time)
+
         if start_time is None:
             self.base_index = "2018-10-19"
         else:
@@ -171,7 +177,6 @@ class LoadShift(IPKeys):
 
         #self.baseline_index = start_time.strftime("%Y-%m-d")+"--ZERO"
         print(self.base_index)
-        self.request = create_load_request(price_map=price_map, start_time = dstart, nLoadOptions=nLoadOptions)
 
         _log.info("REQUEST LENGTH!!!")
         _log.info(len(self.request))
@@ -192,6 +197,9 @@ class LoadShift(IPKeys):
             absolute_forecast, costs = parse_LoadShift_response(self.response)
             ### FIXME - just have hard coded column name - needs to be fixed. ###
             #print(bl.forecast)
+
+            absolute_forecast = absolute_forecast.loc[:, ~absolute_forecast.columns.duplicated()]
+
             #absolute_forecast.loc[:,"2018-10-12--ZERO"] = bl.forecast #[:,"value"]
             #print(absolute_forecast["2018-10-12--ZERO"])
 
@@ -228,6 +236,8 @@ class LoadShift(IPKeys):
 
             forecast = forecast.combine_first(padding)
             print(forecast)
+            if SAVE_LS_FORECAST == True:
+                forecast.to_csv('LSForecast.csv')
 
             forecast_lst = []
             forecast_id  = []
@@ -578,15 +588,28 @@ def parse_Baseline_response(result):
     forecast_values.index = convert_FLAME_time_to_UTC(forecast_values.index)
     return forecast_values
 
-def create_load_request(duration='PT1H', start_time = None, nLoadOptions=12, price_map=None):
-
+def read_load_request():
+    # use a price map stored from a file
     # # OLD STATIC WAY
-    gs_root_dir = os.environ['GS_ROOT_DIR']
-    flame_path  = "FLAME/flame/"
-    fname       = 'Example4A.json' #''defaultLoadRequest.json'
-    filepath    = os.path.join(gs_root_dir, flame_path, fname)
+    gs_root_dir = os.environ['GS_ROOT_DIR'] #'/Users/mkromer/PycharmProjects/GlobalSchedulerCore/'
+    flame_path = "FLAME/flame/"
+    fname = 'Example4A_04262019.json'  # 'Example4A.json' #''defaultLoadRequest.json'
+    filepath = os.path.join(gs_root_dir, flame_path, fname)
     with open(filepath) as f:
-        old_msg = json.load(f)
+        msg = json.load(f)
+
+    start_time = datetime.strptime(msg['marginalCostCurve'][0]['dstart'],TIME_FORMAT).replace(tzinfo=pytz.timezone('US/Eastern'))
+
+    payload_request = json.dumps(
+        {"type": "LoadRequest",
+         "msg": msg
+         }
+    )
+    return payload_request, start_time
+
+
+
+def create_load_request(duration='PT1H', start_time = None, nLoadOptions=12, price_map=None):
 
     if start_time is None:
         # get set of times
@@ -599,7 +622,7 @@ def create_load_request(duration='PT1H', start_time = None, nLoadOptions=12, pri
 
     if price_map:
         priceMaps = price_map
-    else:
+    else:   # deprecated, used for initial testing
         borders=[randint(10, 30) * 10 for i in range(24)]
         priceMaps =[build_priceMap(border) for border in borders]
 
@@ -609,16 +632,9 @@ def create_load_request(duration='PT1H', start_time = None, nLoadOptions=12, pri
     msg = {'nLoadOptions': unicode(nLoadOptions),
            'marginalCostCurve': marginalCostCurve}
 
-    if USE_STATIC == True:
-        msg_to_use = old_msg
-    else:
-        msg_to_use = msg
-
-    # print(msg_to_use)
-
     payload_request = json.dumps(
         {"type": "LoadRequest",
-         "msg": msg_to_use
+         "msg": msg
          }
     )
     return payload_request
@@ -645,7 +661,10 @@ def parse_LoadShift_response(response):
     response_options = response['msg']['options']
     ind_options = []
     costs = {}
+    #print(response['msg'])
+    #print(response_options)
     for option in response_options:
+        #print(option)
         implementationCost = option['implementationCost']
         optionID = option['optionID']
         costs[optionID] = implementationCost
@@ -729,6 +748,7 @@ def store_forecasts(start_time, end_time, res=24):
             except:
                 print("query failed - skipping!")
         except:
+            print('query failed - no connection?')
             pass
 
         # 3. increment query_start
@@ -810,7 +830,7 @@ if __name__ == '__main__':
 
     ws = create_connection(ws_url, sslopt=sslopt)
 
-    TEST_BASELINE   = True
+    TEST_BASELINE   = False
     TEST_STATUS     = False
     TEST_LOADSHIFT  = True
     TEST_STATUS     = False
@@ -822,7 +842,7 @@ if __name__ == '__main__':
     # Baseline
     def test_Baseline():
         print("running Baseline")
-        start =  '2019-03-27T00:00:00'
+        start =  '2019-03-29T00:00:00'
         granularity = 1
         # granularity =  'PT1H'
         duration = 'PT24H'
@@ -839,7 +859,7 @@ if __name__ == '__main__':
         print("running LoadShift")
         # LoadShift
         current_tz = pytz.timezone('US/Eastern')
-        start_time = current_tz.localize(datetime(year=2019,month=03,day=27,hour=0))
+        start_time = current_tz.localize(datetime(year=2019,month=04,day=26,hour=15))
         ls = LoadShift(websocket = ws,
                        start_time = start_time)
         ls.process()
@@ -903,7 +923,7 @@ if __name__ == '__main__':
     ##
 
     if STORE_FORECASTS == True:
-        start_time = "2018-06-24T00:00:04"
-        end_time   = "2019-12-24T00:00:04"
+        start_time = "2019-01-03T00:00:04"
+        end_time   = "2019-03-29T00:00:04"
         store_forecasts(start_time, end_time, res=1)
         #store_loadreports(start_time, end_time)
