@@ -76,7 +76,7 @@
    },
    {
       "ID":"ShirleyNorth",
-      "SiteModel": "Shirley",
+      "SiteModel": "Site",
       "Topics":[
          {
             "TopicName":"Modbus",
