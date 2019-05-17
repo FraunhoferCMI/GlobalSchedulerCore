@@ -83,7 +83,7 @@
             "TopicPath":"devices/Site2",
             "TopicAgent":"MBNorth",
             "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3",
-            "TopicDataMapFile": "ShirleyNorthEmulator-Modbus-data-map.csv"
+            "TopicDataMapFile": "ShirleyNorth-Modbus-data-map.csv"
          },
          {
             "TopicName":"Forecast",
@@ -92,7 +92,7 @@
             "TopicScrapeTimeout":"CPR_QUERY_INTERVAL*2"
          }
       ],
-      "Use" :"N",
+      "Use" :"Y",
       "Metered": "Y",
       "DeviceList":[
          {
