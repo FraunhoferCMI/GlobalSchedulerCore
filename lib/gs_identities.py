@@ -47,7 +47,8 @@ import os
 
 ###################################
 # execution flags, change these to modify modes of operation
-USE_SIM      = 0    # Change for deployed / not deployed
+USE_SIM      = 0      # Change for running in non-real time
+DEPLOYED     = True  # Change for deployed / not deployed
 USE_VOLTTRON = 1
 
 USE_SOLAR_SIM  = 1   # use simulated solar vs real solar data. only valid when USE_SIM==1
@@ -57,12 +58,12 @@ SIM_SCENARIO   = 5
 USE_CONFIGURABLE_OBJ_FCNS = True
 USE_STRATEGIC_SCHEDULE = False   # toggle to True/False depending on if strategic objectives are used
 
-ALIGN_SCHEDULES = False
+ALIGN_SCHEDULES = True
 REGULATE_ESS_OUTPUT = True # True = Match system's output in real time to scheduled output using ESS; False = use scheduled ESS value regardless of divergence from forecast
 USE_FORECAST_VALUE = True
 SMOOTH_RAMP = False
 IMPORT_CONSTRAINT = False    # fail safe to ensure that storage does not charge from the grid
-SEARCH_LOADSHIFT_OPTIONS = False
+SEARCH_LOADSHIFT_OPTIONS = True
 ENABLE_LOAD_SELECT = False
 
 
@@ -144,13 +145,18 @@ EXEC_STARTING = 3
 
 ###############################
 ## Set configuration files here
+if DEPLOYED == True:
+    #SITE_CFG_FILE   = "SiteConfiguration-PlantLevel-original.json"
+    #SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json"
+    SITE_CFG_FILE   = "SiteConfiguration-PlantLevel.json"
+else:
+    SITE_CFG_FILE   = "SiteConfiguration-Emulator-2Sites.json"
+
+
 if USE_SIM == 0:
     SIM_HRS_PER_HR = 1 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
 
     # Configuration File Locations
-    #SITE_CFG_FILE   = "SiteConfiguration-PlantLevel-original.json"
-    #SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json"
-    SITE_CFG_FILE   = "SiteConfiguration-PlantLevel.json"
     SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
     DAY_AHEAD_SYSTEM_CFG_FILE = "DayAheadSundialSystemConfiguration.json"
 
@@ -158,9 +164,7 @@ if USE_SIM == 0:
 
 else:
     SIM_HRS_PER_HR = 15 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
-
     # Configuration File Locations
-    SITE_CFG_FILE   = "SiteConfiguration-Emulator.json"
     SYSTEM_CFG_FILE = "EmulatedSundialSystemConfiguration.json"
     DAY_AHEAD_SYSTEM_CFG_FILE = "DayAheadSundialSystemConfiguration.json"
 
@@ -168,6 +172,8 @@ else:
 ###################################
 ### Sets some internal schedules
 MODBUS_SCRAPE_INTERVAL  = 1 # period in seconds for modbus device to post on the IEB bus
+NORTH_MODBUS_SCRAPE_INTERVAL  = 10 # period in seconds for modbus device to post on the IEB bus
+
 AVERAGING_WINDOW = int(15*60 / SIM_HRS_PER_HR) # period in seconds over which to average readings
 AVG_UPDATE_PD    = 30 # period, in seconds, over which to update average calculation
 #MODBUS_PTS_PER_WINDOW = int(MODBUS_AVERAGING_WINDOW/MODBUS_SCRAPE_INTERVAL)
