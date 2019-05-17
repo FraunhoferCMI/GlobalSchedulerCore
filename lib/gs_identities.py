@@ -57,13 +57,13 @@ SIM_SCENARIO   = 5
 USE_CONFIGURABLE_OBJ_FCNS = True
 USE_STRATEGIC_SCHEDULE = False   # toggle to True/False depending on if strategic objectives are used
 
-ALIGN_SCHEDULES = False
+ALIGN_SCHEDULES = True
 REGULATE_ESS_OUTPUT = True # True = Match system's output in real time to scheduled output using ESS; False = use scheduled ESS value regardless of divergence from forecast
 USE_FORECAST_VALUE = True
 SMOOTH_RAMP = False
 IMPORT_CONSTRAINT = False    # fail safe to ensure that storage does not charge from the grid
-SEARCH_LOADSHIFT_OPTIONS = False
-ENABLE_LOAD_SELECT = False
+SEARCH_LOADSHIFT_OPTIONS = False # If True, the optimizer will search through all load shift options available (as opposed to searching a single option)
+ENABLE_LOAD_SELECT = False # If True, GS will propagate load shift commands to the FLAME.  If False, Load shift selection will be logged, but not transmitted.
 
 
 ###################################
