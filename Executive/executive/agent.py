@@ -589,13 +589,13 @@ class ExecutiveAgent(Agent):
             self.update_tariffs()
 
             HistorianTools.publish_data(self,
-                                        "SystemResource/",
+                                        "SystemResource",
                                         default_units["AvgPwr_kW"],
                                         "AvgPwr_kW",
                                         self.system_resources.state_vars["AvgPwr_kW"])
 
             HistorianTools.publish_data(self,
-                                        "SystemResource/",
+                                        "SystemResource",
                                         default_units["Pwr_kW"],
                                         "Pwr_kW",
                                         self.system_resources.state_vars["Pwr_kW"])
