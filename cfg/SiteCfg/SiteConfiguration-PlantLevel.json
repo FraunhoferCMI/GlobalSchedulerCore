@@ -90,7 +90,7 @@
             "TopicPath":"devices/cpr/ShirleyNorth/forecast",
             "TopicAgent":"cpr",
             "TopicScrapeTimeout":"CPR_QUERY_INTERVAL*2",
-            "TopicDataMapFile": "ShirleySouth-Forecast-data-map.csv"
+            "TopicDataMapFile": "ShirleyNorth-Forecast-data-map.csv"
          }
       ],
       "Use" :"Y",
