@@ -63,8 +63,8 @@ REGULATE_ESS_OUTPUT = True # True = Match system's output in real time to schedu
 USE_FORECAST_VALUE = True
 SMOOTH_RAMP = False
 IMPORT_CONSTRAINT = False    # fail safe to ensure that storage does not charge from the grid
-SEARCH_LOADSHIFT_OPTIONS = True
-ENABLE_LOAD_SELECT = False
+SEARCH_LOADSHIFT_OPTIONS = False # If True, the optimizer will search through all load shift options available (as opposed to searching a single option)
+ENABLE_LOAD_SELECT = False # If True, GS will propagate load shift commands to the FLAME.  If False, Load shift selection will be logged, but not transmitted.
 
 
 ###################################
