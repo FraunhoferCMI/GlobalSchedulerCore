@@ -1,2 +1,4 @@
 Forecast,ShirleyNorth-PVPlant,Forecast,Pwr,,kW
 Time,ShirleyNorth-PVPlant,Forecast,t,,UTC
+Duration,ShirleyNorth-PVPlant,Forecast,duration,,hr
+Resolution,ShirleyNorth-PVPlant,Forecast,resolution,,min

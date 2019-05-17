@@ -20,6 +20,7 @@ from gs_identities import *
 from gs_utilities import Forecast, get_schedule
 from HistorianTools import publish_data
 from CPRinteraction import create_xml_query, parse_query, get_date
+import json
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -36,17 +37,15 @@ class CPRPub(Agent):
         super(CPRPub,self).__init__(**kwargs)
 
         self._conf = utils.load_config(config_path)
+        ForecastSiteCfgFile = os.path.join(GS_ROOT_DIR,"ForecastAgentV2/","SiteConfig.json")
+        self.site_config = json.load(open(ForecastSiteCfgFile, 'r'))   # self._conf['EnergySites']
 
         if self._conf['sim_interval'] == 60:
-            self._conf['topic'] = "devices/cpr/forecast/all"
             self.query_interval = CPR_QUERY_INTERVAL        #sets query interval using hourly query interval from gs_identities
             self.duration       = SSA_SCHEDULE_DURATION
             self.requesttimeout = CPR_TIMEOUT
             self.frequency = "hour"
         else:
-            self._conf['topic'] = "".join(["devices/cpr/forecast",
-                                       str(self._conf['sim_interval']),
-                                       "m/all"])
             self.query_interval = CPR_1MIN_QUERY_INTERVAL   #sets query interval using 1min query interval from gs_identities
             self.duration       = DURATION_1MIN_FORECAST
             self.requesttimeout = CPR_1M_TIMEOUT        
@@ -103,7 +102,8 @@ class CPRPub(Agent):
                 _log.debug("start date = "+str(self.start_date)+"; end date is "+str(self.end_date))
                 cur_payload = create_xml_query(start=self.start_date,
                                                end=self.end_date,
-                                               TimeResolution_Minutes=self._conf['sim_interval'])
+                                               TimeResolution_Minutes=self._conf['sim_interval'],
+                                                a = self.site_config)
                 _log.debug("current payload:\n"+ minidom.parseString(cur_payload).toprettyxml())
 
                 _log.info("Making model request:\n{}".format(cur_payload))
@@ -138,54 +138,57 @@ class CPRPub(Agent):
 
             if status == 'Done':
                 #_log.info(data.content)
-                parsed_response = parse_query(data.content)
-                _log.debug("Model received, Parsed Response Sending: {}".format(parsed_response))
-                cprModel = Forecast(resolution = self._conf['sim_interval'],
-                                    duration=self.duration,
-                                    **parsed_response)
-                #duration = self.duration,
-                #
-                print(parsed_response["forecast"])
-                try:
-                    publish_data(self,
-                                 "cpr/forecast"+str(self._conf['sim_interval']),
-                                 parsed_response["units"],
-                                 "tPlus1",
-                                 parsed_response["forecast"][1],
-                                 TimeStamp_str=parsed_response["time"][1])
+                parsed_response_list = parse_query(data.content)
 
-                    publish_data(self,
-                                 "cpr/forecast"+str(self._conf['sim_interval']),
-                                 parsed_response["units"],
-                                 "tPlus5",
-                                 parsed_response["forecast"][5],
-                                 TimeStamp_str=parsed_response["time"][5])
+                for k,parsed_response in parsed_response_list.items():
+                    _log.debug("Model received, Parsed Response Sending: {}".format(parsed_response))
+                    cprModel = Forecast(resolution = self._conf['sim_interval'],
+                                        duration=self.duration,
+                                        **parsed_response)
+                    #duration = self.duration,
+                    #
+                    _log.info("Forecast - "+k)
+                    _log.info(parsed_response["forecast"])
+                    try:
+                        publish_data(self,
+                                     self._conf['TimeSlicePath'][k]+"/forecast"+str(self._conf['sim_interval']),
+                                     parsed_response["units"],
+                                     "tPlus1",
+                                     parsed_response["forecast"][1],
+                                     TimeStamp_str=parsed_response["time"][1])
 
-                    publish_data(self,
-                                 "cpr/ghi"+str(self._conf['sim_interval']),
-                                 "W/m2",
-                                 "tPlus1",
-                                 parsed_response["ghi"][1],
-                                 TimeStamp_str=parsed_response["time"][1])
+                        publish_data(self,
+                                     self._conf['TimeSlicePath'][k]+"/forecast"+str(self._conf['sim_interval']),
+                                     parsed_response["units"],
+                                     "tPlus5",
+                                     parsed_response["forecast"][5],
+                                     TimeStamp_str=parsed_response["time"][5])
 
-                    publish_data(self,
-                                 "cpr/ghi"+str(self._conf['sim_interval']),
-                                 "W/m2",
-                                 "tPlus5",
-                                 parsed_response["ghi"][5],
-                                 TimeStamp_str=parsed_response["time"][5])
+                        publish_data(self,
+                                     self._conf['TimeSlicePath'][k]+"/ghi"+str(self._conf['sim_interval']),
+                                     "W/m2",
+                                     "tPlus1",
+                                     parsed_response["ghi"][1],
+                                     TimeStamp_str=parsed_response["time"][1])
 
-                except:  # probably got an empty message back - not sure why this happens.
-                    _log.info("ForecastError: did not receive valid response")
-                    _log.info(cprModel.forecast_obj)
+                        publish_data(self,
+                                     self._conf['TimeSlicePath'][k]+"/ghi"+str(self._conf['sim_interval']),
+                                     "W/m2",
+                                     "tPlus5",
+                                     parsed_response["ghi"][5],
+                                     TimeStamp_str=parsed_response["time"][5])
+
+                    except:  # probably got an empty message back - not sure why this happens.
+                        _log.info("ForecastError: did not receive valid response")
+                        _log.info(cprModel.forecast_obj)
 
 
-                message = cprModel.forecast_obj
-                self.vip.pubsub.publish(
-                    peer="pubsub",
-                    topic=self._conf['topic'],
-                    headers={},
-                    message=message)
+                    message = cprModel.forecast_obj
+                    self.vip.pubsub.publish(
+                        peer="pubsub",
+                        topic=self._conf['Topics'][k], #self._conf['topic'], self.topics[k]
+                        headers={},
+                        message=message)
 
                 self.status_pending = False # allow new model requests to be made
 

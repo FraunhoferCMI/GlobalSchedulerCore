@@ -1,16 +1,21 @@
 {
-                "receive_interval":5,
-                "sim_interval":60,
-                "userName": "schoudhary@cse.fraunhofer.org",
-                "password":"Shines2017",
-                "querystring":{"key":"FRHR3MXX7"},
-                "url" : "https://service.solaranywhere.com/api/v2/Simulation",
-		"url2": "https://service.solaranywhere.com/api/v2/SimulationResult/",
-                "payload":"",
-            	"headers":"",
-
+    "receive_interval":5,
+    "sim_interval":60,
+    "userName": "schoudhary@cse.fraunhofer.org",
+    "password":"Shines2017",
+    "querystring":{"key":"FRHR3MXX7"},
+    "url" : "https://service.solaranywhere.com/api/v2/Simulation",
+    "url2": "https://service.solaranywhere.com/api/v2/SimulationResult/",
+    "payload":"",
+    "headers":"",
     "agentid": "cpr",
-    "message": "hello"
-
-
+    "message": "hello",
+    "Topics": {
+        "ShirleyNorth": "devices/cpr/ShirleyNorth/forecast/all",
+        "ShirleySouth": "devices/cpr/forecast/all"
+    },
+    "TimeSlicePath": {
+        "ShirleyNorth": "cpr/ShirleyNorth",
+        "ShirleySouth": "cpr"
+    }
 }
