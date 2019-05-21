@@ -21,41 +21,42 @@ def create_xml_query(start, end, TimeResolution_Minutes, a):
     CreateSimulationRequest = ET.Element("CreateSimulationRequest",
                                          xmlns="http://service.solaranywhere.com/api/v2")
     EnergySites = ET.SubElement(CreateSimulationRequest, "EnergySites")
-    for b in a['EnergySites']:
+    for k,b in a['EnergySites'].items():
         EnergySite = ET.SubElement(EnergySites, "EnergySite",
-                                   Name=b["Name"],
+                                   Name=k,
                                    Description=b["Description"])
         Location = ET.SubElement(EnergySite, "Location",
                                  Latitude=b["Location"]["Latitude"],
                                  Longitude=b["Location"]["Longitude"])
         PvSystems = ET.SubElement(EnergySite, "PvSystems")
-        PvSystem = ET.SubElement(PvSystems, "PvSystem",
-                                 Albedo_Percent=b["PVSystem"]["Albedo_Percent"],
-                                 GeneralDerate_Percent=b["PVSystem"]["GeneralDerate_Percent"])
-        Inverters = ET.SubElement(PvSystem, "Inverters")
-        Inverter = ET.SubElement(Inverters, "Inverter",
-                                 Count=b["PVSystem"]["Inverters"]["Count"],
-                                 MaxPowerOutputAC_kW=b["PVSystem"]["Inverters"]["MaxPowerOutputAC_kW"],
-                                 EfficiencyRating_Percent=b["PVSystem"]["Inverters"]["EfficiencyRating_Percent"])
-        PvArrays = ET.SubElement(PvSystem, "PvArrays")
-        PvArray = ET.SubElement(PvArrays, "PvArray")
-        PvModules = ET.SubElement(PvArray, "PvModules")
-        PvModule = ET.SubElement(PvModules, "PvModule",
-                                 Count=b["PVSystem"]["PVArrays"]["PvModule"]["Count"],
-                                 NameplateDCRating_kW=b["PVSystem"]["PVArrays"]["PvModule"]["NameplateDCRating_kW"],
-                                 PtcRating_kW=b["PVSystem"]["PVArrays"]["PvModule"]["PtcRating_kW"],
-                                 PowerTemperatureCoefficient_PercentPerDegreeC=b["PVSystem"]["PVArrays"]["PvModule"][
-                                     "PowerTemperatureCoefficient_PercentPerDegreeC"],
-                                 NominalArrayOperatingCellTemperature_DegreesC=b["PVSystem"]["PVArrays"]["PvModule"][
-                                     "NominalArrayOperatingCellTemperature_DegreesC"])
-        ArrayConfiguration = ET.SubElement(PvArray, "ArrayConfiguration",
-                                           Azimuth_Degrees=b["PVSystem"]["PVArrays"]["ArrayConfiguration"][
-                                               "Azimuth_Degrees"],
-                                           Tilt_Degrees=b["PVSystem"]["PVArrays"]["ArrayConfiguration"]["Tilt_Degrees"],
-                                           Tracking=b["PVSystem"]["PVArrays"]["ArrayConfiguration"]["Tracking"],
-                                           TrackingRotationLimit_Degrees=
-                                           b["PVSystem"]["PVArrays"]["ArrayConfiguration"][
-                                               "TrackingRotationLimit_Degrees"])
+        for c in b['PVSystems']:
+            PvSystem = ET.SubElement(PvSystems, "PvSystem",
+                                     Albedo_Percent=c["PVSystem"]["Albedo_Percent"],
+                                     GeneralDerate_Percent=c["PVSystem"]["GeneralDerate_Percent"])
+            Inverters = ET.SubElement(PvSystem, "Inverters")
+            Inverter = ET.SubElement(Inverters, "Inverter",
+                                     Count=c["PVSystem"]["Inverters"]["Count"],
+                                     MaxPowerOutputAC_kW=c["PVSystem"]["Inverters"]["MaxPowerOutputAC_kW"],
+                                     EfficiencyRating_Percent=c["PVSystem"]["Inverters"]["EfficiencyRating_Percent"])
+            PvArrays = ET.SubElement(PvSystem, "PvArrays")
+            PvArray = ET.SubElement(PvArrays, "PvArray")
+            PvModules = ET.SubElement(PvArray, "PvModules")
+            PvModule = ET.SubElement(PvModules, "PvModule",
+                                     Count=c["PVSystem"]["PVArrays"]["PvModule"]["Count"],
+                                     NameplateDCRating_kW=c["PVSystem"]["PVArrays"]["PvModule"]["NameplateDCRating_kW"],
+                                     PtcRating_kW=c["PVSystem"]["PVArrays"]["PvModule"]["PtcRating_kW"],
+                                     PowerTemperatureCoefficient_PercentPerDegreeC=c["PVSystem"]["PVArrays"]["PvModule"][
+                                         "PowerTemperatureCoefficient_PercentPerDegreeC"],
+                                     NominalArrayOperatingCellTemperature_DegreesC=c["PVSystem"]["PVArrays"]["PvModule"][
+                                         "NominalArrayOperatingCellTemperature_DegreesC"])
+            ArrayConfiguration = ET.SubElement(PvArray, "ArrayConfiguration",
+                                               Azimuth_Degrees=c["PVSystem"]["PVArrays"]["ArrayConfiguration"][
+                                                   "Azimuth_Degrees"],
+                                               Tilt_Degrees=c["PVSystem"]["PVArrays"]["ArrayConfiguration"]["Tilt_Degrees"],
+                                               Tracking=c["PVSystem"]["PVArrays"]["ArrayConfiguration"]["Tracking"],
+                                               TrackingRotationLimit_Degrees=
+                                               c["PVSystem"]["PVArrays"]["ArrayConfiguration"][
+                                                   "TrackingRotationLimit_Degrees"])
 
     SimulationOptions = ET.SubElement(CreateSimulationRequest, "SimulationOptions",
                                       PowerModel="CprPVForm",
