@@ -232,7 +232,7 @@ if __name__ == '__main__':
     toffset = 0
     schedule_timestamps = [gs_start_time.replace(tzinfo=pytz.UTC) +
                            timedelta(minutes=t+toffset) for t in range(0,
-                                                               SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                               SSA_SCHEDULE_DURATION * MINUTES_PER_HR * 2,
                                                                SSA_SCHEDULE_RESOLUTION)]
     sundial_resources.interpolate_forecast(schedule_timestamps)
     sundial_resources.cfg_cost(schedule_timestamps, tariffs=tariffs)
