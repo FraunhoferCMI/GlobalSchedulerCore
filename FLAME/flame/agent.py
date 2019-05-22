@@ -87,7 +87,7 @@ FORCE_TIME = USE_SIM  # for debugging - lets user force a start time.
 max_load_report_length = 60
 
 ### WEBSOCKET ###
-ws_url = "wss://flame.ipkeys.com:9443/socket/msg"
+ws_url = "wss://flame.ipkeys.com/socket/msg"
 # old way
 # ws = create_connection(url, timeout=None)
 # insecure way, use this if certificate is giving problems
