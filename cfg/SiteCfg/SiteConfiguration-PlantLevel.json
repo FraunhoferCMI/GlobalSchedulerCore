@@ -76,7 +76,7 @@
    },
    {
       "ID":"ShirleyNorth",
-      "SiteModel": "Shirley",
+      "SiteModel": "Site",
       "Topics":[
          {
             "TopicName":"Modbus",
@@ -114,6 +114,43 @@
                   "ResourceType":"Solectria",
                   "Mfr": "Solectria",
                   "nameplate_rating_kW": "500",
+                  "Metered":"Y",
+                  "DeviceList":[]
+               }
+            ]
+         }
+      ]
+   },
+   {
+      "ID":"VirtualSite1",
+      "SiteModel": "VirtualSite",
+      "Topics":[
+         {
+            "TopicName":"VirtualESSPlant",
+            "TopicPath":"devices/VirtualESSPlant",
+            "TopicAgent":"vp",
+            "TopicScrapeTimeout":"20",
+            "TopicDataMapFile": "VirtualSite1-data-map.csv"
+         }
+      ],
+      "Use" :"N",
+      "Metered": "Y",
+      "DeviceList":[
+         {
+            "ID":"ESSPlant",
+            "ResourceType":"VirtualDERCtrlNode",
+            "Metered":"N",
+            "DeviceList":[
+               {
+                  "ID":"ESS1",
+                  "ResourceType":"Tesla",
+                  "Mfr": "Tesla",
+                  "max_chg_pwr": "500",
+                  "max_dischg_pwr": "500",
+                  "max_soe": "1000",
+                  "min_soe": "0",
+                  "chg_eff": "0.93",
+                  "dischg_eff": "0.93",
                   "Metered":"Y",
                   "DeviceList":[]
                }
