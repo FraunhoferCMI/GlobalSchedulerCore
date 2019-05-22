@@ -374,6 +374,7 @@ class ExecutiveAgent(Agent):
         _log.info("sundial_resources assigned")
         self.sdr_to_sm_lookup_table = build_SundialResource_to_SiteManager_lookup_table(self.sundial_resource_cfg_list,
                                                                                         self.sundial_resources,
+                                                                                        SDR_to_SM_table=[],
                                                                                         sitemgr_list=self.sitemgr_list,
                                                                                         use_volttron=1)
         for entries in self.sdr_to_sm_lookup_table:
@@ -388,6 +389,7 @@ class ExecutiveAgent(Agent):
         strategic_sundial_resources = SundialSystemResource(self.day_ahead_sundial_resource_cfg_list, self.get_gs_start_time())
         strategic_sdr_to_sm_lookup_table = build_SundialResource_to_SiteManager_lookup_table(self.day_ahead_sundial_resource_cfg_list,
                                                                                              strategic_sundial_resources,
+                                                                                             SDR_to_SM_table=[],
                                                                                              sitemgr_list=self.sitemgr_list,
                                                                                              use_volttron=1)
         self.strategic_sdr = self.init_sdr_dict(strategic_sundial_resources,
@@ -561,6 +563,7 @@ class ExecutiveAgent(Agent):
         type SundialResource_to_SiteManager_lookup_table
         :return: None
         """
+        _log.info('*************************  Running UPDATE SUNDIAL RESOURCES **************************')
         for entries in sdr_dict['lookup_table']:
             # for each SundialResource that maps to an end point device (i.e., terminal nodes in the
             # the resource tree)

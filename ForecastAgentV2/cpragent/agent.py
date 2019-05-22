@@ -142,9 +142,21 @@ class CPRPub(Agent):
 
                 for k,parsed_response in parsed_response_list.items():
                     _log.debug("Model received, Parsed Response Sending: {}".format(parsed_response))
-                    cprModel = Forecast(resolution = self._conf['sim_interval'],
-                                        duration=self.duration,
-                                        **parsed_response)
+                    forecast_corrections = self.site_config['EnergySites'][k]["ForecastCorrections"]
+                    if forecast_corrections['Use'] == 'Y':
+                        _log.info("********Using corrections for site "+k)
+                        cprModel = Forecast(resolution = self._conf['sim_interval'],
+                                            duration=self.duration,
+                                            use_correction=True,
+                                            correction_type = forecast_corrections["CorrectionType"],
+                                            correction_file=forecast_corrections["CorrectionFile"],
+                                            **parsed_response)
+                    else:
+                        _log.info("********NOT Using corrections for site " + k)
+                        cprModel = Forecast(resolution = self._conf['sim_interval'],
+                                            duration=self.duration,
+                                            **parsed_response)
+
                     #duration = self.duration,
                     #
                     _log.info("Forecast - "+k)

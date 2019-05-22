@@ -164,12 +164,11 @@ class LoadShift(IPKeys):
             self.start_time = start_time
 
             # set the load shift request for the start of the next day:
-            req_start_time = start_time.replace(hour=0) + timedelta(days=1)
+            req_start_time = start_time.replace(hour=0) #+ timedelta(days=1)
             dstart         = req_start_time.strftime(TIME_FORMAT)
             self.request = create_load_request(price_map=price_map, start_time=dstart, nLoadOptions=nLoadOptions)
 
         print(req_start_time)
-
         if start_time is None:
             self.base_index = "2018-10-19"
         else:
@@ -199,7 +198,6 @@ class LoadShift(IPKeys):
             #print(bl.forecast)
 
             absolute_forecast = absolute_forecast.loc[:, ~absolute_forecast.columns.duplicated()]
-
             #absolute_forecast.loc[:,"2018-10-12--ZERO"] = bl.forecast #[:,"value"]
             #print(absolute_forecast["2018-10-12--ZERO"])
 
@@ -224,6 +222,7 @@ class LoadShift(IPKeys):
             #current_tz = pytz.timezone('US/Eastern')
             #utc_start_time = current_tz.localize(self.start_time).astimezone(pytz.timezone('UTC'))
             utc_start_time = self.start_time.astimezone(pytz.timezone('UTC'))
+            print('start time is: '+str(utc_start_time))
             pad_length = 24-self.start_time.hour
             #utc_start_time = ts.astimezone(pytz.timezone('UTC')))
 
@@ -593,12 +592,14 @@ def read_load_request():
     # # OLD STATIC WAY
     gs_root_dir = os.environ['GS_ROOT_DIR'] #'/Users/mkromer/PycharmProjects/GlobalSchedulerCore/'
     flame_path = "FLAME/flame/"
-    fname = 'Example4A_04262019.json'  # 'Example4A.json' #''defaultLoadRequest.json'
+    fname = 'Example4A.json'  # 'Example4A.json' #''defaultLoadRequest.json'
     filepath = os.path.join(gs_root_dir, flame_path, fname)
     with open(filepath) as f:
         msg = json.load(f)
 
-    start_time = datetime.strptime(msg['marginalCostCurve'][0]['dstart'],TIME_FORMAT).replace(tzinfo=pytz.timezone('US/Eastern'))
+    start_time = pytz.timezone("US/Eastern").localize(datetime.strptime(msg['marginalCostCurve'][0]['dstart'], TIME_FORMAT))
+    #print("read load request: "+str(start_time))
+    #print("read load request: " + str(datetime.strptime(msg['marginalCostCurve'][0]['dstart'],TIME_FORMAT)))
 
     payload_request = json.dumps(
         {"type": "LoadRequest",
@@ -820,7 +821,7 @@ def store_loadreports(start_time, end_time):
 
 if __name__ == '__main__':
 
-    ws_url = "wss://flame.ipkeys.com:9443/socket/msg"
+    ws_url = "wss://flame.ipkeys.com/socket/msg"
     # old way
     # ws = create_connection(ws_url, timeout=None)
     # insecure way, use this if certificate is giving problems
@@ -830,7 +831,7 @@ if __name__ == '__main__':
 
     ws = create_connection(ws_url, sslopt=sslopt)
 
-    TEST_BASELINE   = False
+    TEST_BASELINE   = True
     TEST_STATUS     = False
     TEST_LOADSHIFT  = True
     TEST_STATUS     = False
@@ -842,7 +843,7 @@ if __name__ == '__main__':
     # Baseline
     def test_Baseline():
         print("running Baseline")
-        start =  '2019-03-29T00:00:00'
+        start =  datetime.now(pytz.timezone('US/Eastern')).replace(microsecond=0, second=0).strftime(TIME_FORMAT) #'2019-05-01T00:00:00'
         granularity = 1
         # granularity =  'PT1H'
         duration = 'PT24H'
@@ -858,8 +859,9 @@ if __name__ == '__main__':
     def test_LoadShift():
         print("running LoadShift")
         # LoadShift
-        current_tz = pytz.timezone('US/Eastern')
-        start_time = current_tz.localize(datetime(year=2019,month=04,day=26,hour=15))
+        start_time =  datetime.now(pytz.timezone('US/Eastern')).replace(microsecond=0, second=0, minute=0).strftime(TIME_FORMAT) #'2019-05-01T00:00:00'
+        #current_tz = pytz.timezone('US/Eastern')
+        #start_time = current_tz.localize(datetime(year=2019,month=04,day=26,hour=15))
         ls = LoadShift(websocket = ws,
                        start_time = start_time)
         ls.process()

@@ -95,7 +95,7 @@ class ObjectiveFunction():
             start_ind -= 1
 
 
-        cur_data = self.obj_fcn_data.iloc[start_ind:start_ind + SSA_PTS_PER_SCHEDULE]
+        cur_data = self.obj_fcn_data.iloc[start_ind:start_ind + len(schedule_timestamps)]
         cur_data.index = schedule_timestamps
         #cur_data['Cost'] = [0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
         #                    0.05, 0.05, 0.05, 0.05, 0.05, 0.05,

@@ -153,11 +153,13 @@ def get_gs_path(local_path, fname):
     return os.path.join(gs_root_dir , local_path , fname)
 
 ##############################################################################
-def get_pv_correction_factors(forecast, ts, reference_forecast):
-    if USE_PV_ADJUST == 1:
+def get_pv_correction_factors(forecast, ts, reference_forecast,
+                              correction_type='Matrix',
+                              correction_file='pv_correction_factors_v2.csv'):
+    if correction_type == 'Matrix':
         ghi_high_threshold = 5000
         ghi_med_threshold = 3000
-        fname_fullpath = get_gs_path('lib/', 'pv_correction_factors_v2.csv')
+        fname_fullpath = get_gs_path('lib/', correction_file)
         corr_factors = pd.read_csv(fname_fullpath)
         # reference_forecast = np.array(ref)
         total_ghi = sum(reference_forecast)
@@ -169,12 +171,12 @@ def get_pv_correction_factors(forecast, ts, reference_forecast):
         else:
             k = 'Low'
 
-        for ii in range(0, len(forecast) - 1):
+        for ii in range(0, len(forecast)):
             forecast[ii] = corr_factors[k][ts[ii].hour] * forecast[ii]
             #_log.info("Corr: "+str(corr_factors[k][ts[ii].hour])+" - "+str(forecast[ii]))
 
-    elif USE_PV_ADJUST == 2: # Machine-learning based approach
-        fname_fullpath = get_gs_path('lib/', 'pv_training_data.csv')
+    elif correction_type == 'ML': # Machine-learning based approach
+        fname_fullpath = get_gs_path('lib/', correction_file)
         #get_solar_predictions(forecast, reference_forecast, ts, fname_fullpath)
         pass
     return forecast
@@ -208,7 +210,9 @@ class Forecast():
                  duration =  SSA_SCHEDULE_DURATION,
                  resolution = SSA_SCHEDULE_RESOLUTION,
                  labels = None,
-                 use_correction = False):
+                 use_correction = False,
+                 correction_type = None,
+                 correction_file = None):
         assert isinstance(forecast, list)
         assert isinstance(time, list)
         self.time = time
@@ -220,7 +224,7 @@ class Forecast():
 
         ts = [datetime.strptime(v, TIME_FORMAT) for v in time]
         if use_correction == True:
-            self.forecast = get_pv_correction_factors(forecast, ts, ghi)
+            self.forecast = get_pv_correction_factors(forecast, ts, ghi, correction_type, correction_file)
         else:
             self.forecast = forecast
 

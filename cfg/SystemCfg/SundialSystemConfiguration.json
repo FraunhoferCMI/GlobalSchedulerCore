@@ -11,7 +11,7 @@
       {
         "FcnName": "DemandChargeObjectiveFunction",
         "params": "desc='DemandCharge', cost_per_kW=10.0, threshold = 0, tariff_key='system_tariff'",
-        "Use": "N"
+        "Use": "Y"
       },
       {
         "FcnName": "dkWObjectiveFunction",
@@ -98,8 +98,8 @@
             "Use": "Y"
           },
           {
-            "AgentID": "ShirleyNorth",
-            "DeviceID": "ShirleyNorth-ESSPlant",
+            "AgentID": "VirtualSite1",
+            "DeviceID": "VirtualSite1-ESSPlant",
             "Use": "N"
           }
         ]

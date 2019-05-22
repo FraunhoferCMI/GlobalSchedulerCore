@@ -1,0 +1,17 @@
+PV2.Device.CommStatus,ShirleyNorth-PVPlant-Inverter2,HealthStatus,CommsStatus,0,
+PV2.Meter.W,ShirleyNorth-PVPlant-Inverter2,OpStatus,Pwr_kW,Y,kW
+PV2.Meter.W_SF,ShirleyNorth-PVPlant-Inverter2,OpStatus,Pwr_SF,,none
+PMC.ModeCtrl.OpModeCtrl,ShirleyNorth,ModeControl,OpModeCtrl,,
+PMC.ModeCtrl.OpModeStatus,ShirleyNorth,ModeStatus,OpModeStatus,,
+PMC.ModeCtrl.SysModeCtrl,ShirleyNorth,ModeControl,SysModeCtrl,Y,
+PMC.ModeCtrl.SysModeStatus,ShirleyNorth,ModeStatus,SysModeStatus,Y,
+PMC.ModeCtrl.GSModeCtrl,ShirleyNorth,ModeControl,GSModeCtrl,,
+PMC.ModeCtrl.GSModStatus,ShirleyNorth,ModeStatus,GSModeStatus,,
+PMC.ModeCtrl.GSHeartBeat,ShirleyNorth,ModeStatus,GSHeartBeat,,
+PMC.ModeCtrl.PMCWatchDog,ShirleyNorth,ModeControl,PMCWatchDog,,
+PMC.ModeCtrl.WatchDogTimeoutEnable,ShirleyNorth,ModeControl,WatchDogTimeoutEnable,,
+PV1.Device.CommStatus,ShirleyNorth-PVPlant-Inverter1,HealthStatus,CommsStatus,0,
+PV1.Meter.W,ShirleyNorth-PVPlant-Inverter1,OpStatus,Pwr_kW,Y,kW
+PV1.Meter.W_SF,ShirleyNorth-PVPlant-Inverter1,OpStatus,Pwr_SF,,none
+Site.Meter.W,ShirleyNorth,OpStatus,Pwr_kW,Y,kW
+Site.Meter.W_SF,ShirleyNorth,OpStatus,Pwr_SF,,none

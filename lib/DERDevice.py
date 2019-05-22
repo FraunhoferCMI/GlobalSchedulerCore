@@ -193,6 +193,7 @@ ess_state_vars_update_rate = {"CommStatus": 720,
 site_lookup = {"Shirley":"ShirleySite(site_info, None, data_map_dir, gs_start_time)",
                "ShirleyDeviceLevelCtrl":"ShirleySiteDeviceLevelCtrl(site_info, None, data_map_dir, gs_start_time)",
                "ShirleyEmulator": "ShirleySiteEmulator(site_info, None, data_map_dir, gs_start_time)",
+               "VirtualSite":"VirtualSite(site_info, None, data_map_dir, gs_start_time)",
                "FLAME": "FLAMESite(site_info, None, data_map_dir, gs_start_time)",
                "ModbusSite": "DERModbusSite(site_info, None, data_map_dir, gs_start_time)",
                "Site": "DERSite(site_info, None, data_map_dir, gs_start_time)"}
@@ -202,6 +203,7 @@ device_keys = {"ESS": "ESSDevice(device, parent_device=self, gs_start_time=gs_st
                "Solectria": "SolectriaInverter(device, parent_device=self, gs_start_time=gs_start_time)",
                "PV": "PVDevice(device, parent_device=self, gs_start_time=gs_start_time)",
                "ESSCtrlNode": "ESSCtrlNode(device, parent_device=self, gs_start_time=gs_start_time)",
+               "VirtualDERCtrlNode": "VirtualDERCtrlNode(device, parent_device=self, gs_start_time=gs_start_time)",
                "TeslaCtrlNode": "TeslaCtrlNode(device, parent_device=self, gs_start_time=gs_start_time)",
                "SolectriaPVCtrlNode": "SolectriaPVCtrlNode(device, parent_device=self, gs_start_time=gs_start_time)",
                "PVCtrlNode": "PVCtrlNode(device, parent_device=self, gs_start_time=gs_start_time)",
@@ -720,7 +722,6 @@ class DERDevice():
         # check for comms & device failures
         self.check_comm_status()
         self.check_device_status()
-
         self.check_write_status()
 
         # call this routine for each child:
@@ -1560,6 +1561,23 @@ class ShirleySite(DERSite, DERModbusDevice):
 
 
 ##############################################################################
+class VirtualSite(DERSite):
+
+    ##############################################################################
+    def set_power_real(self, val, sitemgr):
+        self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": val})
+        _log.info(self.device_id+": Setting power to "+str(val))
+
+        self.writePending["SetPoint"] = 1
+        self.expectedValue["SetPoint"] = val
+        sitemgr.vip.rpc.call('vpagent-1.0_2',
+                             'set_real_pwr',
+                             val)
+        return 1
+
+
+
+##############################################################################
 class ShirleySiteEmulator(ShirleySite):
     """
     addresses variance between actual shirley site and CSE emulator
@@ -1683,6 +1701,58 @@ class DERCtrlNode(DERDevice):
         # where does the actual pwr ctrl live???
         return 1
 
+##############################################################################
+class VirtualDERCtrlNode(DERCtrlNode):
+
+    ##############################################################################
+    def __init__(self, device_info, parent_device=None, gs_start_time=None):
+        DERDevice.__init__(self, device_info, parent_device, gs_start_time)  # device_id, device_type, parent_device)
+        self.state_vars.update({"SetPt": 0,
+                                "SetPtCmd": 0})
+        self.state_vars_update_list = ess_update_list  # device_update_list
+        self.state_vars_update_rate = ess_state_vars_update_rate
+        _log.info(self.device_id)
+        _log.info(self.state_vars_update_rate)
+
+        self.chkReg = ["SetPoint"]
+        self.chkRegAttributes = {"SetPoint": self.pwr_ctrl}
+        self.writeReg = {"SetPoint": "SetPoint"}
+        self.writeRegAttributes = {"SetPoint": self.pwr_ctrl}
+        self.writePending = {"SetPoint": 0}
+        self.expectedValue = {"SetPoint": 0}
+        self.nTries = {"SetPoint": 0}
+        self.writeError = {"SetPoint": 0}
+        self.update_state_vars(None)
+        self.state_vars["OrigDemandForecast_t_str"] = [0.0]*SSA_PTS_PER_SCHEDULE
+
+    ##############################################################################
+    def set_power_real(self, val, sitemgr):
+        self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": val})
+        _log.info(self.device_id+": Setting power to "+str(val))
+
+        self.writePending["SetPoint"] = 1
+        self.expectedValue["SetPoint"] = val
+
+        v = sitemgr.vip.rpc.call('vpagent-1.0_1',
+                             'set_real_pwr',
+                             val).get(timeout=5)
+        _log.info('rpc complete, v = '+str(v))
+        return 1
+
+    ##############################################################################
+    def update_state_vars(self, SiteMgr):
+        DERCtrlNode.update_state_vars(self, SiteMgr)
+
+        #fixme - should use get_gs_time
+        if USE_SIM == 1:
+            now = get_gs_time(self.gs_start_time,timedelta(0))
+        else:
+            now = utils.get_aware_utc_now()
+        self.state_vars["OrigDemandForecast_t_str"] = [(now.replace(minute=0, second=0)  +
+                                                        timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%S")
+                                                       for t in range(0,
+                                                                      SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                                      SSA_SCHEDULE_RESOLUTION)]
 
 ##############################################################################
 class LoadNode(DERDevice):

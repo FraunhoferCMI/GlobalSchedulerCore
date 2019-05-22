@@ -1,70 +1,110 @@
 {
-  "EnergySites": [
-    {
-      "Name": "ShirleyNorth",
+  "EnergySites": {
+    "ShirleyNorth": {
       "Topic": "devices/cpr/ShirleyNorth/forecast/all",
       "Description": "Shirley site in MA, 1MW North Site",
+      "ForecastCorrections": {
+        "Use": "N"
+      },
       "Location": {
         "Latitude": "42.5604788",
         "Longitude": "-71.6331026"
       },
-      "PVSystem": {
-        "Albedo_Percent": "17",
-        "GeneralDerate_Percent": "85.00",
-        "Inverters": {
-          "Count": "2",
-          "MaxPowerOutputAC_kW": "500.00000",
-          "EfficiencyRating_Percent": "98.000000"
+      "PVSystems": [
+        {
+          "PVSystem": {
+            "Albedo_Percent": "17",
+            "GeneralDerate_Percent": "85.00",
+            "Inverters": {
+              "Count": "1",
+              "MaxPowerOutputAC_kW": "500.00000",
+              "EfficiencyRating_Percent": "98.000000"
+            },
+            "PVArrays": {
+              "PvModule": {
+                "Count": "1782",
+                "NameplateDCRating_kW": "0.310000",
+                "PtcRating_kW": "0.284800",
+                "PowerTemperatureCoefficient_PercentPerDegreeC": "0.43",
+                "NominalArrayOperatingCellTemperature_DegreesC": "45"
+              },
+              "ArrayConfiguration": {
+                "Azimuth_Degrees": "232",
+                "Tilt_Degrees": "20.000",
+                "Tracking": "Fixed",
+                "TrackingRotationLimit_Degrees": "90"
+              }
+            }
+          }
         },
-        "PVArrays": {
-          "PvModule": {
-            "Count": "3222",
-            "NameplateDCRating_kW": "0.310000",
-            "PtcRating_kW": "0.284800",
-            "PowerTemperatureCoefficient_PercentPerDegreeC": "0.43",
-            "NominalArrayOperatingCellTemperature_DegreesC": "45"
-          },
-          "ArrayConfiguration": {
-            "Azimuth_Degrees": "232",
-            "Tilt_Degrees": "20.000",
-            "Tracking": "Fixed",
-            "TrackingRotationLimit_Degrees": "90"
+        {
+          "PVSystem": {
+            "Albedo_Percent": "17",
+            "GeneralDerate_Percent": "85.00",
+            "Inverters": {
+              "Count": "1",
+              "MaxPowerOutputAC_kW": "500.00000",
+              "EfficiencyRating_Percent": "98.000000"
+            },
+            "PVArrays": {
+              "PvModule": {
+                "Count": "1440",
+                "NameplateDCRating_kW": "0.310000",
+                "PtcRating_kW": "0.284800",
+                "PowerTemperatureCoefficient_PercentPerDegreeC": "0.43",
+                "NominalArrayOperatingCellTemperature_DegreesC": "45"
+              },
+              "ArrayConfiguration": {
+                "Azimuth_Degrees": "232",
+                "Tilt_Degrees": "20.000",
+                "Tracking": "Fixed",
+                "TrackingRotationLimit_Degrees": "90"
+              }
+            }
           }
         }
-      }
+      ]
     },
-    {
-      "Name": "ShirleySouth",
+    "ShirleySouth": {
       "Description": "Shirley site in MA, 0.5MW South Site",
       "Topic": "devices/cpr/forecast/all",
+      "ForecastCorrections": {
+        "Use": "Y",
+        "CorrectionType": "Matrix",
+        "CorrectionFile": "pv_correction_factors_v2.csv"
+      },
       "Location": {
         "Latitude": "42.5553",
         "Longitude": "-71.6246"
       },
-      "PVSystem": {
-        "Albedo_Percent": "17",
-        "GeneralDerate_Percent": "85.00",
-        "Inverters": {
-          "Count": "1",
-          "MaxPowerOutputAC_kW": "500.00000",
-          "EfficiencyRating_Percent": "98.000000"
-        },
-        "PVArrays": {
-          "PvModule": {
-            "Count": "1710",
-            "NameplateDCRating_kW": "0.310000",
-            "PtcRating_kW": "0.284800",
-            "PowerTemperatureCoefficient_PercentPerDegreeC": "0.43",
-            "NominalArrayOperatingCellTemperature_DegreesC": "45"
-          },
-          "ArrayConfiguration": {
-            "Azimuth_Degrees": "232",
-            "Tilt_Degrees": "20.000",
-            "Tracking": "Fixed",
-            "TrackingRotationLimit_Degrees": "90"
+      "PVSystems": [
+        {
+          "PVSystem": {
+            "Albedo_Percent": "17",
+            "GeneralDerate_Percent": "85.00",
+            "Inverters": {
+              "Count": "1",
+              "MaxPowerOutputAC_kW": "500.00000",
+              "EfficiencyRating_Percent": "98.000000"
+            },
+            "PVArrays": {
+              "PvModule": {
+                "Count": "1710",
+                "NameplateDCRating_kW": "0.310000",
+                "PtcRating_kW": "0.284800",
+                "PowerTemperatureCoefficient_PercentPerDegreeC": "0.43",
+                "NominalArrayOperatingCellTemperature_DegreesC": "45"
+              },
+              "ArrayConfiguration": {
+                "Azimuth_Degrees": "232",
+                "Tilt_Degrees": "20.000",
+                "Tracking": "Fixed",
+                "TrackingRotationLimit_Degrees": "90"
+              }
+            }
           }
         }
-      }
+      ]
     }
-  ]
+  }
 }
