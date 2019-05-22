@@ -173,7 +173,7 @@ def get_pv_correction_factors(forecast, ts, reference_forecast,
 
         for ii in range(0, len(forecast)):
             forecast[ii] = corr_factors[k][ts[ii].hour] * forecast[ii]
-            _log.info("Corr: "+str(corr_factors[k][ts[ii].hour])+" - "+str(forecast[ii]))
+            #_log.info("Corr: "+str(corr_factors[k][ts[ii].hour])+" - "+str(forecast[ii]))
 
     elif correction_type == 'ML': # Machine-learning based approach
         fname_fullpath = get_gs_path('lib/', correction_file)
