@@ -75,7 +75,7 @@
           {
             "AgentID": "ShirleyNorth",
             "DeviceID": "ShirleyNorth-PVPlant",
-            "Use": "N"
+            "Use": "Y"
           }
         ]
       },
