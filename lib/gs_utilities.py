@@ -224,12 +224,15 @@ class Forecast():
 
         ts = [datetime.strptime(v, TIME_FORMAT) for v in time]
         if use_correction == True:
-            self.forecast = get_pv_correction_factors(forecast, ts, ghi, correction_type, correction_file)
+            self.forecast = get_pv_correction_factors(forecast[:], ts[:], ghi[:], correction_type, correction_file)
         else:
-            self.forecast = forecast
+            self.forecast = forecast[:]
+
+        self.orig_forecast = forecast[:]
 
         if labels == None:
             self.labels = {"Forecast": "Forecast",
+                           "OrigForecast": "OrigForecast",
                            "Time": "Time",
                            "Duration": "Duration",
                            "Resolution": "Resolution",
@@ -244,20 +247,24 @@ class Forecast():
     def serialize(self):
         if self.ghi == None:
             self.forecast_values = {self.labels["Forecast"]: self.forecast,
+                                    self.labels["OrigForecast"]: self.orig_forecast,
                                     self.labels["Time"]: self.time,
                                     self.labels["Duration"]: self.duration,
                                     self.labels["Resolution"]: self.resolution}
             self.forecast_meta_data = {self.labels["Forecast"]: {"units": self.units, "type": self.datatype},
+                                       self.labels["OrigForecast"]: {"units": self.units, "type": self.datatype},
                                        self.labels["Time"]: {"units": "UTC", "type": "str"},
                                        self.labels["Duration"]: {"units": "hr", "type": "int"},
                                        self.labels["Resolution"]: {"units": "min", "type": "int"}}
         else:
             self.forecast_values = {self.labels["Forecast"]: self.forecast,
+                                    self.labels["OrigForecast"]: self.orig_forecast,
                                     self.labels["ghi"]: self.ghi,
                                     self.labels["Time"]: self.time,
                                     self.labels["Duration"]: self.duration,
                                     self.labels["Resolution"]: self.resolution}
             self.forecast_meta_data = {self.labels["Forecast"]: {"units": self.units, "type": self.datatype},
+                                       self.labels["OrigForecast"]: {"units": self.units, "type": self.datatype},
                                        self.labels["ghi"]: {"units": self.units, "type": self.datatype},
                                        self.labels["Time"]: {"units": "UTC", "type": "str"},
                                        self.labels["Duration"]: {"units": "hr", "type": "int"},
