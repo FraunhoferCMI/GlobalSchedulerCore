@@ -1038,6 +1038,61 @@ class ExecutiveAgent(Agent):
         publishes schedule data to the database
         :return: None
         """
+
+
+        # construct topic that appends current hour to the name and then store data to that topic
+        # this represents a snapshot of the perceived state of the system for the next 24 hrs
+        cur_hr = datetime.utcnow().hour
+        topic    = sdr_dict['path'] + "Snapshot"+str(cur_hr)
+        key_list = ['System', 'PV', 'ESS', 'Load', 'LoadShift']
+
+        for ii in range(0, len(sdr_dict['System'].schedule_vars["DemandForecast_kW"])):
+            for k in key_list:
+                try:
+                    ts = sdr_dict[k].schedule_vars["timestamp"][ii]
+                    ts_str = ts.strftime("%Y-%m-%dT%H:%M:%S")
+                    HistorianTools.publish_data(self,
+                                                topic,
+                                                default_units["DemandForecast_kW"],
+                                                k,
+                                                sdr_dict[k].schedule_vars["DemandForecast_kW"][ii],
+                                                TimeStamp_str=ts_str,
+                                                ref_time=self.gs_start_time)
+                except:
+                    pass
+
+            try:
+                ts = sdr_dict['PV'].schedule_vars["timestamp"][ii]
+                ts_str = ts.strftime("%Y-%m-%dT%H:%M:%S")
+                pv_plus_load = sdr_dict['PV'].schedule_vars["DemandForecast_kW"][ii] + \
+                               sdr_dict['Load'].schedule_vars["DemandForecast_kW"][ii]
+                HistorianTools.publish_data(self,
+                                            topic,
+                                            default_units["DemandForecast_kW"],
+                                            'pv_plus_load',
+                                            pv_plus_load,
+                                            TimeStamp_str=ts_str,
+                                            ref_time=self.gs_start_time)
+            except:
+                pass
+
+            try:
+                ts = sdr_dict['ESS'].schedule_vars["timestamp"][ii]
+                ts_str = ts.strftime("%Y-%m-%dT%H:%M:%S")
+                HistorianTools.publish_data(self,
+                                            topic,
+                                            default_units["EnergyAvailableForecast_kWh"],
+                                            'EnergyAvailableForecast_kWh',
+                                            sdr_dict['ESS'].schedule_vars["EnergyAvailableForecast_kWh"][ii],
+                                            TimeStamp_str=ts_str,
+                                            ref_time=self.gs_start_time)
+            except:
+                pass
+
+
+            #_log.info(ts_str + ": " + str(sdr_dict['System'].schedule_vars["DemandForecast_kW"][ii]))
+
+
         HistorianTools.publish_data(self,
                                     sdr_dict['path']+"SystemResource/Schedule",
                                     default_units["DemandForecast_kW"],

@@ -159,36 +159,42 @@ class CPRPub(Agent):
 
                     #duration = self.duration,
                     #
-                    _log.info("Forecast - "+k)
-                    _log.info(parsed_response["forecast"])
+                    _log.info("Orig Forecast - "+k)
+                    _log.info(cprModel.forecast_values['OrigForecast'])
+                    _log.info("Corrected Forecast - "+k)
+                    _log.info(cprModel.forecast_values['Forecast'])
+                    corrected_forecast = cprModel.forecast_values['Forecast']
+                    ghi = cprModel.forecast_values['ghi']
+                    ts = cprModel.forecast_values['Time']
+
                     try:
                         publish_data(self,
                                      self._conf['TimeSlicePath'][k]+"/forecast"+str(self._conf['sim_interval']),
                                      parsed_response["units"],
                                      "tPlus1",
-                                     parsed_response["forecast"][1],
-                                     TimeStamp_str=parsed_response["time"][1])
+                                     corrected_forecast[1],
+                                     TimeStamp_str=ts[1])
 
                         publish_data(self,
                                      self._conf['TimeSlicePath'][k]+"/forecast"+str(self._conf['sim_interval']),
                                      parsed_response["units"],
                                      "tPlus5",
-                                     parsed_response["forecast"][5],
-                                     TimeStamp_str=parsed_response["time"][5])
+                                     corrected_forecast[5],
+                                     TimeStamp_str=ts[5])
 
                         publish_data(self,
                                      self._conf['TimeSlicePath'][k]+"/ghi"+str(self._conf['sim_interval']),
                                      "W/m2",
                                      "tPlus1",
-                                     parsed_response["ghi"][1],
-                                     TimeStamp_str=parsed_response["time"][1])
+                                     ghi[1],
+                                     TimeStamp_str=ts[1])
 
                         publish_data(self,
                                      self._conf['TimeSlicePath'][k]+"/ghi"+str(self._conf['sim_interval']),
                                      "W/m2",
                                      "tPlus5",
-                                     parsed_response["ghi"][5],
-                                     TimeStamp_str=parsed_response["time"][5])
+                                     ghi[5],
+                                     TimeStamp_str=ts[5])
 
                     except:  # probably got an empty message back - not sure why this happens.
                         _log.info("ForecastError: did not receive valid response")

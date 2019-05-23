@@ -293,6 +293,7 @@ class FLAMECommsAgent(Agent):
 
 
             load_option_forecast_labels = {"Forecast": "SelectedProfileLoad",
+                                           "OrigForecast": "OrigSelectedProfileLoad",
                                            "Time": "SelectedProfileTime",
                                            "Duration": "SelectedProfileDuration",
                                            "Resolution": "SelectedProfileResolution",
