@@ -392,6 +392,9 @@ class ExecutiveAgent(Agent):
                                                                                              SDR_to_SM_table=[],
                                                                                              sitemgr_list=self.sitemgr_list,
                                                                                              use_volttron=1)
+        for entries in strategic_sdr_to_sm_lookup_table:
+            _log.info("Setup: Strategic SundialResource Init: "+entries.sundial_resource.resource_id + ":" + str(entries.device_list))
+
         self.strategic_sdr = self.init_sdr_dict(strategic_sundial_resources,
                                                 strategic_sdr_to_sm_lookup_table,
                                                 self.tariffs,
@@ -918,6 +921,8 @@ class ExecutiveAgent(Agent):
         if (USE_STRATEGIC_SCHEDULE == True) & (self.OperatingMode != EXEC_STARTING):
             _log.info('***********************************************************************************************')
             _log.info('*** RUNNING STRATEGIC SCHEDULE ****')
+            self.update_sundial_resources(self.strategic_sdr,
+                                          update_forecasts = False)
             self.run_optimizer(self.strategic_sdr)
 
             fname_fullpath = get_gs_path("GS_Optimizer/","myloadshape.csv")
