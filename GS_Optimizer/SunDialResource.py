@@ -547,7 +547,7 @@ class SundialResource():
             _log.debug(str(self.state_vars["OrigDemandForecast_kW"]))
             self.state_vars["DemandForecast_kW"]           = self.interpolate_values(schedule_timestamps,
                                                                                      self.state_vars["OrigDemandForecast_kW"])
-            self.state_vars["EnergyAvailableForecast_kWh"] = self.state_vars["OrigEnergyAvailableForecast_kWh"]
+            self.state_vars["EnergyAvailableForecast_kWh"] = numpy.array(self.state_vars["OrigEnergyAvailableForecast_kWh"])
 
             try:
                 self.state_vars["LoadShiftOptions_kW"] = self.interpolate_values(schedule_timestamps,
