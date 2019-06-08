@@ -748,6 +748,10 @@ class ExecutiveAgent(Agent):
             netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
             netDemandAvg_kW = self.system_resources.state_vars["AvgPwr_kW"]
 
+            SOE_kWh = self.ess_resources.state_vars["SOE_kWh"]
+            min_SOE_kWh = self.ess_resources.state_vars["MinSOE_kWh"]
+            max_SOE_kWh = self.ess_resources.state_vars["MaxSOE_kWh"]
+
             if self.prevPwr_kW is None:
                 self.prevPwr_kW = curPwr_kW
             elif SMOOTH_RAMP == False:
@@ -773,7 +777,24 @@ class ExecutiveAgent(Agent):
                 if ALIGN_SCHEDULES == True:
                     cur_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0,tzinfo=pytz.utc)
                     try:
+                        reserve_soe_high = max_SOE_kWh * ESS_RESERVE_HIGH
+                        reserve_soe_low  = min_SOE_kWh * ESS_RESERVE_LOW
+                        soe_upper_buffer_used =  (SOE_kWh-reserve_soe_high) / (max_SOE_kWh-reserve_soe_high)
+                        soe_lower_buffer_used =  (reserve_soe_low-SOE_kWh) / (reserve_soe_high-min_SOE_kWh)
                         targetPwr_kW = self.sundial_resources.schedule_vars["schedule_kW"][cur_time]
+                        reserve_target = netDemandAvg_kW - self.ess_resources.state_vars["AvgPwr_kW"]
+                        _log.info('Calculating adjusted tgt: orig_tgt =' + str(targetPwr_kW) + '; reserve target = ' + str(reserve_target))
+
+                        if (soe_upper_buffer_used >= 0) & (targetPwr_kW>0):
+                            # SOE is above reserve margin and charge commanded - calculate the target as a
+                            # blended fraction of the scheduled value and the recent average
+                            targetPwr_kW   = targetPwr_kW + soe_upper_buffer_used * (reserve_target-targetPwr_kW)
+                            _log.info('In ESS upper reserve margin: upper buffer = '+str(soe_upper_buffer_used)+'; reserve_soe_high = '+str(reserve_soe_high))
+                        elif (soe_lower_buffer_used >= 0) & (targetPwr_kW<0):
+                            # SOE is below lower reserve margin and discharge commanded - calculate the target as a
+                            # blended fraction of the scheduled value and the recent average
+                            targetPwr_kW   = targetPwr_kW + soe_lower_buffer_used * (reserve_target - targetPwr_kW)
+                            _log.info('In ESS lower reserve margin: lower buffer = ' + str(soe_lower_buffer_used) + '; reserve_soe_low = ' + str(reserve_soe_low))
                         expectedPwr_kW = self.pv_resources.schedule_vars["schedule_kW"][cur_time] + self.load_resources.schedule_vars["schedule_kW"][cur_time]
                         essTargetPwr_kW = self.ess_resources.schedule_vars["schedule_kW"][cur_time]
                         expectedSOE_kWh = self.ess_resources.schedule_vars["schedule_kWh"][cur_time]
@@ -813,10 +834,6 @@ class ExecutiveAgent(Agent):
             _log.debug("Regulator: Current PV+Load is "+str(curPwr_kW))
             _log.debug("Regulator: Forecast Error "+str(forecastError_kW))
             _log.debug("Regulator: Expected SOE "+str(expectedSOE_kWh))
-
-            SOE_kWh = self.ess_resources.state_vars["SOE_kWh"]
-            min_SOE_kWh = self.ess_resources.state_vars["MinSOE_kWh"]
-            max_SOE_kWh = self.ess_resources.state_vars["MaxSOE_kWh"]
 
             if IMPORT_CONSTRAINT == True:
                 max_charge_kW = min(-1*self.pv_resources.state_vars["Pwr_kW"],
