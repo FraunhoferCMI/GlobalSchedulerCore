@@ -432,10 +432,10 @@ class LoadShapeObjectiveFunction(ObjectiveFunction):
 
         if self.init_params["vble_price"] == False:
             price = 10.0  # sort of arbitrary, just needs to be a number big enough to drive behavior in the desired direction.
-            self.cost = sum(self.err) * price
+            self.cost = (sum(self.err) * price**2)**0.5
         else:
             price = self.init_params["cur_cost"][1]  # sort of arbitrary, just needs to be a number big enough to drive behavior in the desired direction.
-            self.cost = sum(self.err * price)
+            self.cost = (sum(self.err * price**2))**0.5
         #demand = numpy.array(profile)
 
         return self.cost
