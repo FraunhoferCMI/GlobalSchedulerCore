@@ -723,7 +723,7 @@ def store_forecasts(start_time, end_time, res=24):
 
     while query_start < end_datetime:
         # 0. Connect to server
-        ws_url = "wss://flame.ipkeys.com:9443/socket/msg"
+        ws_url = "wss://flame.ipkeys.com/socket/msg"
         sslopt = {"ca_certs": 'IPKeys_Root.pem'}
         try:
             ws = create_connection(ws_url, sslopt=sslopt)
@@ -782,7 +782,7 @@ def store_loadreports(start_time, end_time):
 
     while query_start < end_datetime:
         # 0. Connect to server
-        ws_url = "wss://flame.ipkeys.com:9443/socket/msg"
+        ws_url = "wss://flame.ipkeys.com/socket/msg"
         sslopt = {"ca_certs": 'IPKeys_Root.pem'}
         ws = create_connection(ws_url, sslopt=sslopt)
 
