@@ -191,9 +191,10 @@ class LoadShift(IPKeys):
     def process(self):
 
         self._send_receive()
-        try:
+        if (1): #try:
 
             absolute_forecast, costs = parse_LoadShift_response(self.response)
+            absolute_forecast.to_csv('LoadShapeResults.csv')
             ### FIXME - just have hard coded column name - needs to be fixed. ###
             #print(bl.forecast)
 
@@ -203,10 +204,11 @@ class LoadShift(IPKeys):
 
             #correction = pd.DataFrame(data=[100,100,100,130,115,15,10,10,10,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
             #                          index=absolute_forecast.index)
-            correction = pd.DataFrame(data=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+            print(absolute_forecast)
+            correction = pd.DataFrame(data=[0.0]*len(absolute_forecast),
                                       index=absolute_forecast.index)
-
-            baseline_index = self.base_index + "--ZERO"
+            print(absolute_forecast.columns)
+            baseline_index = absolute_forecast.columns[0] #self.base_index + "--ZERO"
             delta_index    = self.base_index + "--DELTA"
             absolute_forecast[baseline_index] = absolute_forecast[baseline_index]+correction[0]
             #print(absolute_forecast[baseline_index])
@@ -247,8 +249,9 @@ class LoadShift(IPKeys):
                 forecast_id.append(f)
                 forecast_dict.update({f: forecast[f].tolist()})
 
-        except ValueError:
+        else: #except ValueError:
             print("Error Found!")
+            print(self.response['msg'])
             print(self.response['msg']['error'])
             costs = {}
             forecast = pd.DataFrame()
@@ -581,6 +584,7 @@ def create_baseline_request(start, granularity, duration):
     return baseline_request
 
 def parse_Baseline_response(result):
+    print(result['msg'])
     forecast_values = pd.DataFrame(result['msg']['loadSchedule'])
     forecast_values['value'] = forecast_values['value'] * DEMAND_ADJUST
     forecast_values.set_index('dstart', inplace=True)
@@ -592,7 +596,7 @@ def read_load_request():
     # # OLD STATIC WAY
     gs_root_dir = os.environ['GS_ROOT_DIR'] #'/Users/mkromer/PycharmProjects/GlobalSchedulerCore/'
     flame_path = "FLAME/flame/"
-    fname = 'Example4A.json'  # 'Example4A.json' #''defaultLoadRequest.json'
+    fname = 'Example4A_48hr.json'  # 'Example4A.json' #''defaultLoadRequest.json'
     filepath = os.path.join(gs_root_dir, flame_path, fname)
     with open(filepath) as f:
         msg = json.load(f)
@@ -831,7 +835,7 @@ if __name__ == '__main__':
 
     ws = create_connection(ws_url, sslopt=sslopt)
 
-    TEST_BASELINE   = True
+    TEST_BASELINE   = False
     TEST_STATUS     = False
     TEST_LOADSHIFT  = True
     TEST_STATUS     = False
@@ -844,6 +848,8 @@ if __name__ == '__main__':
     def test_Baseline():
         print("running Baseline")
         start =  datetime.now(pytz.timezone('US/Eastern')).replace(microsecond=0, second=0).strftime(TIME_FORMAT) #'2019-05-01T00:00:00'
+        start =  datetime.now(pytz.timezone('US/Eastern')).replace(microsecond=0, second=0, hour=0,minute=0).strftime(TIME_FORMAT) #'2019-05-01T00:00:00'
+
         granularity = 1
         # granularity =  'PT1H'
         duration = 'PT24H'
