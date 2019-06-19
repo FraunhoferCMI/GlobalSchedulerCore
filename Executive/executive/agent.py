@@ -84,6 +84,7 @@ __version__ = '1.0'
 default_units = {"setpoint":"kW",
                  "targetPwr_kW": "kW",
                  "curPwr_kW": "kW",
+                 "curPwrAvg_kW": "kW",
                  "expectedPwr_kW": "kW",
                  "forecastError_kW": "kW",
                  "predPwr_kW": "kW",
@@ -214,6 +215,7 @@ class ExecutiveAgent(Agent):
         self.optimizer_info.update({"setpoint": 0.0})
         self.optimizer_info.update({"targetPwr_kW": 0.0})
         self.optimizer_info.update({"curPwr_kW": 0.0})
+        self.optimizer_info.update({"curPwrAvg_kW": 0.0})
         self.optimizer_info.update({"expectedPwr_kW": 0.0})
         self.optimizer_info.update({"expectedSOE_kWh": 0.0})
         self.optimizer_info.update({"forecastError_kW": 0.0})
@@ -745,6 +747,7 @@ class ExecutiveAgent(Agent):
             # retrieve the current power output of the system, not including energy storage.
             # taking a shortcut here - implicit assumption that there is a single pool of ESS
             curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
+            curPwrAvg_kW = self.system_resources.state_vars["AvgPwr_kW"] - self.ess_resources.state_vars["AvgPwr_kW"] 
             netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
             netDemandAvg_kW = self.system_resources.state_vars["AvgPwr_kW"]
 
@@ -894,6 +897,7 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["setpoint"] = setpoint
             self.optimizer_info["targetPwr_kW"] = targetPwr_kW
             self.optimizer_info["curPwr_kW"] = curPwr_kW
+            self.optimizer_info["curPwrAvg_kW"] = curPwrAvg_kW
             self.optimizer_info["expectedPwr_kW"] = expectedPwr_kW
             self.optimizer_info["expectedSOE_kWh"] = expectedSOE_kWh
             self.optimizer_info["forecastError_kW"] = forecastError_kW
