@@ -215,13 +215,15 @@ class ExecutiveAgent(Agent):
         self.optimizer_info.update({"setpoint": 0.0})
         self.optimizer_info.update({"targetPwr_kW": 0.0})
         self.optimizer_info.update({"curPwr_kW": 0.0})
-        self.optimizer_info.update({"curPwrAvg_kW": 0.0})
         self.optimizer_info.update({"expectedPwr_kW": 0.0})
         self.optimizer_info.update({"expectedSOE_kWh": 0.0})
         self.optimizer_info.update({"forecastError_kW": 0.0})
         self.optimizer_info.update({"netDemand_kW": 0.0})
-        self.optimizer_info.update({"netDemandAvg_kW": 0.0})
         self.optimizer_info.update({"predPwr_kW": 0.0})
+
+        self.optimizer_avg_info = {}
+        self.optimizer_avg_info.update({"curPwrAvg_kW": 0.0})
+        self.optimizer_avg_info.update({"netDemandAvg_kW": 0.0})
 
         self.run_optimizer_cnt     = 0
         self.send_ess_commands_cnt = 0
@@ -897,13 +899,14 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["setpoint"] = setpoint
             self.optimizer_info["targetPwr_kW"] = targetPwr_kW
             self.optimizer_info["curPwr_kW"] = curPwr_kW
-            self.optimizer_info["curPwrAvg_kW"] = curPwrAvg_kW
             self.optimizer_info["expectedPwr_kW"] = expectedPwr_kW
             self.optimizer_info["expectedSOE_kWh"] = expectedSOE_kWh
             self.optimizer_info["forecastError_kW"] = forecastError_kW
             self.optimizer_info["predPwr_kW"] = predPwr_kW
             self.optimizer_info["netDemand_kW"]   = netDemand_kW
-            self.optimizer_info["netDemandAvg_kW"] = netDemandAvg_kW
+
+            self.optimizer_avg_info["curPwrAvg_kW"] = curPwrAvg_kW
+            self.optimizer_avg_info["netDemandAvg_kW"] = netDemandAvg_kW
             self.publish_ess_cmds()
 
     ##############################################################################
@@ -1333,7 +1336,22 @@ class ExecutiveAgent(Agent):
                                             obj_fcn.desc,
                                             sdr_dict['System'].schedule_vars[obj_fcn.desc])
 
+    ##############################################################################
+    @Core.periodic(60)
+    def publish_ess_avg_cmds(self):
+        """
+        prints status to log file and to database
+        :return:
+        """
 
+        for k,v in self.optimizer_avg_info.items():
+            _log.info("ExecutiveStatus: " + k + "=" + str(v))
+            units = default_units[k]
+            HistorianTools.publish_data(self,
+                                        "Executive",
+                                        units,
+                                        k,
+                                        v)
 
     ##############################################################################
     def publish_ess_cmds(self):
