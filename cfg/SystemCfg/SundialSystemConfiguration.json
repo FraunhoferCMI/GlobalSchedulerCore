@@ -38,7 +38,7 @@
       {
         "ID": "SystemLoadShift",
         "ResourceType": "LoadShiftCtrlNode",
-        "Use": "Y",
+        "Use": "N",
         "VirtualPlantList": [],
         "DeviceList": [
           {
@@ -75,7 +75,7 @@
           {
             "AgentID": "ShirleyNorth",
             "DeviceID": "ShirleyNorth-PVPlant",
-            "Use": "Y"
+            "Use": "N"
           }
         ]
       },

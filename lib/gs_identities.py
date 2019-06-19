@@ -69,19 +69,19 @@ ENABLE_LOAD_SELECT = False # If True, GS will propagate load shift commands to t
 
 ###################################
 ### Internal operating clocks.
-EXECUTIVE_CLKTIME = 2 # period, in seconds, at which the executive polls system state
+EXECUTIVE_CLKTIME = 1 # period, in seconds, at which the executive polls system state
 DATA_LOG_SCHEDULE = 1  # period at which state vars are logged, in executive clock cycles
 ENDPT_UPDATE_SCHEDULE  = DATA_LOG_SCHEDULE # period at which sundial system resource objects are updated
 GS_SCHEDULE       = 4*60 #2880/6  # GS optimizer period, in executive clock cycles
 ESS_SCHEDULE      = 1 # ess regulation period, in executive clock cycles
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
-STRATEGIC_SCHEDULE = 24*60*60/15 #240
+STRATEGIC_SCHEDULE = 24*60*60/2 #240
 
 
 ####################################
 ### Some basic device and objective fcn configuration options:
-DEMAND_CHARGE_THRESHOLD = 475 #250
-UPDATE_THRESHOLD = True
+DEMAND_CHARGE_THRESHOLD = 0 #250
+UPDATE_THRESHOLD = False
 
 # FIXME - ESS_RESERVE_xx should be set in absoluate terms, not relative terms - won't work if ESS_MIN is 0
 ESS_MAX = 0.98
@@ -90,8 +90,8 @@ ESS_RESERVE_HIGH = 0.95  # relative to ESS_MAX
 ESS_RESERVE_LOW  = 1.5   # relative to ESS_MIN
 
 USE_PV_ADJUST = 1 # 0 = no adjust; 1 = Use hour lookup adjust
-PV_ADJUST = 0.65
-DEMAND_ADJUST = 1.1
+PV_ADJUST = 1.0 #0.65
+DEMAND_ADJUST = 0.92 #1.0
 #ERROR_MARGIN  = 1.1
 
 
@@ -309,7 +309,7 @@ else:   # schedules associated with live testing
 
     HI_RES_DEMAND_REPORT_DURATION   = 60 # minutes
     HI_RES_DEMAND_REPORT_RESOLUTION = 1 # minute
-    HI_RES_DEMAND_REPORT_SCHEDULE   = 5*60 # seconds
+    HI_RES_DEMAND_REPORT_SCHEDULE   = 1*60 # seconds
 
     LOADSHIFT_FORECAST_UPDATE_INTERVAL = 30*60 # # seconds
 

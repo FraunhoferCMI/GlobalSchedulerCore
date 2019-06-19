@@ -1,4 +1,5 @@
 W,kW,WTokW,"UnitConversion.Scale(val, 0.001)"
+negW,kW,negWTokW,"UnitConversion.Scale(val, -0.001)"
 Wh,kWh,WhTokWh,"UnitConversion.ScaleEnergy(val,0.001)"
 VArh,kVArh,VArhTokVArh,"UnitConversion.ScaleEnergy(val,0.001)"
 cA,A,cAToA,"UnitConversion.Scale(val, 0.01)"
