@@ -1351,6 +1351,7 @@ def export_schedule(profile, timestamps, update=True):
     demand_df.index = pandas.Series(profile.sundial_resources.schedule_vars["timestamp"])
     pandas.options.display.float_format = '{:,.1f}'.format
     print(demand_df)
+    print(demand_df["Demand-"+profile.sundial_resources.resource_id].tolist())
 
 if __name__ == "__main__":
 
