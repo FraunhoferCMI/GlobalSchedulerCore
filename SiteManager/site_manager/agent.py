@@ -604,7 +604,7 @@ class SiteManagerAgent(Agent):
 
 
     ##############################################################################
-    @Core.periodic(PMC_WATCHDOG_PD)
+    #@Core.periodic(PMC_WATCHDOG_PD)
     def increment_site_watchdog(self):
         """
         Commands site to increment watchdog counter
