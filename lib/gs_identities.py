@@ -80,8 +80,8 @@ STRATEGIC_SCHEDULE = 24*60*60/2 #240
 
 ####################################
 ### Some basic device and objective fcn configuration options:
-DEMAND_CHARGE_THRESHOLD = 0 #250
-UPDATE_THRESHOLD = False
+DEMAND_CHARGE_THRESHOLD = 300 #250
+UPDATE_THRESHOLD = True
 
 # FIXME - ESS_RESERVE_xx should be set in absoluate terms, not relative terms - won't work if ESS_MIN is 0
 ESS_MAX = 0.98
@@ -309,7 +309,7 @@ else:   # schedules associated with live testing
 
     HI_RES_DEMAND_REPORT_DURATION   = 60 # minutes
     HI_RES_DEMAND_REPORT_RESOLUTION = 1 # minute
-    HI_RES_DEMAND_REPORT_SCHEDULE   = 1*60 # seconds
+    HI_RES_DEMAND_REPORT_SCHEDULE   = 5*60 # seconds
 
     LOADSHIFT_FORECAST_UPDATE_INTERVAL = 30*60 # # seconds
 
