@@ -313,7 +313,7 @@ class SiteManagerAgent(Agent):
         parses message on IEB published to the SiteManager's specified path, and 
         populates endpts (populate_endpts) based on message contents
         """
-        _log.info("SiteManagerStatus: Topic found - "+str(topic))
+        _log.debug("SiteManagerStatus: Topic found - "+str(topic))
 
         if sender == 'pubsub.compat':
             message = compat.unpack_legacy_message(headers, message)
@@ -560,7 +560,7 @@ class SiteManagerAgent(Agent):
         """
         sends a real power command to the specified device
         """
-        _log.info("SetPt: updating site power output for "+self.site.device_id)
+        _log.debug("SetPt: updating site power output for "+self.site.device_id)
 
         # find the device
         #device_id = args[0] #*args
@@ -576,7 +576,7 @@ class SiteManagerAgent(Agent):
         else:
             # send the command
             self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
-            _log.info("SetPt: Sending Cmd!")
+            _log.debug("SetPt: Sending Cmd!")
             success = device.set_power_real(val, self)
             if success == 0:
                 self.dirtyFlag = 0 # invalid write
@@ -604,7 +604,7 @@ class SiteManagerAgent(Agent):
 
 
     ##############################################################################
-    @Core.periodic(PMC_WATCHDOG_PD)
+    #@Core.periodic(PMC_WATCHDOG_PD)
     def increment_site_watchdog(self):
         """
         Commands site to increment watchdog counter

@@ -672,12 +672,12 @@ class DERDevice():
                 else:
                     # write has not completed successfully - increment nTries, check for if a timeout is triggered
                     self.nTries[reg] += 1
-                    _log.info("Write missed for " + str(reg) + "- try # " + str(self.nTries[reg]) + "expected - "+str(self.expectedValue[reg])+
+                    _log.info("Write missed for " + str(reg) + "- try # " + str(self.nTries[reg]) + ".  Expected - "+str(self.expectedValue[reg])+
                               "; read "+str(self.writeRegAttributes[reg].data_dict[self.writeReg[reg]]))
                     if self.nTries[reg] >= MODBUS_WRITE_ATTEMPTS:
                         self.writeError[reg] = 1
                         self.write_status    = 0
-                        _log.info("Timeout!!")
+                        _log.debug("Timeout!!")
 
     ##############################################################################
     def update_status(self, SiteMgr):
@@ -793,17 +793,17 @@ class DERDevice():
             to_units = self.datagroup_dict_list[attribute].endpt_units[ext_endpt]
             from_units = self.datagroup_dict_list[attribute].units[cmd]
             conversionKey = from_units+"To"+to_units
-            _log.info(conversionKey)
-            _log.info("SetPt: Ext End pt is "+ext_endpt+". Ext units are "+to_units)
-            _log.info("SetPt: Int End pt is "+cmd+".  Int units are "+from_units)
+            _log.debug(conversionKey)
+            _log.debug("SetPt: Ext End pt is "+ext_endpt+". Ext units are "+to_units)
+            _log.debug("SetPt: Int End pt is "+cmd+".  Int units are "+from_units)
 
             nameplate     = self.get_nameplate()
             val           = self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]
-            _log.info("SetPt: Name plate is "+str(nameplate))
+            _log.debug("SetPt: Name plate is "+str(nameplate))
             #self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"] = \
             converted_val = int(eval(site.unit_conversion_table[conversionKey]))
 
-            _log.info("SetPt: New val = "+ str(converted_val)) #str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
+            _log.info("SetPt: "+cmd+" ("+from_units + ") to "+ext_endpt+" ("+to_units + "); New val = "+ str(converted_val)) #str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
 
         except KeyError as e:
             _log.info("SetPt: No units found for "+ext_endpt+".  Assume no conversion is needed.")
@@ -868,7 +868,7 @@ class DERDevice():
             except KeyError:
                 pass
 
-        _log.info("PopEndpts: Topic "+topic+" read "+str(cnt)+" data pts; skipped: "+str(skip_cnt))
+        _log.debug("PopEndpts: Topic "+topic+" read "+str(cnt)+" data pts; skipped: "+str(skip_cnt))
         self.update_status(SiteMgr)
 
     ##############################################################################
@@ -929,7 +929,7 @@ class DERDevice():
             except KeyError:
                 pass
 
-        _log.info("PopEndpts: Topic "+topic+" read "+str(cnt)+" data pts; skipped: "+str(skip_cnt))
+        _log.debug("PopEndpts: Topic "+topic+" read "+str(cnt)+" data pts; skipped: "+str(skip_cnt))
         self.update_status(SiteMgr)
 
     ##############################################################################
@@ -1076,7 +1076,7 @@ def reserve_modbus(device, task_id, sitemgr, device_path):
     # what the failure reason is...
     # TODO - double check that topic path should include "devices"
     #while (request_status == "FAILURE") & (attempt<10):
-    _log.info("Requesting to reserve modbus, requester: " + device.device_id + "; task " + task_id)
+    _log.debug("Requesting to reserve modbus, requester: " + device.device_id + "; task " + task_id)
     start = datetime.now().strftime(
 	    "%Y-%m-%d %H:%M:%S")
     end = (datetime.now() + timedelta(seconds=1.5)).strftime(
@@ -1090,7 +1090,7 @@ def reserve_modbus(device, task_id, sitemgr, device_path):
             [device_path, start, end]).get()
 
         request_status = res["result"]
-        _log.info("reserve_request_status - "+request_status +res["info"])
+        _log.debug("reserve_request_status - "+request_status +res["info"])
         if request_status == "FAILURE":
             _log.info("Request failed, reason is " + res["info"])
             #attempt += 1
