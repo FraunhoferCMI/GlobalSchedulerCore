@@ -774,6 +774,26 @@ class ExecutiveAgent(Agent):
             curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
             curPwrAvg_kW = self.system_resources.state_vars["AvgPwr_kW"] - self.ess_resources.state_vars["AvgPwr_kW"] 
             netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
+            # get 5 sec average?
+
+            #######
+            end = datetime.utcnow()+timedelta(seconds=1)
+            st = end - timedelta(seconds=5)
+
+            st_str = st.strftime(TIME_FORMAT)
+            end_str = end.strftime(TIME_FORMAT)
+
+            device_path_str = 'Executive/netDemand_kW'
+            topic_name = 'datalogger/'+device_path_str
+            netDemand_5SecAvg, n_pts = HistorianTools.calc_avg(self, topic_name, st_str, end_str)
+            #_log.info("Calc Avg: "+str(avg_pwr)+"; n pts = "+str(n_pts))
+            if n_pts == 0:
+                netDemand_5SecAvg = netDemand_kW
+            else:
+                netDemand_5SecAvg = netDemand_kW * 0.5 + netDemand_5SecAvg*0.5
+            ######
+
+
             netDemandAvg_kW = self.system_resources.state_vars["AvgPwr_kW"]
 
             SOE_kWh = self.ess_resources.state_vars["SOE_kWh"]
@@ -811,7 +831,7 @@ class ExecutiveAgent(Agent):
                         soe_lower_buffer_used =  (reserve_soe_low-SOE_kWh) / (reserve_soe_high-min_SOE_kWh)
                         targetPwr_kW = self.sundial_resources.schedule_vars["schedule_kW"][cur_time]
                         reserve_target = netDemandAvg_kW - self.ess_resources.state_vars["AvgPwr_kW"]
-                        _log.info('Calculating adjusted tgt: orig_tgt =' + str(targetPwr_kW) + '; reserve target = ' + str(reserve_target))
+                        _log.debug('Calculating adjusted tgt: orig_tgt =' + str(targetPwr_kW) + '; reserve target = ' + str(reserve_target))
 
                         if (soe_upper_buffer_used >= 0) & (targetPwr_kW>0):
                             # SOE is above reserve margin and charge commanded - calculate the target as a
@@ -932,11 +952,7 @@ class ExecutiveAgent(Agent):
             self.optimizer_avg_info["curPwrAvg_kW"] = curPwrAvg_kW
             self.optimizer_avg_info["netDemandAvg_kW"] = netDemandAvg_kW
 
-            if self.publish_ess_cmds_cnt == 0:
-                self.publish_ess_cmds()
-                self.publish_ess_cmds_cnt = ESS_CMD_PUBLICATION_INTERVAL
-            else:
-                self.publish_ess_cmds_cnt -= 1
+            self.publish_ess_cmds()
 
     ##############################################################################
     def generate_schedule_timestamps(self, sim_time_corr = timedelta(seconds=0), duration=SSA_SCHEDULE_DURATION*MINUTES_PER_HR):
@@ -1390,16 +1406,24 @@ class ExecutiveAgent(Agent):
         :return:
         """
 
-        _log.info("ExecutiveStatus: Mode = "+self.OperatingModes[self.OperatingMode])
+        if self.publish_ess_cmds_cnt == 0:
+            _log.info("ExecutiveStatus: Mode = " + self.OperatingModes[self.OperatingMode])
+
 
         for k,v in self.optimizer_info.items():
-            _log.info("ExecutiveStatus: " + k + "=" + str(v))
+            if self.publish_ess_cmds_cnt == 0:
+                _log.info("ExecutiveStatus: " + k + "=" + str(v))
             units = default_units[k]
             HistorianTools.publish_data(self,
                                         "Executive",
                                         units,
                                         k,
                                         v)
+
+        if self.publish_ess_cmds_cnt == 0:
+            self.publish_ess_cmds_cnt = ESS_CMD_PUBLICATION_INTERVAL
+        else:
+            self.publish_ess_cmds_cnt -= 1
 
 ##############################################################################
     @Core.periodic(EXECUTIVE_CLKTIME)
