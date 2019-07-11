@@ -102,7 +102,7 @@ default_units = {"setpoint":"kW",
                  "DemandChargeThreshold": "kW"}
 
 ##############################################################################
-def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW, max_discharge_kW):
+def calc_ess_setpoint(targetPwr_kW, curPwr_kW, netDemand_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW, max_discharge_kW):
     """
     Calculates a setpoint command to an ESS resource to bridge the gap between forecast and actual generation
     (1) first determines delta between forecast and actual.
@@ -110,7 +110,8 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     (3) Checks for energy constraint
     and adjusts accordingly
     :param targetPwr_kW: expected amount of generation, in kW
-    :param curPwr_kW: actual generation, in kW
+    :param curPwr_kW: actual PV generation, in kW
+    :param netDemand_kW: actual current total generation, in kW
     :param SOE_kWh: current ESS state of energy, in kWh
     :param min_SOE_kWh: minimum allowable SOE, in kWh
     :param max_SOE_kWh: max allowable SOE, in kWh
@@ -123,6 +124,17 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh
     # battery before the next time that we receive a high level schedule request.
     setpoint_cmd_interval = GS_SCHEDULE
     sec_per_hr = 60.0 * 60.0
+
+    RR_CTRL = True
+    if RR_CTRL == True:
+        MAX_RR_PCT_PER_MIN = 0.20
+        cur_delta = targetPwr_kW - netDemand_kW
+        max_delta = MAX_RR_PCT_PER_MIN * SOLAR_NAMEPLATE * setpoint_cmd_interval / 60.0   # kW per cmd
+        if cur_delta < 0:
+            cur_delta = max(cur_delta, -1 * max_delta)
+        else:
+            cur_delta = min(cur_delta, max_delta)
+        targetPwr_kW = netDemand_kW + cur_delta
 
     setpoint = targetPwr_kW-curPwr_kW
     # check that we are within power limits of the storage system
@@ -229,6 +241,9 @@ class ExecutiveAgent(Agent):
         self.send_ess_commands_cnt = 0
         self.update_endpt_cnt      = 0
         self.data_log_cnt          = 0
+        self.publish_sundial_state_cnt    = 0
+        self.publish_ess_cmds_cnt         = 0
+        self.publish_executive_status_cnt = 0
 
         self.prevPwr_kW = None
         #initializes queue for rolling average, maxlen of 600 elements, recommend assigning a variable to this
@@ -274,7 +289,9 @@ class ExecutiveAgent(Agent):
         # Note - to handle multiple resources groupings of the same type, code will need to be modified
         try:
             loadshift_resources = sdr.find_resource_type("LoadShiftCtrlNode")[0]
+            _log.info('****** Load Shift Resource Found!!!! ****')
         except:
+            _log.info('****** Load Shift Resource Not Found!!!! ****')
             loadshift_resources = []
         try:
             load_resources = sdr.find_resource_type("Load")[0]
@@ -570,7 +587,8 @@ class ExecutiveAgent(Agent):
         type SundialResource_to_SiteManager_lookup_table
         :return: None
         """
-        _log.info('*************************  Running UPDATE SUNDIAL RESOURCES **************************')
+        if self.publish_sundial_state_cnt == 0:
+            _log.info('*************************  Running UPDATE SUNDIAL RESOURCES **************************')
         for entries in sdr_dict['lookup_table']:
             # for each SundialResource that maps to an end point device (i.e., terminal nodes in the
             # the resource tree)
@@ -589,7 +607,8 @@ class ExecutiveAgent(Agent):
                             dev_state_var = self.vip.rpc.call(str(devices["AgentID"]),
                                                               "get_device_state_vars",
                                                               devices["DeviceID"]).get(timeout=5)
-                            _log.info(devices["AgentID"]+"-"+devices["DeviceID"]+" - "+str(k) + ": " + str(dev_state_var[k]))
+                            if self.publish_sundial_state_cnt == 0:
+                                _log.info(devices["AgentID"]+"-"+devices["DeviceID"]+" - "+str(k) + ": " + str(dev_state_var[k]))
                             entries.sundial_resource.state_vars[k] = dev_state_var[k]
 
                         except KeyError:
@@ -610,6 +629,10 @@ class ExecutiveAgent(Agent):
                                         "Pwr_kW",
                                         self.system_resources.state_vars["Pwr_kW"])
 
+        if self.publish_sundial_state_cnt == 0:
+            self.publish_sundial_state_cnt = SUNDIAL_STATE_PUBLICATION_INTERVAL
+        else:
+            self.publish_sundial_state_cnt -= 1
 
     ##############################################################################
     def calc_cost(self, sundial_resource):
@@ -852,8 +875,9 @@ class ExecutiveAgent(Agent):
                 # figure out set point command
                 # note that this returns a setpoint command for a SundialResource ESSCtrlNode, which can group together
                 # potentially multiple ESS end point devices
-                setpoint = calc_ess_setpoint(targetPwr_kW,
-                                             predPwr_kW,
+                setpoint = calc_ess_setpoint(targetPwr_kW, # -> target state for the system (From schedule)
+                                             predPwr_kW,   # -> same as current pwr = PV + Load (not incl ESS)
+                                             netDemand_kW, # -> current total system pwr
                                              SOE_kWh,
                                              min_SOE_kWh,
                                              max_SOE_kWh,
@@ -907,7 +931,12 @@ class ExecutiveAgent(Agent):
 
             self.optimizer_avg_info["curPwrAvg_kW"] = curPwrAvg_kW
             self.optimizer_avg_info["netDemandAvg_kW"] = netDemandAvg_kW
-            self.publish_ess_cmds()
+
+            if self.publish_ess_cmds_cnt == 0:
+                self.publish_ess_cmds()
+                self.publish_ess_cmds_cnt = ESS_CMD_PUBLICATION_INTERVAL
+            else:
+                self.publish_ess_cmds_cnt -= 1
 
     ##############################################################################
     def generate_schedule_timestamps(self, sim_time_corr = timedelta(seconds=0), duration=SSA_SCHEDULE_DURATION*MINUTES_PER_HR):
@@ -945,6 +974,7 @@ class ExecutiveAgent(Agent):
         if (USE_STRATEGIC_SCHEDULE == True) & (self.OperatingMode != EXEC_STARTING):
             _log.info('***********************************************************************************************')
             _log.info('*** RUNNING STRATEGIC SCHEDULE ****')
+            self.publish_sundial_state_cnt = 0 # force to zero to make sure this gets published
             self.update_sundial_resources(self.strategic_sdr,
                                           update_forecasts = False)
             self.run_optimizer(self.strategic_sdr)
@@ -1379,7 +1409,13 @@ class ExecutiveAgent(Agent):
         :return:
         """
 
-        _log.info("ExecutiveStatus: Running Executive.  Curent Mode = "+self.OperatingModes[self.OperatingMode])
+        if self.publish_executive_status_cnt == 0:
+            _log.info("ExecutiveStatus: Running Executive.  Curent Mode = "+self.OperatingModes[self.OperatingMode])
+            if self.OptimizerEnable == 1:
+                _log.info("Next Optimization pass in "+str((GS_SCHEDULE-self.run_optimizer_cnt)*EXECUTIVE_CLKTIME)+" seconds.")
+            self.publish_executive_status_cnt = EXECUTIVE_STATUS_PUBLICATION_INTERVAL
+        else:
+            self.publish_executive_status_cnt -= 1
 
         # Wait until initialization has completed before checking on sites
         if self.OperatingMode != EXEC_STARTING:
