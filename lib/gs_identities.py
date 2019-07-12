@@ -73,13 +73,13 @@ EXECUTIVE_CLKTIME = 1 # period, in seconds, at which the executive polls system 
 DATA_LOG_SCHEDULE = 1  # period at which state vars are logged, in executive clock cycles
 ENDPT_UPDATE_SCHEDULE  = DATA_LOG_SCHEDULE # period at which sundial system resource objects are updated
 GS_SCHEDULE       = 4*60 #2880/6  # GS optimizer period, in executive clock cycles
-ESS_SCHEDULE      = 1 # ess regulation period, in executive clock cycles
+ESS_SCHEDULE      = 2 # ess regulation period, in executive clock cycles
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
 STRATEGIC_SCHEDULE = 24*60*60/2 #240
 
-ESS_CMD_PUBLICATION_INTERVAL       = 5
-SUNDIAL_STATE_PUBLICATION_INTERVAL = 5
-EXECUTIVE_STATUS_PUBLICATION_INTERVAL = 5
+ESS_CMD_PUBLICATION_INTERVAL       = 10
+SUNDIAL_STATE_PUBLICATION_INTERVAL = 10
+EXECUTIVE_STATUS_PUBLICATION_INTERVAL = 10
 
 ####################################
 ### Some basic device and objective fcn configuration options:
@@ -153,6 +153,7 @@ if DEPLOYED == True:
     #SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json"
     SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
     SITE_CFG_FILE   = "SiteConfiguration-PlantLevel.json"
+    DAY_AHEAD_SYSTEM_CFG_FILE = "DayAheadSundialSystemConfiguration.json"
 else:
     SITE_CFG_FILE   = "SiteConfiguration-Emulator.json"
     #SITE_CFG_FILE   = "SiteConfiguration-Emulator-2Sites.json"

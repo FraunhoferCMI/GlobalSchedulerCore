@@ -1111,7 +1111,7 @@ def release_modbus(device, task_id, sitemgr):
             "request_cancel_schedule",
             device.device_id, task_id).get()
 
-        _log.info("release_request_status - "+res["result"])
+        _log.debug("release_request_status - "+res["result"])
 
         if res["result"] == "FAILURE":
             _log.info("Release Modbus: Request failed, reason is " + res["info"])
