@@ -1073,9 +1073,10 @@ class ExecutiveAgent(Agent):
                     self.optimizer.persist_lowest_cost = 1
                 else:
                     self.optimizer.persist_lowest_cost = 0
-                _log.info("persist lower cost = "+str(self.optimizer.persist_lowest_cost)+"; old time = "+self.last_forecast_start.strftime("%Y-%m-%dT%H:%M:%S")+"; new time = "+forecast_start.strftime("%Y-%m-%dT%H:%M:%S"))
 
-                sdr_dict['last_forecast_start'] = forecast_start
+                _log.info("persist lower cost = "+str(self.optimizer.persist_lowest_cost)+"; old time = "+sdr_dict['last_forecast'].strftime("%Y-%m-%dT%H:%M:%S")+"; new time = "+forecast_start.strftime("%Y-%m-%dT%H:%M:%S"))
+                _log.info('Predicted Energy error is: ' + str(predicted_energy_error))
+                sdr_dict['last_forecast'] = forecast_start
 
                 ## queue up time-differentiated cost data
                 _log.info("THESE ARE THE TARIFFS: {}".format(sdr_dict['tariffs']))
