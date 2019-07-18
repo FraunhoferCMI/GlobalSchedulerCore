@@ -162,6 +162,45 @@ class EnergyCostObjectiveFunction(ObjectiveFunction):
     def get_obj_fcn_data(self):
         return self.init_params["cur_cost"][0].tolist()
 
+
+##############################################################################
+class EnergyCostObjectiveFunction_Dynamic(EnergyCostObjectiveFunction):
+
+    ##############################################################################
+    def __init__(self, desc="", init_params=None, **kwargs):
+
+        init_params = {'fname': None,
+                       'is_timestamped': False}
+        # duration --> 'time_step': isodate.parse_duration('PT60M')
+
+
+        ObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
+
+    ##############################################################################
+    def obj_fcn_cfg(self, **kwargs):
+        """
+        retrieve data from a file that represents hrs and prices, starting at hour = 0, through hour 23 (UTC)
+        shifts time to line up with current schedule
+        :param kwargs:
+        :return:
+        """
+
+        if self.init_params['is_timestamped'] == False:
+            prices = pandas.read_csv(self.init_params['fname'], header=None)/100.0  # 0 - 23
+        else:
+            pass # not currently suppored
+
+        timestamps = [v + kwargs['sim_offset'] for v in kwargs['schedule_timestamps']]
+
+        shifted_prices = pandas.DataFrame([0.0]*24, index=timestamps)
+        for ii in range(0,len(timestamps)):
+            shifted_prices[0][timestamps[ii]] = prices[0][timestamps[ii].hour]
+        print(shifted_prices)
+
+        self.init_params["cur_cost"] = numpy.array(shifted_prices.transpose())
+
+
+
 class ISONECostObjectiveFunction(EnergyCostObjectiveFunction):
 
     ##############################################################################

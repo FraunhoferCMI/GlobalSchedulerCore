@@ -67,7 +67,7 @@ class SimulatedAnnealer():
     def __init__(self):
         # SSA configuration parameters:
         self.init_run    = 1            # number of runs to estimate initial temperature and weight
-        self.nIterations = 100000           # Number of iterations
+        self.nIterations = 100000       # Number of iterations
         self.temp_decrease_pd = 1500 # Number of iterations betweeen temperature decrease
         self.jump_decrease_pd = 30 # Number of iterations betweeen jump size decrease
         self.init_jump        = 1.0 #0.5 # initial maximum jump
@@ -76,7 +76,7 @@ class SimulatedAnnealer():
         self.O2T              = 0.5 #05  # Conversion of objective function into initial T
 
 
-        self.display_pd = 5000; # update output for printing m and drawning
+        self.display_pd = 5000 # update output for printing m and drawning
 
         self.tResolution_min          = SSA_SCHEDULE_RESOLUTION # time resolution of SSA optimizer control signals, in minutes
         self.optimizationPd_hr        = SSA_SCHEDULE_DURATION # period of the SSA time horizon, in hrs
@@ -113,10 +113,75 @@ class SimulatedAnnealer():
         The new weight is subject to upper and lower bounds set by ub and lb, respectively
         :return:
         """
-        y2 = (random() - .5) * 2.0 * jump
+        # 7/17 - changed to use discrete battery signals to restrict search space
+        resolution = jump/20.0
+        #y2 = (random() - .5) * 2.0 * jump
+        y2 = resolution * round(((random() - .5) * 2.0 * jump) / resolution)
+        #print(y2)
+        #print(resolution)
         y3 = x + y2
         #y4 = z - y2
         return max(min(y3,ub), lb)   #, max(min(y4,ub), lb)
+
+    ############################
+    def calc_jump2(self, x, jump, lb, ub, max_dis, max_chg):
+        """
+        Returns a new value for an SSA weight by perturbing the current weight x by a random amount between +/- jump.
+        The new weight is subject to upper and lower bounds set by ub and lb, respectively
+        :return:
+        """
+        #jump * (-1 * max_dis_array[ind] + max_chg_array[ind]) / 2,
+
+        y2 = (random() - .5) * 2.0 * jump
+        #y2 = 50 * round(((random() - .5) * 2.0 * jump) / 50)
+        #y3 = x + y2
+        mid_point_of_valid_range = ((x+ub)+(x+lb))/2
+        y3 = mid_point_of_valid_range+y2
+        #y4 = z - y2
+        if (0):
+            if y3>(x+ub):
+                _log.info("Calc jump ub violated ")
+                _log.info("perturb by = " + str(y2)+"; mid point = "+str(mid_point_of_valid_range) + "final val = "+str(y3))
+            elif y3<(x+lb):
+                _log.info("Calc jump lb violated ")
+                _log.info("perturb by = " + str(y2)+"; mid point = "+str(mid_point_of_valid_range) + "final val = "+str(y3))
+                _log.info('LB is '+str(lb))
+                _log.info(self.ess.state_vars['EnergyAvailableForecast_kWh'])
+                _log.info(self.ess.state_vars['DemandForecast_kW'])
+
+        #return y3
+        return max(min(y3,max_chg), max_dis)   #, max(min(y4,ub), lb)
+
+    ############################
+    def calc_jump3(self, x, jump, lb, ub, max_dis, max_chg):
+        """
+        Returns a new value for an SSA weight by perturbing the current weight x by a random amount between +/- jump.
+        The new weight is subject to upper and lower bounds set by ub and lb, respectively
+        :return:
+        """
+        # jump * (-1 * max_dis_array[ind] + max_chg_array[ind]) / 2,
+
+        y2 = (random() - .5) * 2.0 * jump
+        # y2 = 50 * round(((random() - .5) * 2.0 * jump) / 50)
+        # y3 = x + y2
+        mid_point_of_valid_range = ((x + ub) + (x + lb)) / 2
+        y3 = mid_point_of_valid_range + y2
+        # y4 = z - y2
+        if (0):
+            if y3 > (x + ub):
+                _log.info("Calc jump ub violated ")
+                _log.info("perturb by = " + str(y2) + "; mid point = " + str(
+                    mid_point_of_valid_range) + "final val = " + str(y3))
+            elif y3 < (x + lb):
+                _log.info("Calc jump lb violated ")
+                _log.info("perturb by = " + str(y2) + "; mid point = " + str(
+                    mid_point_of_valid_range) + "final val = " + str(y3))
+                _log.info('LB is ' + str(lb))
+                _log.info(self.ess.state_vars['EnergyAvailableForecast_kWh'])
+                _log.info(self.ess.state_vars['DemandForecast_kW'])
+
+        # return y3
+        return max(min(y3, x+ub), x+lb)  # , max(min(y4,ub), lb)
 
     ############################
     def get_resource(self, sundial_profiles, resource_type):
@@ -298,13 +363,16 @@ class SimulatedAnnealer():
 
             system_net_demand_baseline = self.system.state_vars["DemandForecast_kW"]
 
+            self.ess.state_vars['EnergyAvailableForecast_kWh'] = numpy.array([self.ess.sundial_resources.state_vars["StartingSOE_kWh"]] * len(self.ess.state_vars["DemandForecast_kW"]))
+
+            min_cost = 1000000000
+
             # From the initial solution, follow the simulated annealing logic: disturb
             # 1 point and check if there is improvement.
             for ii in range(self.nIterations):
 
                 if (ii % self.display_pd == 0): # for debug - periodically publish results
                     _log.info("Iteration "+str(ii)+": T="+str(T)+"; Least Cost Soln = "+str(least_cost_soln.total_cost))
-
                 if ((ii+1) % self.jump_decrease_pd) == 0: # check if it's time to decrease jump size.
                     # decrease jump size
                     jump = jump*self.fract_jump
@@ -330,11 +398,30 @@ class SimulatedAnnealer():
                 # FIXME: currently this just deals with battery charge / discharge instructions - not other resources
                 # FIXME: e.g., PV curtailment
                 ind = int(floor(random()*self.nOptimizationPtsPerPd))
-                self.ess.state_vars["DemandForecast_kW"][ind] = self.calc_jump(self.ess.state_vars["DemandForecast_kW"][ind],
-                                                                               jump*(self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"]+self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])/2,
-                                                                               -1*self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"],
-                                                                               self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])
+                max_chg_array, max_dis_array = self.ess.sundial_resources.get_allowable_state(self.ess.state_vars, ind)
+                old_cmd = self.ess.state_vars["DemandForecast_kW"][ind]
 
+
+                if (1): # old way
+                    self.ess.state_vars["DemandForecast_kW"][ind] = self.calc_jump(self.ess.state_vars["DemandForecast_kW"][ind],
+                                                                                   jump*(self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"]+self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])/2,
+                                                                                   -1*self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"],
+                                                                                   self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])
+
+                else:
+                    # using full scale jump seems to work better
+                    self.ess.state_vars["DemandForecast_kW"][ind] = self.calc_jump2(self.ess.state_vars["DemandForecast_kW"][ind],
+                                                                                   jump*(self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"]+self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])/2,
+                                                                                   #jump * (-1*max_dis_array + max_chg_array) / 2,
+                                                                                   max_dis_array, #[ind],
+                                                                                   max_chg_array, #[ind],
+                                                                                   -1*self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"],
+                                                                                   self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])
+
+
+                if (0):  # Shouldn't ever happen - here for testing
+                    if abs(self.ess.state_vars["DemandForecast_kW"][ind])>500:
+                        _log.info("Old Command: "+ str(old_cmd) + "; New Command: "+str(ind)+": "+str(self.ess.state_vars["DemandForecast_kW"][ind])+"; Max: "+str(max_chg_array)+"; Min="+str(max_dis_array))
                 # Then: check for constraints.
                 # TODO - right now, just checking for battery limit violations.  Eventually put in ability to include
                 # TODO - additional constraints
@@ -367,6 +454,12 @@ class SimulatedAnnealer():
                 # Calculate delta cost between this test value and the current least cost solution
                 delta = total_cost - least_cost_soln.total_cost
 
+                if total_cost < min_cost:
+                    min_cost = total_cost
+                    iteration_cnt = ii
+                    #_log.info('****** MINIMUM FOUND = ' + str(min_cost) + "****************")
+                    final_soln = self.copy_profile(current_soln, final_soln)
+
                 dirty_flag = True
                 if delta < 0.0:
                     # Current test value is a new least-cost solution.  Use this!
@@ -381,16 +474,23 @@ class SimulatedAnnealer():
                     th = exp(-delta / T)
                     r  = random()
                     if r < th:
-                        #print("non best solution adopted.  r="+str(r)+"; Th = "+str(th)+"; T="+str(T)+"; delta = "+str(delta))
+                        #if delta>20:
+                        #    _log.info("non best solution adopted.  r="+str(r)+"; Th = "+str(th)+"; T="+str(T)+"; delta = "+str(delta))
                         least_cost_soln = self.copy_profile(current_soln, least_cost_soln)  # set least cost soln to current soln
                         dirty_flag = False
 
+                if (ii-iteration_cnt) > 1000:
+                    # revert to absoluate least cost solution
+                    least_cost_soln = self.copy_profile(final_soln, least_cost_soln)
+                    iteration_cnt = ii
+                    #_log.info("Reverting to previous LCS!")
                 # end of main loop (nIterations)
 
             t8 = datetime.now()
             deltaT = t8 - t0
             total_time = deltaT.total_seconds()
 
+            _log.info('****** MINIMUM FOUND = ' + str(min_cost) + "****************")
             _log.info("least cost soln is "+str(least_cost_soln.total_cost))
             _log.info("total time: "+str(total_time))
 
@@ -458,8 +558,13 @@ class SimulatedAnnealer():
         for ii in range(0, len(loadshift_resources.state_vars["LoadShiftOptions_kW"])):
             _log.info("*************** Searching Load Shift Option "+str(ii+1)+" of "+
                       str(len(loadshift_resources.state_vars["LoadShiftOptions_kW"]))+"***************************")
-            loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii]
-            sundial_resources.state_vars["DemandForecast_kW"]   = sundial_resources.state_vars["LoadShiftOptions_kW"][ii]
+            if loadshift_resources.schedule_vars["SelectedProfile"] is not None:
+                loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii] + loadshift_resources.schedule_vars["SelectedProfile"]
+                sundial_resources.state_vars["DemandForecast_kW"]   = sundial_resources.state_vars["LoadShiftOptions_kW"][ii] + loadshift_resources.schedule_vars["SelectedProfile"]
+            else:
+                loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii]
+                sundial_resources.state_vars["DemandForecast_kW"]   = sundial_resources.state_vars["LoadShiftOptions_kW"][ii]
+
         #    sundial_resources.interpolate_forecast(schedule_timestamps)
             least_cost_soln = self.run_ssa_optimization(sundial_resources,timestamps)
             least_cost_soln_list.append(least_cost_soln)
@@ -566,8 +671,11 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
             sundial_resources.cfg_cost(schedule_timestamps,
                                        system_tariff = system_tariff,
                                        solarPlusStorage_tariff = solarPlusStorage_tariff)
-            #optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
-            optimizer.search_single_option(sundial_resources, schedule_timestamps)
+
+            if SEARCH_LOADSHIFT_OPTIONS == True:
+                optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
+            else:
+                optimizer.search_single_option(sundial_resources, schedule_timestamps)
         else:
             _log.info("No valid forecasts found - skipping")
 
@@ -777,6 +885,9 @@ def load_scenarios(cur_resource, gs_start_time):
             load_shift_options = [ls[ii].tolist() for ii in range(0, 13)]
             loadshift_resources.load_scenario(load_options=load_shift_options,
                                               t=forecast_timestamps)
+            loadshift_resources.state_vars["IDList"] = [ii for ii in range(0,13)]
+            loadshift_resources.state_vars["OptionsPending"] = 1
+
     except:
         pass
 
