@@ -887,14 +887,14 @@ class ESSResource(SundialResource):
             time_elapsed = float((schedule_timestamps[0] - cur_time).total_seconds())  # seconds since the first forecast ts
             # fraction of an hour before the next schedule starts
             scale_factor = time_elapsed / float(MINUTES_PER_HR * SEC_PER_MIN)
-            eff_factor = self.get_eff_factor(self.state_vars["TgtPwr_kW"])
+            eff_factor = self.get_eff_factor(self.state_vars["AvgPwr_kW"]) # self.state_vars["TgtPwr_kW"]
 
             self.state_vars["StartingSOE_kWh"] = min(max(self.state_vars["SOE_kWh"] +
-                                                         self.state_vars["TgtPwr_kW"]*scale_factor*eff_factor,
+                                                         self.state_vars["AvgPwr_kW"]*scale_factor*eff_factor, # self.state_vars["TgtPwr_kW"]
                                                          self.state_vars["MinSOE_kWh"]),
                                                      self.state_vars["MaxSOE_kWh"])
             _log.info("Starting SOE is "+str(self.state_vars["StartingSOE_kWh"]))
-            _log.info("Current SOE is "+str(self.state_vars["SOE_kWh"]))
+            _log.info("Current SOE is "+str(self.state_vars["SOE_kWh"])+"; Avg Pwr is "+str(self.state_vars["AvgPwr_kW"])+"; TgtPwr is "+str(self.state_vars["TgtPwr_kW"]))
             _log.info(cur_time)
             _log.info(scale_factor)
 
