@@ -94,7 +94,7 @@ ESS_RESERVE_LOW  = 1.5   # relative to ESS_MIN
 
 USE_PV_ADJUST = 1 # 0 = no adjust; 1 = Use hour lookup adjust
 PV_ADJUST = 1.0 #0.65
-DEMAND_ADJUST = 0.92 #1.0
+DEMAND_ADJUST = 1.0
 #ERROR_MARGIN  = 1.1
 
 
