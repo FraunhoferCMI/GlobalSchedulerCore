@@ -6,12 +6,12 @@
       {
         "FcnName": "EnergyCostObjectiveFunction",
         "params": "desc='EnergyPrice', fname='energy_price_data.xlsx'",
-        "Use": "Y"
+        "Use": "N"
       },
       {
         "FcnName": "DemandChargeObjectiveFunction",
         "params": "desc='DemandCharge', cost_per_kW=10.0, threshold = 0, tariff_key='system_tariff'",
-        "Use": "Y"
+        "Use": "N"
       },
       {
         "FcnName": "dkWObjectiveFunction",
@@ -21,7 +21,7 @@
       {
         "FcnName": "LoadShapeObjectiveFunction",
         "params": "desc='LoadShape', fname='loadshape_prices.xlsx', vble_price=True",
-        "Use": "N"
+        "Use": "Y"
       },
       {
         "FcnName": "DynamicLoadShapeObjectiveFunction",
@@ -30,7 +30,7 @@
       },
       {
         "FcnName": "PeakerPlantObjectiveFunction",
-        "params": "desc='DemandCharge', cost_per_kW=10.0, threshold=250, tariff_key='peaker_tariff'",
+        "params": "desc='DemandCharge', cost_per_kW=20.0, threshold=150, tariff_key='peaker_tariff'",
         "Use": "N"
       }
     ],
