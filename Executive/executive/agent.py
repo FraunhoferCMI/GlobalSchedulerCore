@@ -757,6 +757,10 @@ class ExecutiveAgent(Agent):
         pass
 
     ##############################################################################
+    def send_site_tgt(self):
+        pass
+
+    ##############################################################################
     #@Core.periodic(ESS_SCHEDULE)
     def send_ess_commands(self):
         """
@@ -765,68 +769,71 @@ class ExecutiveAgent(Agent):
         devices
         :return: None
         """
-        if self.OptimizerEnable == ENABLED:
-            # Now we need to determine the target battery set point.  To do so, look at the total current system
-            # power output, subtracting the contribution from the battery.  The delta between total current system
-            # output and the schedule output determines the target ESS set point.
-            # Note: As currently implemented, this is reactive, so high likelihood that this will chase noise
-            #
-            # retrieve the current power output of the system, not including energy storage.
-            # taking a shortcut here - implicit assumption that there is a single pool of ESS
-            curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
-            curPwrAvg_kW = self.system_resources.state_vars["AvgPwr_kW"] - self.ess_resources.state_vars["AvgPwr_kW"] 
-            netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
-            # get 5 sec average?
+        #if self.OptimizerEnable == ENABLED:
+        # Now we need to determine the target battery set point.  To do so, look at the total current system
+        # power output, subtracting the contribution from the battery.  The delta between total current system
+        # output and the schedule output determines the target ESS set point.
+        # Note: As currently implemented, this is reactive, so high likelihood that this will chase noise
+        #
+        # retrieve the current power output of the system, not including energy storage.
+        # taking a shortcut here - implicit assumption that there is a single pool of ESS
+        curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
+        curPwrAvg_kW = self.system_resources.state_vars["AvgPwr_kW"] - self.ess_resources.state_vars["AvgPwr_kW"]
+        netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
+        # get 5 sec average?
 
-            #######
-            end = datetime.utcnow()+timedelta(seconds=1)
-            st = end - timedelta(seconds=5)
+        ####### Caalculated a 5 second average from the database
+        end = datetime.utcnow()+timedelta(seconds=1)
+        st = end - timedelta(seconds=5)
 
-            st_str = st.strftime(TIME_FORMAT)
-            end_str = end.strftime(TIME_FORMAT)
+        st_str = st.strftime(TIME_FORMAT)
+        end_str = end.strftime(TIME_FORMAT)
 
-            device_path_str = 'Executive/netDemand_kW'
-            topic_name = 'datalogger/'+device_path_str
-            netDemand_5SecAvg, n_pts = HistorianTools.calc_avg(self, topic_name, st_str, end_str)
-            _log.info("Calc Avg: "+str(netDemand_5SecAvg)+"; netDemand = "+str(netDemand_kW)+"; n pts = "+str(n_pts))
-            if n_pts == 0:
-                netDemand_5SecAvg = netDemand_kW
-            else:
-                netDemand_5SecAvg = netDemand_kW/(n_pts+1) + netDemand_5SecAvg*n_pts/(n_pts+1)
-            ######
+        device_path_str = 'Executive/netDemand_kW'
+        topic_name = 'datalogger/'+device_path_str
+        netDemand_5SecAvg, n_pts = HistorianTools.calc_avg(self, topic_name, st_str, end_str)
+        _log.info("Calc Avg: "+str(netDemand_5SecAvg)+"; netDemand = "+str(netDemand_kW)+"; n pts = "+str(n_pts))
+        if n_pts == 0:
+            netDemand_5SecAvg = netDemand_kW
+        else:
+            netDemand_5SecAvg = netDemand_kW/(n_pts+1) + netDemand_5SecAvg*n_pts/(n_pts+1)
+        ######
 
 
-            netDemandAvg_kW = self.system_resources.state_vars["AvgPwr_kW"]
+        netDemandAvg_kW = self.system_resources.state_vars["AvgPwr_kW"]
 
-            SOE_kWh = self.ess_resources.state_vars["SOE_kWh"]
-            min_SOE_kWh = self.ess_resources.state_vars["MinSOE_kWh"]
-            max_SOE_kWh = self.ess_resources.state_vars["MaxSOE_kWh"]
+        SOE_kWh = self.ess_resources.state_vars["SOE_kWh"]
+        min_SOE_kWh = self.ess_resources.state_vars["MinSOE_kWh"]
+        max_SOE_kWh = self.ess_resources.state_vars["MaxSOE_kWh"]
 
-            if self.prevPwr_kW is None:
-                self.prevPwr_kW = curPwr_kW
-            elif SMOOTH_RAMP == False:
-                self.prevPwr_kW = curPwr_kW
-
-            #Determines slope between current and previous point
-            predchangePwr_kW = self.get_extrapolation(self.prevPwr_kW, curPwr_kW, 1, 1)
-                        #Determines if queue(FIFO) is full
-            if len(self.queuePwr) == self.queuePwr.maxlen:
-                #If full, pop the most element at front of queue(FIFO)
-                self.queuePwr.popleft()
-            #Push latest calculated slope value into end of queue(FIFO)
-            self.queuePwr.append(predchangePwr_kW)
-            #Predicted power is equal to the current Power + rolling average of slope
-            if SMOOTH_RAMP == True:
-                predPwr_kW = curPwr_kW + (sum(self.queuePwr) / len(self.queuePwr))
-            else:
-                predPwr_kW = curPwr_kW #+ (sum(self.queuePwr) / len(self.queuePwr))
-            #Updates previous power holding variable
+        if self.prevPwr_kW is None:
             self.prevPwr_kW = curPwr_kW
+        elif SMOOTH_RAMP == False:
+            self.prevPwr_kW = curPwr_kW
+
+        #Determines slope between current and previous point
+        predchangePwr_kW = self.get_extrapolation(self.prevPwr_kW, curPwr_kW, 1, 1)
+                    #Determines if queue(FIFO) is full
+        if len(self.queuePwr) == self.queuePwr.maxlen:
+            #If full, pop the most element at front of queue(FIFO)
+            self.queuePwr.popleft()
+        #Push latest calculated slope value into end of queue(FIFO)
+        self.queuePwr.append(predchangePwr_kW)
+        #Predicted power is equal to the current Power + rolling average of slope
+        if SMOOTH_RAMP == True:
+            predPwr_kW = curPwr_kW + (sum(self.queuePwr) / len(self.queuePwr))
+        else:
+            predPwr_kW = curPwr_kW #+ (sum(self.queuePwr) / len(self.queuePwr))
+        #Updates previous power holding variable
+        self.prevPwr_kW = curPwr_kW
+
+        if self.OptimizerEnable == ENABLED:
 
             if USE_FORECAST_VALUE == True:
                 if ALIGN_SCHEDULES == True:
                     cur_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0,tzinfo=pytz.utc)
                     try:
+                        # this adjusts the target power based on how close we are to the battery's upper reserve margin
                         reserve_soe_high = max_SOE_kWh * ESS_RESERVE_HIGH
                         reserve_soe_low  = min_SOE_kWh * ESS_RESERVE_LOW
                         soe_upper_buffer_used =  (SOE_kWh-reserve_soe_high) / (max_SOE_kWh-reserve_soe_high)
@@ -837,12 +844,12 @@ class ExecutiveAgent(Agent):
 
                         if (soe_upper_buffer_used >= 0) & (targetPwr_kW>0):
                             # SOE is above reserve margin and charge commanded - calculate the target as a
-                            # blended fraction of the scheduled value and the recent average
+                            # blended fraction of the scheduled value and the recent average solar production
                             targetPwr_kW   = targetPwr_kW + soe_upper_buffer_used * (reserve_target-targetPwr_kW)
                             _log.info('In ESS upper reserve margin: upper buffer = '+str(soe_upper_buffer_used)+'; reserve_soe_high = '+str(reserve_soe_high))
                         elif (soe_lower_buffer_used >= 0) & (targetPwr_kW<0):
                             # SOE is below lower reserve margin and discharge commanded - calculate the target as a
-                            # blended fraction of the scheduled value and the recent average
+                            # blended fraction of the scheduled value and the recent average solar production
                             targetPwr_kW   = targetPwr_kW + soe_lower_buffer_used * (reserve_target - targetPwr_kW)
                             _log.info('In ESS lower reserve margin: lower buffer = ' + str(soe_lower_buffer_used) + '; reserve_soe_low = ' + str(reserve_soe_low))
                         expectedPwr_kW = self.pv_resources.schedule_vars["schedule_kW"][cur_time] + self.load_resources.schedule_vars["schedule_kW"][cur_time]
@@ -877,22 +884,43 @@ class ExecutiveAgent(Agent):
                 expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][0] + self.load_resources.schedule_vars["DemandForecast_kW"][0]
                 essTargetPwr_kW = 0
                 expectedSOE_kWh = self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][0]
+        else:
+            targetPwr_kW = self.pv_resources.state_vars["AvgPwr_kW"]
+            expectedPwr_kW = self.pv_resources.state_vars["AvgPwr_kW"] + self.load_resources.state_vars["AvgPwr_kW"]
+            essTargetPwr_kW = 0
+            expectedSOE_kWh = self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][0]
 
-            forecastError_kW = expectedPwr_kW - curPwr_kW
-            _log.debug("Regulator: Forecast Power is " + str(expectedPwr_kW))
-            _log.debug("Regulator: Scheduled power output is " + str(targetPwr_kW))
-            _log.debug("Regulator: Current PV+Load is "+str(curPwr_kW))
-            _log.debug("Regulator: Forecast Error "+str(forecastError_kW))
-            _log.debug("Regulator: Expected SOE "+str(expectedSOE_kWh))
+        forecastError_kW = expectedPwr_kW - curPwr_kW
+        _log.debug("Regulator: Forecast Power is " + str(expectedPwr_kW))
+        _log.debug("Regulator: Scheduled power output is " + str(targetPwr_kW))
+        _log.debug("Regulator: Current PV+Load is "+str(curPwr_kW))
+        _log.debug("Regulator: Forecast Error "+str(forecastError_kW))
+        _log.debug("Regulator: Expected SOE "+str(expectedSOE_kWh))
 
-            if IMPORT_CONSTRAINT == True:
-                max_charge_kW = min(-1*self.pv_resources.state_vars["Pwr_kW"],
-                                    self.ess_resources.state_vars["MaxChargePwr_kW"])
-            else:
-                max_charge_kW = self.ess_resources.state_vars["MaxChargePwr_kW"]
+        if IMPORT_CONSTRAINT == True:
+            max_charge_kW = min(-1*self.pv_resources.state_vars["Pwr_kW"],
+                                self.ess_resources.state_vars["MaxChargePwr_kW"])
+        else:
+            max_charge_kW = self.ess_resources.state_vars["MaxChargePwr_kW"]
 
-            max_discharge_kW = self.ess_resources.state_vars["MaxDischargePwr_kW"]
+        max_discharge_kW = self.ess_resources.state_vars["MaxDischargePwr_kW"]
 
+        REGULATE_PCC = True
+        if REGULATE_PCC == True:
+            pv_plus_ess_tgt = targetPwr_kW - self.load_resources.state_vars['Pwr_kW'] # Schedule - Load
+            setpoint = pv_plus_ess_tgt
+
+            for entries in self.sdr_to_sm_lookup_table:
+                if entries.sundial_resource.resource_type == "ESSCtrlNode":  # for each ESS
+                    for devices in entries.device_list:  # for each end point device associated with that ESS
+                        if devices["isAvailable"] == 1:  # device is available for control
+                            self.vip.rpc.call(str(devices["AgentID"]),
+                                              "set_pcc_target",
+                                              devices["DeviceID"],
+                                              pv_plus_ess_tgt)
+
+            pass
+        else:
             if REGULATE_ESS_OUTPUT == True:
                 # figure out set point command
                 # note that this returns a setpoint command for a SundialResource ESSCtrlNode, which can group together
@@ -943,20 +971,20 @@ class ExecutiveAgent(Agent):
                                               pro_rata_share)
 
 
-            self.optimizer_info["setpoint"] = setpoint
-            self.optimizer_info["targetPwr_kW"] = targetPwr_kW
-            self.optimizer_info["curPwr_kW"] = curPwr_kW
-            self.optimizer_info["expectedPwr_kW"] = expectedPwr_kW
-            self.optimizer_info["expectedSOE_kWh"] = expectedSOE_kWh
-            self.optimizer_info["forecastError_kW"] = forecastError_kW
-            self.optimizer_info["predPwr_kW"] = predPwr_kW
-            self.optimizer_info["netDemand_kW"]   = netDemand_kW
-            self.optimizer_info["netDemand5SecAvg_kW"] = netDemand_5SecAvg
+        self.optimizer_info["setpoint"] = setpoint
+        self.optimizer_info["targetPwr_kW"] = targetPwr_kW
+        self.optimizer_info["curPwr_kW"] = curPwr_kW
+        self.optimizer_info["expectedPwr_kW"] = expectedPwr_kW
+        self.optimizer_info["expectedSOE_kWh"] = expectedSOE_kWh
+        self.optimizer_info["forecastError_kW"] = forecastError_kW
+        self.optimizer_info["predPwr_kW"] = predPwr_kW
+        self.optimizer_info["netDemand_kW"]   = netDemand_kW
+        self.optimizer_info["netDemand5SecAvg_kW"] = netDemand_5SecAvg
 
-            self.optimizer_avg_info["curPwrAvg_kW"] = curPwrAvg_kW
-            self.optimizer_avg_info["netDemandAvg_kW"] = netDemandAvg_kW
+        self.optimizer_avg_info["curPwrAvg_kW"] = curPwrAvg_kW
+        self.optimizer_avg_info["netDemandAvg_kW"] = netDemandAvg_kW
 
-            self.publish_ess_cmds()
+        self.publish_ess_cmds()
 
     ##############################################################################
     def generate_schedule_timestamps(self, sim_time_corr = timedelta(seconds=0), duration=SSA_SCHEDULE_DURATION*MINUTES_PER_HR):

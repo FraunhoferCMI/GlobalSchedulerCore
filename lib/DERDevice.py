@@ -1549,6 +1549,7 @@ class ShirleySite(DERSite, DERModbusDevice):
         #TODO: Limit check
         self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": int(val)})
         _log.info("Setting Power to "+str(val))
+
         self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
         self.writePending["SetPoint"] = 1
         self.expectedValue["SetPoint"] = int(val)
@@ -1956,6 +1957,27 @@ class ESSCtrlNode(DERModbusCtrlNode):
                                                                       SSA_SCHEDULE_RESOLUTION)]
 
 
+    ##############################################################################
+    def change_setpoint(self, req_delta, SiteMgr):
+
+        # see if the requested change is feasible:
+        cur_setpoint = self.state_vars['SetPt']   # change to SetPoint????
+        max_charge_kW = self.state_vars['MaxChargePwr_kW']
+        max_discharge_kW = self.state_vars['MaxDischargePwr_kW']
+
+        setpoint = cur_setpoint+req_delta
+
+        # check that we are within power limits of the storage system
+        if setpoint < -1 * max_discharge_kW:
+            setpoint = -1 * max_discharge_kW
+            _log.info("ESSCtrlNode: Power-limited Setpoint =" + str(setpoint)+"; current setpoint = "+str(cur_setpoint))
+        if setpoint > max_charge_kW:
+            setpoint = max_charge_kW
+            _log.info("ESSCtrlNode: Power-limited Setpoint =" + str(setpoint)+"; current setpoint = "+str(cur_setpoint))
+
+        _log.info("Sending ESS command = "+str(setpoint)+"; cur = "+str(cur_setpoint)+"; req_delta = "+str(req_delta))
+        success = self.set_power_real(setpoint, SiteMgr)
+
 
 
 ##############################################################################
@@ -2114,7 +2136,6 @@ class ESSDevice(DERDevice):
 
     ##############################################################################
     def __init__(self, device_info, parent_device=None, gs_start_time=None):
-
         DERDevice.__init__(self, device_info, parent_device, gs_start_time) #device_id, device_type, parent_device)
 
         _log.info("Device info is ="+str(device_info))

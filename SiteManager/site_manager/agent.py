@@ -556,6 +556,46 @@ class SiteManagerAgent(Agent):
 
     ##############################################################################
     @RPC.export
+    def set_pcc_target(self, device_id, targetPwr_kW):
+
+        # find the device
+        #device_id = args[0] #*args
+        #val = args[1]
+        SOLAR_NAMEPLATE = 500 # FIXME TEMP!!!!!
+        setpoint_cmd_interval = 1
+        RR_CTRL = True
+        MAX_RR_PCT_PER_MIN = 0.20
+
+        device = self.site.find_device(device_id)
+
+        if device == None:
+            _log.info("SetPCCTgt: ERROR! Device "+device_id+" not found in "+self.site.device_id)
+        else:
+            # send the command
+            self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
+
+            # first retrieve the current PCC power
+            pccPwr_kW = self.site.state_vars['Pwr_kW']
+
+
+            # now calculate the requested change in power
+            req_delta = targetPwr_kW - pccPwr_kW
+            _log.info("SetPCCTgt: PCC Target is: "+str(targetPwr_kW)+"; Actual pcc = "+str(pccPwr_kW)+"; req delta = "+str(req_delta))
+            if RR_CTRL == True:  # limit the change based on configured RR limits
+                max_delta = MAX_RR_PCT_PER_MIN * SOLAR_NAMEPLATE * setpoint_cmd_interval / 60.0  # kW per cmd
+                if req_delta < 0:
+                    req_delta = max(req_delta, -1 * max_delta)
+                else:
+                    req_delta = min(req_delta, max_delta)
+            #val = 0
+
+            success = device.change_setpoint(req_delta, self)
+            if success == 0:
+                self.dirtyFlag = 0 # invalid write
+
+
+    ##############################################################################
+    @RPC.export
     def set_real_pwr_cmd(self, device_id, val):
         """
         sends a real power command to the specified device
