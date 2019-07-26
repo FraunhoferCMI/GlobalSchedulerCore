@@ -95,6 +95,7 @@ default_units = {"setpoint":"kW",
                  "expectedSOE_kWh": "kWh",
                  "netDemand_kW": "kW",
                  "netDemandAvg_kW": "kW",
+                 "netDemand5SecAvg_kW": "kW",
                  "timestamp": "datetime",
                  "gs_start_time": "datetime",
                  "SIM_START_TIME": "datetime",
@@ -231,6 +232,7 @@ class ExecutiveAgent(Agent):
         self.optimizer_info.update({"expectedSOE_kWh": 0.0})
         self.optimizer_info.update({"forecastError_kW": 0.0})
         self.optimizer_info.update({"netDemand_kW": 0.0})
+        self.optimizer_info.update({"netDemand5SecAvg_kW": 0.0})
         self.optimizer_info.update({"predPwr_kW": 0.0})
 
         self.optimizer_avg_info = {}
@@ -786,11 +788,11 @@ class ExecutiveAgent(Agent):
             device_path_str = 'Executive/netDemand_kW'
             topic_name = 'datalogger/'+device_path_str
             netDemand_5SecAvg, n_pts = HistorianTools.calc_avg(self, topic_name, st_str, end_str)
-            #_log.info("Calc Avg: "+str(avg_pwr)+"; n pts = "+str(n_pts))
+            _log.info("Calc Avg: "+str(netDemand_5SecAvg)+"; netDemand = "+str(netDemand_kW)+"; n pts = "+str(n_pts))
             if n_pts == 0:
                 netDemand_5SecAvg = netDemand_kW
             else:
-                netDemand_5SecAvg = netDemand_kW * 0.5 + netDemand_5SecAvg*0.5
+                netDemand_5SecAvg = netDemand_kW/(n_pts+1) + netDemand_5SecAvg*n_pts/(n_pts+1)
             ######
 
 
@@ -897,7 +899,8 @@ class ExecutiveAgent(Agent):
                 # potentially multiple ESS end point devices
                 setpoint = calc_ess_setpoint(targetPwr_kW, # -> target state for the system (From schedule)
                                              predPwr_kW,   # -> same as current pwr = PV + Load (not incl ESS)
-                                             netDemand_kW, # -> current total system pwr
+                                             #netDemand_kW, # -> current total system pwr
+                                             netDemand_5SecAvg, # -> current total system pwr
                                              SOE_kWh,
                                              min_SOE_kWh,
                                              max_SOE_kWh,
@@ -948,6 +951,7 @@ class ExecutiveAgent(Agent):
             self.optimizer_info["forecastError_kW"] = forecastError_kW
             self.optimizer_info["predPwr_kW"] = predPwr_kW
             self.optimizer_info["netDemand_kW"]   = netDemand_kW
+            self.optimizer_info["netDemand5SecAvg_kW"] = netDemand_5SecAvg
 
             self.optimizer_avg_info["curPwrAvg_kW"] = curPwrAvg_kW
             self.optimizer_avg_info["netDemandAvg_kW"] = netDemandAvg_kW
@@ -1255,6 +1259,15 @@ class ExecutiveAgent(Agent):
                                     TimeStamp_str=sdr_dict['ESS'].schedule_vars["timestamp"][23].strftime(
                                         "%Y-%m-%dT%H:%M:%S"),
                                     ref_time=self.gs_start_time)
+        HistorianTools.publish_data(self,
+                                    sdr_dict['path']+"ESSResource/Schedule",
+                                    default_units["EnergyAvailableForecast_kWh"],
+                                    "EnergyAvailableForecast_tPlus0_kWh",
+                                    sdr_dict['ESS'].schedule_vars["EnergyAvailableForecast_kWh"][0],
+                                    TimeStamp_str=sdr_dict['ESS'].schedule_vars["timestamp"][0].strftime(
+                                        "%Y-%m-%dT%H:%M:%S"),
+                                    ref_time = self.gs_start_time)
+
         HistorianTools.publish_data(self,
                                     sdr_dict['path']+"ESSResource/Schedule",
                                     default_units["EnergyAvailableForecast_kWh"],
