@@ -1,0 +1,2 @@
+Reference Point,Volttron Point Name,Units,Unit Details,Modbus Register,Writable,Point Address,Default Value,Notes
+,pcc_meter.meter.W,100W,,>h,TRUE,362,0,
