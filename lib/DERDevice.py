@@ -1968,7 +1968,7 @@ class ESSCtrlNode(DERModbusCtrlNode):
             cur_setpoint = self.state_vars['Pwr_kW']
         else:
             #cur_setpoint = self.state_vars['Pwr_kW']  # self.op_status.data_dict['CtrlRegister']
-            cur_setpoint = self.op_status.data_dict['CtrlRegister']
+            cur_setpoint = -1*self.op_status.data_dict['CtrlRegister']
 
         max_charge_kW = self.state_vars['MaxChargePwr_kW']
         max_discharge_kW = self.state_vars['MaxDischargePwr_kW']
