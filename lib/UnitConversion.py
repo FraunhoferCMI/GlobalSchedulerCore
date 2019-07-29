@@ -10,7 +10,11 @@ def PctToUnits(val,nameplate):
     return float(val)/100.0 * nameplate
 
 def UnitsToPct(val, nameplate):
-    return int(float(val)*100.0 / float(nameplate))
+    return round(float(val)*100.0 / float(nameplate))
+
+def UnitsToFracPct(val, nameplate):
+    return round(10*float(val)*100.0 / float(nameplate))/10
+
 
 def SunSpecScale(keyval, cur_attribute, to_unit_scale, to_unit_units, val, incoming_msg=None):
     base_name = keyval[:len(keyval) - len(to_unit_units)]  # assume this has a unit on the end of the name

@@ -568,7 +568,7 @@ class DERDevice():
             cur_device.print_site_status()
 
     ##############################################################################
-    def calc_avg_pwr(self, SiteMgr):
+    def calc_avg_pwr(self, SiteMgr, averaging_window=AVERAGING_WINDOW):
         """
         Calculates average power for the device over a window of time defined by AVERAGING_WINDOW seconds
         If no points are available, returns the previous AvgPwr.
@@ -577,7 +577,7 @@ class DERDevice():
         """
         if SiteMgr is not None:
             end = datetime.utcnow()+timedelta(seconds=1)
-            st = end - timedelta(seconds=AVERAGING_WINDOW)
+            st = end - timedelta(seconds=averaging_window)
 
             st_str = st.strftime(TIME_FORMAT)
             end_str = end.strftime(TIME_FORMAT)
@@ -587,11 +587,11 @@ class DERDevice():
             avg_pwr, n_pts = HistorianTools.calc_avg(SiteMgr, topic_name, st_str, end_str)
             #_log.info("Calc Avg: "+str(avg_pwr)+"; n pts = "+str(n_pts))
             if n_pts == 0:
-                return self.state_vars['AvgPwr_kW']
+                return self.state_vars['AvgPwr_kW'], n_pts
             else:
-                return avg_pwr
+                return avg_pwr, n_pts
         else: # still initializing, no actual data
-            return 0
+            return 0, 0
 
     ##############################################################################
     def update_state_vars(self, SiteMgr):
@@ -618,7 +618,7 @@ class DERDevice():
         try:
             if self.op_status.data_dict["Pwr_kW"] is not None:
                 self.state_vars.update({"Pwr_kW": self.op_status.data_dict["Pwr_kW"]})
-                self.state_vars.update({"AvgPwr_kW": self.calc_avg_pwr(SiteMgr)})
+                self.state_vars.update({"AvgPwr_kW": self.calc_avg_pwr(SiteMgr)}[0])
         except KeyError:
             pass
 
@@ -672,7 +672,7 @@ class DERDevice():
                 else:
                     # write has not completed successfully - increment nTries, check for if a timeout is triggered
                     self.nTries[reg] += 1
-                    _log.info("Write missed for " + str(reg) + "- try # " + str(self.nTries[reg]) + ".  Expected - "+str(self.expectedValue[reg])+
+                    _log.debug("Write missed for " + str(reg) + "- try # " + str(self.nTries[reg]) + ".  Expected - "+str(self.expectedValue[reg])+
                               "; read "+str(self.writeRegAttributes[reg].data_dict[self.writeReg[reg]]))
                     if self.nTries[reg] >= MODBUS_WRITE_ATTEMPTS:
                         self.writeError[reg] = 1
@@ -801,8 +801,7 @@ class DERDevice():
             val           = self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]
             _log.debug("SetPt: Name plate is "+str(nameplate))
             #self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"] = \
-            converted_val = int(eval(site.unit_conversion_table[conversionKey]))
-
+            converted_val = round(eval(site.unit_conversion_table[conversionKey]))
             _log.info("SetPt: "+cmd+" ("+from_units + ") to "+ext_endpt+" ("+to_units + "); New val = "+ str(converted_val)) #str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
 
         except KeyError as e:
@@ -1939,7 +1938,7 @@ class ESSCtrlNode(DERModbusCtrlNode):
         self.update_state_vars(None)
 
         self.state_vars["OrigDemandForecast_t_str"] = [0.0]*SSA_PTS_PER_SCHEDULE
-
+        self.prev_setpt = 0.0
 
     ##############################################################################
     def update_state_vars(self, SiteMgr):
@@ -1961,12 +1960,26 @@ class ESSCtrlNode(DERModbusCtrlNode):
     def change_setpoint(self, req_delta, SiteMgr):
 
         # see if the requested change is feasible:
-        cur_setpoint = self.state_vars['SetPt']   # change to SetPoint????
+        if DEPLOYED == False:
+            # cur_setpoint = self.state_vars['SetPt']
+            # cur_setpoint = self.pwr_ctrl.data_dict['SetPoint']
+            #cur_setpoint = self.op_status.data_dict['CtrlRegister']
+            #cur_setpoint = self.prev_setpt
+            cur_setpoint = self.state_vars['Pwr_kW']
+        else:
+            #cur_setpoint = self.state_vars['Pwr_kW']  # self.op_status.data_dict['CtrlRegister']
+            cur_setpoint = self.op_status.data_dict['CtrlRegister']
+
         max_charge_kW = self.state_vars['MaxChargePwr_kW']
         max_discharge_kW = self.state_vars['MaxDischargePwr_kW']
 
+        _log.info("Estimated current ess output=  "+str(cur_setpoint))
+        _log.info("current ess setpoint=  "+str(self.pwr_ctrl.data_dict['SetPoint']))
+        _log.info("ctrl reg = "+str(self.op_status.data_dict['CtrlRegister']))
+        _log.info(req_delta)
         setpoint = cur_setpoint+req_delta
-
+        #_log.info(self.op_status.data_dict['SetPt'])
+        #_log.info(self.state_vars['SetPoint'])
         # check that we are within power limits of the storage system
         if setpoint < -1 * max_discharge_kW:
             setpoint = -1 * max_discharge_kW
@@ -1977,6 +1990,8 @@ class ESSCtrlNode(DERModbusCtrlNode):
 
         _log.info("Sending ESS command = "+str(setpoint)+"; cur = "+str(cur_setpoint)+"; req_delta = "+str(req_delta))
         success = self.set_power_real(setpoint, SiteMgr)
+
+        self.prev_setpt = self.pwr_ctrl.data_dict['SetPoint']
 
 
 

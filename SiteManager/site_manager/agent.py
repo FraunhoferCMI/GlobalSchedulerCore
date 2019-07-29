@@ -562,12 +562,13 @@ class SiteManagerAgent(Agent):
         #device_id = args[0] #*args
         #val = args[1]
         SOLAR_NAMEPLATE = 500 # FIXME TEMP!!!!!
-        setpoint_cmd_interval = 1
+        setpoint_cmd_interval = 2.5
         RR_CTRL = True
         MAX_RR_PCT_PER_MIN = 0.20
 
         device = self.site.find_device(device_id)
 
+        #targetPwr_kW = -100
         if device == None:
             _log.info("SetPCCTgt: ERROR! Device "+device_id+" not found in "+self.site.device_id)
         else:
@@ -576,18 +577,28 @@ class SiteManagerAgent(Agent):
 
             # first retrieve the current PCC power
             pccPwr_kW = self.site.state_vars['Pwr_kW']
-
+            pccAvgPwr_kW,n_pts = self.site.calc_avg_pwr(self, averaging_window=60) # 10 second average
+            pccAvgPwr_kW = pccPwr_kW  / (n_pts+1) + pccAvgPwr_kW * n_pts / (n_pts+1)
+            ######
 
             # now calculate the requested change in power
-            req_delta = targetPwr_kW - pccPwr_kW
-            _log.info("SetPCCTgt: PCC Target is: "+str(targetPwr_kW)+"; Actual pcc = "+str(pccPwr_kW)+"; req delta = "+str(req_delta))
+            #_log.info("SetPCCTgt: PCC Target is: {:.1f}"+str(targetPwr_kW)+"; current PCC = "+str(pccPwr_kW)+"; npts="+str(n_pts))
+            _log.info("SetPCCTgt: PCC Target is: {:.1f}" + "; current PCC = " + str(pccPwr_kW) + "; npts=" + str(n_pts)).format(targetPwr_kW)
+            _log.info("Avg pcc = " + str(pccAvgPwr_kW))
+
             if RR_CTRL == True:  # limit the change based on configured RR limits
+                req_delta = targetPwr_kW - pccAvgPwr_kW
+                _log.info('orig req delta is: '+str(req_delta))
                 max_delta = MAX_RR_PCT_PER_MIN * SOLAR_NAMEPLATE * setpoint_cmd_interval / 60.0  # kW per cmd
                 if req_delta < 0:
                     req_delta = max(req_delta, -1 * max_delta)
                 else:
                     req_delta = min(req_delta, max_delta)
-            #val = 0
+                _log.info('corrected req delta is: '+str(req_delta))
+                targetPwr_kW = pccAvgPwr_kW+req_delta
+
+            req_delta = targetPwr_kW - pccPwr_kW
+            _log.info("SetPCCTgt: New PCC Target is: "+str(targetPwr_kW)+"; final req delta = "+str(req_delta))
 
             success = device.change_setpoint(req_delta, self)
             if success == 0:
