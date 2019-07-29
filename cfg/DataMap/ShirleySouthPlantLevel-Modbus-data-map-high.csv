@@ -1,5 +1,6 @@
 IBS.real_pwr_ctrl.W_SetPoint,ShirleySouth-ESSPlant,RealPwrCtrl,SetPoint,Y,kW
 ess.tesla_real_pwr_ctrl.DirectReal_Power,ShirleySouth-ESSPlant-ESS1,RealPwrCtrl,SetPoint,Y,kW
+ess.real_pwr_ctrl.CurrentTarget,ShirleySouth-ESSPlant,OpStatus,CtrlRegister,Y,kW
 ess.tesla_status.Status_BatteryTargetP,ShirleySouth-ESSPlant-ESS1,OpStatus,SetPt_kW,Y,kW
 ess.tesla_meter.Power_3Ph,ShirleySouth-ESSPlant-ESS1,OpStatus,Pwr_kW,Y,kW
 inv1.pwr_ctrl.Real_Power_Setpoint,ShirleySouth-PVPlant-Inverter1,RealPwrCtrl,SetPoint,Y,kW
