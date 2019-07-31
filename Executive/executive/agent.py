@@ -905,70 +905,72 @@ class ExecutiveAgent(Agent):
 
         max_discharge_kW = self.ess_resources.state_vars["MaxDischargePwr_kW"]
 
-        REGULATE_PCC = True
-        if REGULATE_PCC == True:
-            pv_plus_ess_tgt = targetPwr_kW - self.load_resources.state_vars['Pwr_kW'] # Schedule - Load
-            setpoint = pv_plus_ess_tgt
+        if self.OptimizerEnable == ENABLED:
 
-            for entries in self.sdr_to_sm_lookup_table:
-                if entries.sundial_resource.resource_type == "ESSCtrlNode":  # for each ESS
-                    for devices in entries.device_list:  # for each end point device associated with that ESS
-                        if devices["isAvailable"] == 1:  # device is available for control
-                            self.vip.rpc.call(str(devices["AgentID"]),
-                                              "set_pcc_target",
-                                              devices["DeviceID"],
-                                              pv_plus_ess_tgt)
+            REGULATE_PCC = True
+            if REGULATE_PCC == True:
+                pv_plus_ess_tgt = targetPwr_kW - self.load_resources.state_vars['Pwr_kW'] # Schedule - Load
+                setpoint = pv_plus_ess_tgt
 
-            pass
-        else:
-            if REGULATE_ESS_OUTPUT == True:
-                # figure out set point command
-                # note that this returns a setpoint command for a SundialResource ESSCtrlNode, which can group together
-                # potentially multiple ESS end point devices
-                setpoint = calc_ess_setpoint(targetPwr_kW, # -> target state for the system (From schedule)
-                                             predPwr_kW,   # -> same as current pwr = PV + Load (not incl ESS)
-                                             #netDemand_kW, # -> current total system pwr
-                                             netDemand_5SecAvg, # -> current total system pwr
-                                             SOE_kWh,
-                                             min_SOE_kWh,
-                                             max_SOE_kWh,
-                                             max_charge_kW,
-                                             max_discharge_kW)
+                for entries in self.sdr_to_sm_lookup_table:
+                    if entries.sundial_resource.resource_type == "ESSCtrlNode":  # for each ESS
+                        for devices in entries.device_list:  # for each end point device associated with that ESS
+                            if devices["isAvailable"] == 1:  # device is available for control
+                                self.vip.rpc.call(str(devices["AgentID"]),
+                                                  "set_pcc_target",
+                                                  devices["DeviceID"],
+                                                  pv_plus_ess_tgt)
 
+                pass
             else:
-                setpoint = essTargetPwr_kW
+                if REGULATE_ESS_OUTPUT == True:
+                    # figure out set point command
+                    # note that this returns a setpoint command for a SundialResource ESSCtrlNode, which can group together
+                    # potentially multiple ESS end point devices
+                    setpoint = calc_ess_setpoint(targetPwr_kW, # -> target state for the system (From schedule)
+                                                 predPwr_kW,   # -> same as current pwr = PV + Load (not incl ESS)
+                                                 #netDemand_kW, # -> current total system pwr
+                                                 netDemand_5SecAvg, # -> current total system pwr
+                                                 SOE_kWh,
+                                                 min_SOE_kWh,
+                                                 max_SOE_kWh,
+                                                 max_charge_kW,
+                                                 max_discharge_kW)
+
+                else:
+                    setpoint = essTargetPwr_kW
 
 
-            _log.debug("Regulator: setpoint = " + str(setpoint))
+                _log.debug("Regulator: setpoint = " + str(setpoint))
 
-            # figure out how to divide set point command between and propagate commands to end point devices
-            for entries in self.sdr_to_sm_lookup_table:
-                if entries.sundial_resource.resource_type == "ESSCtrlNode":  # for each ESS
-                    for devices in entries.device_list:   # for each end point device associated with that ESS
-                        if devices["isAvailable"] == 1:   # device is available for control
-                            # retrieve a reference to the device end point operational registers
-                            device_state_vars = self.vip.rpc.call(str(devices["AgentID"]),
-                                                                  "get_device_state_vars",
-                                                                  devices["DeviceID"]).get(timeout=5)
+                # figure out how to divide set point command between and propagate commands to end point devices
+                for entries in self.sdr_to_sm_lookup_table:
+                    if entries.sundial_resource.resource_type == "ESSCtrlNode":  # for each ESS
+                        for devices in entries.device_list:   # for each end point device associated with that ESS
+                            if devices["isAvailable"] == 1:   # device is available for control
+                                # retrieve a reference to the device end point operational registers
+                                device_state_vars = self.vip.rpc.call(str(devices["AgentID"]),
+                                                                      "get_device_state_vars",
+                                                                      devices["DeviceID"]).get(timeout=5)
 
-                            _log.debug("state vars = "+str(device_state_vars))
+                                _log.debug("state vars = "+str(device_state_vars))
 
-                            # Divides the set point command across the available ESS sites.
-                            # currently divided pro rata based on kWh available.
-                            # Right now configured with only one ESS - has not been tested this iteration with more
-                            # than one ESS end point in this iteration
-                            if (setpoint > 0):  # charging
-                                pro_rata_share = float(device_state_vars["SOE_kWh"]+EPSILON) / (float(SOE_kWh)+EPSILON) * float(setpoint)
-                                #todo - need to check for min SOE - implication of the above is that min = 0
-                            else: # discharging
-                                pro_rata_share = float(device_state_vars["MaxSOE_kWh"] - device_state_vars["SOE_kWh"]+EPSILON) /\
-                                                 (max_SOE_kWh - float(SOE_kWh)+EPSILON) * float(setpoint)
-                            _log.debug("Optimizer: Sending request for " + str(pro_rata_share) + "to " + devices["AgentID"])
-                            # send command
-                            self.vip.rpc.call(str(devices["AgentID"]),
-                                              "set_real_pwr_cmd",
-                                              devices["DeviceID"],
-                                              pro_rata_share)
+                                # Divides the set point command across the available ESS sites.
+                                # currently divided pro rata based on kWh available.
+                                # Right now configured with only one ESS - has not been tested this iteration with more
+                                # than one ESS end point in this iteration
+                                if (setpoint > 0):  # charging
+                                    pro_rata_share = float(device_state_vars["SOE_kWh"]+EPSILON) / (float(SOE_kWh)+EPSILON) * float(setpoint)
+                                    #todo - need to check for min SOE - implication of the above is that min = 0
+                                else: # discharging
+                                    pro_rata_share = float(device_state_vars["MaxSOE_kWh"] - device_state_vars["SOE_kWh"]+EPSILON) /\
+                                                     (max_SOE_kWh - float(SOE_kWh)+EPSILON) * float(setpoint)
+                                _log.debug("Optimizer: Sending request for " + str(pro_rata_share) + "to " + devices["AgentID"])
+                                # send command
+                                self.vip.rpc.call(str(devices["AgentID"]),
+                                                  "set_real_pwr_cmd",
+                                                  devices["DeviceID"],
+                                                  pro_rata_share)
 
 
         self.optimizer_info["setpoint"] = setpoint
