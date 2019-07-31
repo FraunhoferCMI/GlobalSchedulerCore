@@ -568,7 +568,7 @@ class SiteManagerAgent(Agent):
 
         device = self.site.find_device(device_id)
 
-        #targetPwr_kW = -100
+        #targetPwr_kW = 100
         if device == None:
             _log.info("SetPCCTgt: ERROR! Device "+device_id+" not found in "+self.site.device_id)
         else:
@@ -577,13 +577,13 @@ class SiteManagerAgent(Agent):
 
             # first retrieve the current PCC power
             pccPwr_kW = self.site.state_vars['Pwr_kW']
-            pccAvgPwr_kW,n_pts = self.site.calc_avg_pwr(self, averaging_window=60) # 10 second average
+            pccAvgPwr_kW,n_pts = self.site.calc_avg_pwr(self, averaging_window=30) # 10 second average
             pccAvgPwr_kW = pccPwr_kW  / (n_pts+1) + pccAvgPwr_kW * n_pts / (n_pts+1)
             ######
 
             # now calculate the requested change in power
-            #_log.info("SetPCCTgt: PCC Target is: {:.1f}"+str(targetPwr_kW)+"; current PCC = "+str(pccPwr_kW)+"; npts="+str(n_pts))
-            _log.info("SetPCCTgt: PCC Target is: {:.1f}" + "; current PCC = " + str(pccPwr_kW) + "; npts=" + str(n_pts)).format(targetPwr_kW)
+            _log.info("SetPCCTgt: PCC Target is: "+str(targetPwr_kW)+"; current PCC = "+str(pccPwr_kW)+"; npts="+str(n_pts))
+            #_log.info("SetPCCTgt: PCC Target is: {:.1f}" + "; current PCC = " + str(pccPwr_kW) + "; npts=" + str(n_pts)).format(targetPwr_kW)
             _log.info("Avg pcc = " + str(pccAvgPwr_kW))
 
             if RR_CTRL == True:  # limit the change based on configured RR limits
