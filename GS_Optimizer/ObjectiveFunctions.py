@@ -399,6 +399,26 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
         return self.init_params["threshold"]
 
 ##############################################################################
+class MinPeakBFObjectiveFunction(DemandChargeObjectiveFunction):
+
+    ##############################################################################
+    def obj_fcn_cost(self, profile):
+        """
+        placeholder for a function that calculates a demand charge for a given net demand profile
+        :return: cost of executing the profile, in $
+        """
+        #demand = numpy.array(profile)
+
+        max_neg_demand = min(profile["DemandForecast_kW"])
+        threshold  = self.init_params["threshold"]*(1-self.init_params["safety_buffer"])
+        if max_neg_demand < threshold: #self.threshold:
+            cost = self.init_params["cost_per_kW"] * (threshold-max_neg_demand)
+        else:
+            cost = 0.0
+        return cost
+
+
+##############################################################################
 class TieredEnergyObjectiveFunction():
     """
     placeholder for a function that calculates a demand charge for a given net demand profile
