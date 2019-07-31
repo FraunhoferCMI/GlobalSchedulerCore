@@ -96,6 +96,8 @@ class ObjectiveFunction():
 
 
         cur_data = self.obj_fcn_data.iloc[start_ind:start_ind + len(schedule_timestamps)]
+        print(cur_data)
+        print(schedule_timestamps)
         cur_data.index = schedule_timestamps
         #cur_data['Cost'] = [0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
         #                    0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
