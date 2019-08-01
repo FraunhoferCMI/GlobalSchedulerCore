@@ -618,7 +618,8 @@ class DERDevice():
         try:
             if self.op_status.data_dict["Pwr_kW"] is not None:
                 self.state_vars.update({"Pwr_kW": self.op_status.data_dict["Pwr_kW"]})
-                self.state_vars.update({"AvgPwr_kW": self.calc_avg_pwr(SiteMgr)}[0])
+                avg_pwr = self.calc_avg_pwr(SiteMgr)[0]
+                self.state_vars.update({"AvgPwr_kW": avg_pwr})
         except KeyError:
             pass
 
