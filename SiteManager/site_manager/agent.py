@@ -556,7 +556,7 @@ class SiteManagerAgent(Agent):
 
     ##############################################################################
     @RPC.export
-    def set_pcc_target(self, device_id, targetPwr_kW):
+    def set_pcc_target(self, device_id, targetPwr_kW, rr_enable = True):
 
         # find the device
         #device_id = args[0] #*args
@@ -582,11 +582,9 @@ class SiteManagerAgent(Agent):
             ######
 
             # now calculate the requested change in power
-            _log.info("SetPCCTgt: PCC Target is: "+str(targetPwr_kW)+"; current PCC = "+str(pccPwr_kW)+"; npts="+str(n_pts))
-            #_log.info("SetPCCTgt: PCC Target is: {:.1f}" + "; current PCC = " + str(pccPwr_kW) + "; npts=" + str(n_pts)).format(targetPwr_kW)
-            _log.info("Avg pcc = " + str(pccAvgPwr_kW))
+            _log.info("SetPCCTgt: PCC Target is: "+str(targetPwr_kW)+"; current PCC = "+str(pccPwr_kW)+"; Avg PCC="+str(pccAvgPwr_kW))
 
-            if RR_CTRL == True:  # limit the change based on configured RR limits
+            if rr_enable == True:  # limit the change based on configured RR limits
                 req_delta = targetPwr_kW - pccAvgPwr_kW
                 _log.info('orig req delta is: '+str(req_delta))
                 max_delta = MAX_RR_PCT_PER_MIN * SOLAR_NAMEPLATE * setpoint_cmd_interval / 60.0  # kW per cmd
@@ -594,11 +592,11 @@ class SiteManagerAgent(Agent):
                     req_delta = max(req_delta, -1 * max_delta)
                 else:
                     req_delta = min(req_delta, max_delta)
-                _log.info('corrected req delta is: '+str(req_delta))
+                _log.info('Ramp-limited req delta is: '+str(req_delta))
                 targetPwr_kW = pccAvgPwr_kW+req_delta
 
             req_delta = targetPwr_kW - pccPwr_kW
-            _log.info("SetPCCTgt: New PCC Target is: "+str(targetPwr_kW)+"; final req delta = "+str(req_delta))
+            _log.info("SetPCCTgt: Ramp-Limited PCC Target is: "+str(targetPwr_kW)+"; Requested ESS delta = "+str(req_delta))
 
             success = device.change_setpoint(req_delta, self)
             if success == 0:
