@@ -24,8 +24,15 @@
             "TopicPath":"devices/Site1high",
             "TopicAgent":"platform.driver",
             "TopicRegistry": "registry_configs/site1high_registry.csv",
-            "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3",
+            "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*20",
             "TopicDataMapFile": "ShirleySouthPlantLevel-Modbus-data-map-high.csv"
+         },
+         {
+            "TopicName":"Modbus",
+            "TopicPath":"devices/Site1veryhigh",
+            "TopicAgent":"platform.driver",
+            "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3",
+            "TopicDataMapFile": "ShirleySouthEmulator-Modbus-data-map-veryhigh.csv"
          },
          {
             "TopicName":"Forecast",

@@ -568,7 +568,7 @@ class DERDevice():
             cur_device.print_site_status()
 
     ##############################################################################
-    def calc_avg_pwr(self, SiteMgr):
+    def calc_avg_pwr(self, SiteMgr, averaging_window=AVERAGING_WINDOW):
         """
         Calculates average power for the device over a window of time defined by AVERAGING_WINDOW seconds
         If no points are available, returns the previous AvgPwr.
@@ -577,7 +577,7 @@ class DERDevice():
         """
         if SiteMgr is not None:
             end = datetime.utcnow()+timedelta(seconds=1)
-            st = end - timedelta(seconds=AVERAGING_WINDOW)
+            st = end - timedelta(seconds=averaging_window)
 
             st_str = st.strftime(TIME_FORMAT)
             end_str = end.strftime(TIME_FORMAT)
@@ -587,11 +587,11 @@ class DERDevice():
             avg_pwr, n_pts = HistorianTools.calc_avg(SiteMgr, topic_name, st_str, end_str)
             #_log.info("Calc Avg: "+str(avg_pwr)+"; n pts = "+str(n_pts))
             if n_pts == 0:
-                return self.state_vars['AvgPwr_kW']
+                return self.state_vars['AvgPwr_kW'], n_pts
             else:
-                return avg_pwr
+                return avg_pwr, n_pts
         else: # still initializing, no actual data
-            return 0
+            return 0, 0
 
     ##############################################################################
     def update_state_vars(self, SiteMgr):
@@ -618,7 +618,8 @@ class DERDevice():
         try:
             if self.op_status.data_dict["Pwr_kW"] is not None:
                 self.state_vars.update({"Pwr_kW": self.op_status.data_dict["Pwr_kW"]})
-                self.state_vars.update({"AvgPwr_kW": self.calc_avg_pwr(SiteMgr)})
+                avg_pwr = self.calc_avg_pwr(SiteMgr)[0]
+                self.state_vars.update({"AvgPwr_kW": avg_pwr})
         except KeyError:
             pass
 
@@ -672,12 +673,12 @@ class DERDevice():
                 else:
                     # write has not completed successfully - increment nTries, check for if a timeout is triggered
                     self.nTries[reg] += 1
-                    _log.info("Write missed for " + str(reg) + "- try # " + str(self.nTries[reg]) + "expected - "+str(self.expectedValue[reg])+
+                    _log.debug("Write missed for " + str(reg) + "- try # " + str(self.nTries[reg]) + ".  Expected - "+str(self.expectedValue[reg])+
                               "; read "+str(self.writeRegAttributes[reg].data_dict[self.writeReg[reg]]))
                     if self.nTries[reg] >= MODBUS_WRITE_ATTEMPTS:
                         self.writeError[reg] = 1
                         self.write_status    = 0
-                        _log.info("Timeout!!")
+                        _log.debug("Timeout!!")
 
     ##############################################################################
     def update_status(self, SiteMgr):
@@ -793,17 +794,16 @@ class DERDevice():
             to_units = self.datagroup_dict_list[attribute].endpt_units[ext_endpt]
             from_units = self.datagroup_dict_list[attribute].units[cmd]
             conversionKey = from_units+"To"+to_units
-            _log.info(conversionKey)
-            _log.info("SetPt: Ext End pt is "+ext_endpt+". Ext units are "+to_units)
-            _log.info("SetPt: Int End pt is "+cmd+".  Int units are "+from_units)
+            _log.debug(conversionKey)
+            _log.debug("SetPt: Ext End pt is "+ext_endpt+". Ext units are "+to_units)
+            _log.debug("SetPt: Int End pt is "+cmd+".  Int units are "+from_units)
 
             nameplate     = self.get_nameplate()
             val           = self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"]
-            _log.info("SetPt: Name plate is "+str(nameplate))
+            _log.debug("SetPt: Name plate is "+str(nameplate))
             #self.datagroup_dict_list[attribute + "Cmd"].data_dict[cmd + "_cmd"] = \
-            converted_val = int(eval(site.unit_conversion_table[conversionKey]))
-
-            _log.info("SetPt: New val = "+ str(converted_val)) #str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
+            converted_val = round(eval(site.unit_conversion_table[conversionKey]))
+            _log.info("SetPt: "+cmd+" ("+from_units + ") to "+ext_endpt+" ("+to_units + "); New val = "+ str(converted_val)) #str(self.datagroup_dict_list[attribute+"Cmd"].data_dict[cmd + "_cmd"]))
 
         except KeyError as e:
             _log.info("SetPt: No units found for "+ext_endpt+".  Assume no conversion is needed.")
@@ -868,7 +868,7 @@ class DERDevice():
             except KeyError:
                 pass
 
-        _log.info("PopEndpts: Topic "+topic+" read "+str(cnt)+" data pts; skipped: "+str(skip_cnt))
+        _log.debug("PopEndpts: Topic "+topic+" read "+str(cnt)+" data pts; skipped: "+str(skip_cnt))
         self.update_status(SiteMgr)
 
     ##############################################################################
@@ -929,7 +929,7 @@ class DERDevice():
             except KeyError:
                 pass
 
-        _log.info("PopEndpts: Topic "+topic+" read "+str(cnt)+" data pts; skipped: "+str(skip_cnt))
+        _log.debug("PopEndpts: Topic "+topic+" read "+str(cnt)+" data pts; skipped: "+str(skip_cnt))
         self.update_status(SiteMgr)
 
     ##############################################################################
@@ -1076,7 +1076,7 @@ def reserve_modbus(device, task_id, sitemgr, device_path):
     # what the failure reason is...
     # TODO - double check that topic path should include "devices"
     #while (request_status == "FAILURE") & (attempt<10):
-    _log.info("Requesting to reserve modbus, requester: " + device.device_id + "; task " + task_id)
+    _log.debug("Requesting to reserve modbus, requester: " + device.device_id + "; task " + task_id)
     start = datetime.now().strftime(
 	    "%Y-%m-%d %H:%M:%S")
     end = (datetime.now() + timedelta(seconds=1.5)).strftime(
@@ -1090,7 +1090,7 @@ def reserve_modbus(device, task_id, sitemgr, device_path):
             [device_path, start, end]).get()
 
         request_status = res["result"]
-        _log.info("reserve_request_status - "+request_status +res["info"])
+        _log.debug("reserve_request_status - "+request_status +res["info"])
         if request_status == "FAILURE":
             _log.info("Request failed, reason is " + res["info"])
             #attempt += 1
@@ -1111,7 +1111,7 @@ def release_modbus(device, task_id, sitemgr):
             "request_cancel_schedule",
             device.device_id, task_id).get()
 
-        _log.info("release_request_status - "+res["result"])
+        _log.debug("release_request_status - "+res["result"])
 
         if res["result"] == "FAILURE":
             _log.info("Release Modbus: Request failed, reason is " + res["info"])
@@ -1549,6 +1549,7 @@ class ShirleySite(DERSite, DERModbusDevice):
         #TODO: Limit check
         self.pwr_ctrl_cmd.data_dict.update({"SetPoint_cmd": int(val)})
         _log.info("Setting Power to "+str(val))
+
         self.set_point("RealPwrCtrl", "SetPoint", sitemgr)
         self.writePending["SetPoint"] = 1
         self.expectedValue["SetPoint"] = int(val)
@@ -1938,7 +1939,7 @@ class ESSCtrlNode(DERModbusCtrlNode):
         self.update_state_vars(None)
 
         self.state_vars["OrigDemandForecast_t_str"] = [0.0]*SSA_PTS_PER_SCHEDULE
-
+        self.prev_setpt = 0.0
 
     ##############################################################################
     def update_state_vars(self, SiteMgr):
@@ -1955,6 +1956,43 @@ class ESSCtrlNode(DERModbusCtrlNode):
                                                                       SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
                                                                       SSA_SCHEDULE_RESOLUTION)]
 
+
+    ##############################################################################
+    def change_setpoint(self, req_delta, SiteMgr):
+
+        # see if the requested change is feasible:
+        if DEPLOYED == False:
+            # cur_setpoint = self.state_vars['SetPt']
+            # cur_setpoint = self.pwr_ctrl.data_dict['SetPoint']
+            #cur_setpoint = self.op_status.data_dict['CtrlRegister']
+            #cur_setpoint = self.prev_setpt
+            cur_setpoint = self.state_vars['Pwr_kW']
+        else:
+            #cur_setpoint = self.state_vars['Pwr_kW']  # self.op_status.data_dict['CtrlRegister']
+            cur_setpoint = -1*self.op_status.data_dict['CtrlRegister']
+
+        max_charge_kW = self.state_vars['MaxChargePwr_kW']
+        max_discharge_kW = self.state_vars['MaxDischargePwr_kW']
+
+        _log.info("Estimated current ess output=  "+str(cur_setpoint))
+        _log.info("current ess setpoint=  "+str(self.pwr_ctrl.data_dict['SetPoint']))
+        _log.info("ctrl reg = "+str(self.op_status.data_dict['CtrlRegister']))
+        _log.info(req_delta)
+        setpoint = cur_setpoint+req_delta
+        #_log.info(self.op_status.data_dict['SetPt'])
+        #_log.info(self.state_vars['SetPoint'])
+        # check that we are within power limits of the storage system
+        if setpoint < -1 * max_discharge_kW:
+            setpoint = -1 * max_discharge_kW
+            _log.info("ESSCtrlNode: Power-limited Setpoint =" + str(setpoint)+"; current setpoint = "+str(cur_setpoint))
+        if setpoint > max_charge_kW:
+            setpoint = max_charge_kW
+            _log.info("ESSCtrlNode: Power-limited Setpoint =" + str(setpoint)+"; current setpoint = "+str(cur_setpoint))
+
+        _log.info("Sending ESS command = "+str(setpoint)+"; cur = "+str(cur_setpoint)+"; req_delta = "+str(req_delta))
+        success = self.set_power_real(setpoint, SiteMgr)
+
+        self.prev_setpt = self.pwr_ctrl.data_dict['SetPoint']
 
 
 
@@ -2114,7 +2152,6 @@ class ESSDevice(DERDevice):
 
     ##############################################################################
     def __init__(self, device_info, parent_device=None, gs_start_time=None):
-
         DERDevice.__init__(self, device_info, parent_device, gs_start_time) #device_id, device_type, parent_device)
 
         _log.info("Device info is ="+str(device_info))

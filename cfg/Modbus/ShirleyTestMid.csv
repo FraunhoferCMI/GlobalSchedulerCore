@@ -1,9 +1,6 @@
 Reference Point,Volttron Point Name,Units,Unit Details,Modbus Register,Writable,Point Address,Default Value,Notes
-,ess.tesla_meter.Power_3Ph,W,,>i,TRUE,778,0,
 0,ess.tesla_meter.Var_3Ph,VAr,0,>i,TRUE,780,0,
 0,ess.tesla_meter.Apparent_3Ph,VA,0,>i,TRUE,782,0,
-0,ess.tesla_meter.ACVoltage,dV,0,>i,TRUE,784,0,
-0,ess.tesla_meter.ACCurrent,dA,0,>i,TRUE,786,0,
 0,ess.tesla_meter.ACFrequency,mHz,0,>H,TRUE,788,0,
 ,ess.tesla_real_pwr_ctrl.DirectReal_PIncreaseLimit,W,,>i,TRUE,856,0,
 ,ess.tesla_real_pwr_ctrl.DirectReal_PDecreaseLimit,W,,>i,TRUE,858,0,

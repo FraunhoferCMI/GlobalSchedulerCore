@@ -15,6 +15,7 @@ PMC.ModeCtrl.GSHeartBeat,ShirleySouth,ModeStatus,GSHeartBeat,,
 PMC.ModeCtrl.PMCWatchDog,ShirleySouth,ModeControl,PMCWatchDog,,
 PMC.ModeCtrl.WatchDogTimeoutEnable,ShirleySouth,ModeControl,WatchDogTimeoutEnable,,
 ESS.RealPwrCtrl.SetPoint,ShirleySouth-ESSPlant,RealPwrCtrl,SetPoint,Y,kW
+ESS.RealPwrCtrl.CurSetPoint,ShirleySouth-ESSPlant,OpStatus,CtrlRegister,Y,kW
 PV.Device.CommStatus,ShirleySouth-PVPlant-Inverter1,HealthStatus,CommsStatus,0,
 PV.Meter.W,ShirleySouth-PVPlant-Inverter1,OpStatus,Pwr_kW,Y,kW
 PV.Meter.W_SF,ShirleySouth-PVPlant-Inverter1,OpStatus,Pwr_SF,,none

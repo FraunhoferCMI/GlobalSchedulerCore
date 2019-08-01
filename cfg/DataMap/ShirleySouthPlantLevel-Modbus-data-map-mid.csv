@@ -4,7 +4,6 @@ ess.tesla_alarms.Alarm_LossBattMeter,ShirleySouth-ESSPlant-ESS1,HealthStatus,Ala
 ess.tesla_alarms.Alarm_MainOpen,ShirleySouth-ESSPlant-ESS1,HealthStatus,Alarm_MainBreaker,,
 ess.tesla_alarms.Alarm_NumBlockCommFail,ShirleySouth-ESSPlant-ESS1,HealthStatus,Alarm_NumCommBlockFail,,
 ess.tesla_alarms.Alarm_NumBlockOpFail,ShirleySouth-ESSPlant-ESS1,HealthStatus,Alarm_NumOpBlockFail,,
-ess.tesla_meter.Power_3Ph,ShirleySouth-ESSPlant-ESS1,OpStatus,Pwr_kW_internal,,kW
 ess.tesla_q_ctrl.DirectReactive_Heartbeat,ShirleySouth-ESSPlant-ESS1,QSetPt,Heartbeat,,
 ess.tesla_q_ctrl.DirectReactive_Q,ShirleySouth-ESSPlant-ESS1,QSetPt,SetPoint,Y,kVAr
 ess.tesla_q_ctrl.DirectReactive_QDecreaseLimit,ShirleySouth-ESSPlant-ESS1,QSetPt,DownRampLimit_pct,Y,Pct
@@ -39,9 +38,7 @@ PVF.ramp_limit.MaxQRmpRte,ShirleySouth,QModeCtrl,QRampLimit_pct,Y,PctPerSec
 PVF.ramp_limit.MaxRRmpRte,ShirleySouth,RealPwrCtrl,RampLimit_pct,Y,PctPerSec
 PVF.real_pwr_ctrl.W_Enable,ShirleySouth,RealPwrCtrl,Enable,,
 PVF.real_pwr_ctrl.W_SetPoint,ShirleySouth,RealPwrCtrl,SetPoint,Y,kW
-ess.tesla_meter.ACCurrent,ShirleySouth-ESSPlant-ESS1,OpStatus,Current_internal,,A
 ess.tesla_meter.ACFrequency,ShirleySouth-ESSPlant-ESS1,OpStatus,frequency_internal,,Hz
-ess.tesla_meter.ACVoltage,ShirleySouth-ESSPlant-ESS1,OpStatus,V_internal,,V
 ess.tesla_meter.Apparent_3Ph,ShirleySouth-ESSPlant-ESS1,OpStatus,ApparentPwr_kVA_internal,,kVA
 ess.tesla_meter.Var_3Ph,ShirleySouth-ESSPlant-ESS1,OpStatus,VAr_kVAr_internal,,kVAr
 ess.tesla_status.Status_BatteryTargetQ,ShirleySouth-ESSPlant-ESS1,OpStatus,QSetPt_kVAr,Y,kVAr

@@ -11,6 +11,13 @@
             "TopicDataMapFile": "ShirleySouthEmulator-Modbus-data-map.csv"
          },
          {
+            "TopicName":"Modbus",
+            "TopicPath":"devices/Site1high",
+            "TopicAgent":"platform.driver",
+            "TopicScrapeTimeout":"MODBUS_SCRAPE_INTERVAL*3",
+            "TopicDataMapFile": "ShirleySouthEmulator-Modbus-data-map-high.csv"
+         },
+         {
             "TopicName":"Forecast",
             "TopicPath":"devices/cpr/forecast",
             "TopicAgent":"cpr",

@@ -96,6 +96,8 @@ class ObjectiveFunction():
 
 
         cur_data = self.obj_fcn_data.iloc[start_ind:start_ind + len(schedule_timestamps)]
+        print(cur_data)
+        print(schedule_timestamps)
         cur_data.index = schedule_timestamps
         #cur_data['Cost'] = [0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
         #                    0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
@@ -162,6 +164,45 @@ class EnergyCostObjectiveFunction(ObjectiveFunction):
     def get_obj_fcn_data(self):
         return self.init_params["cur_cost"][0].tolist()
 
+
+##############################################################################
+class EnergyCostObjectiveFunction_Dynamic(EnergyCostObjectiveFunction):
+
+    ##############################################################################
+    def __init__(self, desc="", init_params=None, **kwargs):
+
+        init_params = {'fname': None,
+                       'is_timestamped': False}
+        # duration --> 'time_step': isodate.parse_duration('PT60M')
+
+
+        ObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
+
+    ##############################################################################
+    def obj_fcn_cfg(self, **kwargs):
+        """
+        retrieve data from a file that represents hrs and prices, starting at hour = 0, through hour 23 (UTC)
+        shifts time to line up with current schedule
+        :param kwargs:
+        :return:
+        """
+
+        if self.init_params['is_timestamped'] == False:
+            prices = pandas.read_csv(self.init_params['fname'], header=None)/100.0  # 0 - 23
+        else:
+            pass # not currently suppored
+
+        timestamps = [v + kwargs['sim_offset'] for v in kwargs['schedule_timestamps']]
+
+        shifted_prices = pandas.DataFrame([0.0]*24, index=timestamps)
+        for ii in range(0,len(timestamps)):
+            shifted_prices[0][timestamps[ii]] = prices[0][timestamps[ii].hour]
+        print(shifted_prices)
+
+        self.init_params["cur_cost"] = numpy.array(shifted_prices.transpose())
+
+
+
 class ISONECostObjectiveFunction(EnergyCostObjectiveFunction):
 
     ##############################################################################
@@ -197,7 +238,7 @@ class PeakerPlantObjectiveFunction(ObjectiveFunction):
         init_params = {'threshold': 100,
                        'cost_per_kW': 10,
                        'safety_buffer': 0.0,
-                       'hrs': [17,18,19,20],   # [18,19,20,21,22],
+                       'hrs': [19,20,21,22],   # [18,19,20,21,22],
                        'hrs_index': [],
                        'tariff_key': 'tariffs'}
         ObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
@@ -360,6 +401,26 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
         return self.init_params["threshold"]
 
 ##############################################################################
+class MinPeakBFObjectiveFunction(DemandChargeObjectiveFunction):
+
+    ##############################################################################
+    def obj_fcn_cost(self, profile):
+        """
+        placeholder for a function that calculates a demand charge for a given net demand profile
+        :return: cost of executing the profile, in $
+        """
+        #demand = numpy.array(profile)
+
+        max_neg_demand = min(profile["DemandForecast_kW"])
+        threshold  = self.init_params["threshold"]*(1-self.init_params["safety_buffer"])
+        if max_neg_demand < threshold: #self.threshold:
+            cost = self.init_params["cost_per_kW"] * (threshold-max_neg_demand)
+        else:
+            cost = 0.0
+        return cost
+
+
+##############################################################################
 class TieredEnergyObjectiveFunction():
     """
     placeholder for a function that calculates a demand charge for a given net demand profile
@@ -432,10 +493,10 @@ class LoadShapeObjectiveFunction(ObjectiveFunction):
 
         if self.init_params["vble_price"] == False:
             price = 10.0  # sort of arbitrary, just needs to be a number big enough to drive behavior in the desired direction.
-            self.cost = sum(self.err) * price
+            self.cost = (sum(self.err) * price**2)**0.5
         else:
             price = self.init_params["cur_cost"][1]  # sort of arbitrary, just needs to be a number big enough to drive behavior in the desired direction.
-            self.cost = sum(self.err * price)
+            self.cost = (sum(self.err * price**2))**0.5
         #demand = numpy.array(profile)
 
         return self.cost

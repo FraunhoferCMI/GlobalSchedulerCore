@@ -313,7 +313,7 @@ class SiteManagerAgent(Agent):
         parses message on IEB published to the SiteManager's specified path, and 
         populates endpts (populate_endpts) based on message contents
         """
-        _log.info("SiteManagerStatus: Topic found - "+str(topic))
+        _log.debug("SiteManagerStatus: Topic found - "+str(topic))
 
         if sender == 'pubsub.compat':
             message = compat.unpack_legacy_message(headers, message)
@@ -556,11 +556,60 @@ class SiteManagerAgent(Agent):
 
     ##############################################################################
     @RPC.export
+    def set_pcc_target(self, device_id, targetPwr_kW, rr_enable = True):
+
+        # find the device
+        #device_id = args[0] #*args
+        #val = args[1]
+        SOLAR_NAMEPLATE = 500 # FIXME TEMP!!!!!
+        setpoint_cmd_interval = 2.5
+        RR_CTRL = True
+        MAX_RR_PCT_PER_MIN = 0.20
+
+        device = self.site.find_device(device_id)
+
+        #targetPwr_kW = 100
+        if device == None:
+            _log.info("SetPCCTgt: ERROR! Device "+device_id+" not found in "+self.site.device_id)
+        else:
+            # send the command
+            self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
+
+            # first retrieve the current PCC power
+            pccPwr_kW = self.site.state_vars['Pwr_kW']
+            pccAvgPwr_kW,n_pts = self.site.calc_avg_pwr(self, averaging_window=30) # 10 second average
+            pccAvgPwr_kW = pccPwr_kW  / (n_pts+1) + pccAvgPwr_kW * n_pts / (n_pts+1)
+            ######
+
+            # now calculate the requested change in power
+            _log.info("SetPCCTgt: PCC Target is: "+str(targetPwr_kW)+"; current PCC = "+str(pccPwr_kW)+"; Avg PCC="+str(pccAvgPwr_kW))
+
+            if rr_enable == True:  # limit the change based on configured RR limits
+                req_delta = targetPwr_kW - pccAvgPwr_kW
+                _log.info('orig req delta is: '+str(req_delta))
+                max_delta = MAX_RR_PCT_PER_MIN * SOLAR_NAMEPLATE * setpoint_cmd_interval / 60.0  # kW per cmd
+                if req_delta < 0:
+                    req_delta = max(req_delta, -1 * max_delta)
+                else:
+                    req_delta = min(req_delta, max_delta)
+                _log.info('Ramp-limited req delta is: '+str(req_delta))
+                targetPwr_kW = pccAvgPwr_kW+req_delta
+
+            req_delta = targetPwr_kW - pccPwr_kW
+            _log.info("SetPCCTgt: Ramp-Limited PCC Target is: "+str(targetPwr_kW)+"; Requested ESS delta = "+str(req_delta))
+
+            success = device.change_setpoint(req_delta, self)
+            if success == 0:
+                self.dirtyFlag = 0 # invalid write
+
+
+    ##############################################################################
+    @RPC.export
     def set_real_pwr_cmd(self, device_id, val):
         """
         sends a real power command to the specified device
         """
-        _log.info("SetPt: updating site power output for "+self.site.device_id)
+        _log.debug("SetPt: updating site power output for "+self.site.device_id)
 
         # find the device
         #device_id = args[0] #*args
@@ -576,7 +625,7 @@ class SiteManagerAgent(Agent):
         else:
             # send the command
             self.dirtyFlag = 1 # set dirtyFlag - indicates a new write has occurred, so site data needs to update
-            _log.info("SetPt: Sending Cmd!")
+            _log.debug("SetPt: Sending Cmd!")
             success = device.set_power_real(val, self)
             if success == 0:
                 self.dirtyFlag = 0 # invalid write
@@ -604,7 +653,7 @@ class SiteManagerAgent(Agent):
 
 
     ##############################################################################
-    @Core.periodic(PMC_WATCHDOG_PD)
+    #@Core.periodic(PMC_WATCHDOG_PD)
     def increment_site_watchdog(self):
         """
         Commands site to increment watchdog counter

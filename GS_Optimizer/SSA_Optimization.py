@@ -67,7 +67,7 @@ class SimulatedAnnealer():
     def __init__(self):
         # SSA configuration parameters:
         self.init_run    = 1            # number of runs to estimate initial temperature and weight
-        self.nIterations = 100000           # Number of iterations
+        self.nIterations = 100000       # Number of iterations
         self.temp_decrease_pd = 1500 # Number of iterations betweeen temperature decrease
         self.jump_decrease_pd = 30 # Number of iterations betweeen jump size decrease
         self.init_jump        = 1.0 #0.5 # initial maximum jump
@@ -76,7 +76,7 @@ class SimulatedAnnealer():
         self.O2T              = 0.5 #05  # Conversion of objective function into initial T
 
 
-        self.display_pd = 5000; # update output for printing m and drawning
+        self.display_pd = 5000 # update output for printing m and drawning
 
         self.tResolution_min          = SSA_SCHEDULE_RESOLUTION # time resolution of SSA optimizer control signals, in minutes
         self.optimizationPd_hr        = SSA_SCHEDULE_DURATION # period of the SSA time horizon, in hrs
@@ -113,10 +113,75 @@ class SimulatedAnnealer():
         The new weight is subject to upper and lower bounds set by ub and lb, respectively
         :return:
         """
-        y2 = (random() - .5) * 2.0 * jump
+        # 7/17 - changed to use discrete battery signals to restrict search space
+        resolution = jump/20.0
+        #y2 = (random() - .5) * 2.0 * jump
+        y2 = resolution * round(((random() - .5) * 2.0 * jump) / resolution)
+        #print(y2)
+        #print(resolution)
         y3 = x + y2
         #y4 = z - y2
         return max(min(y3,ub), lb)   #, max(min(y4,ub), lb)
+
+    ############################
+    def calc_jump2(self, x, jump, lb, ub, max_dis, max_chg):
+        """
+        Returns a new value for an SSA weight by perturbing the current weight x by a random amount between +/- jump.
+        The new weight is subject to upper and lower bounds set by ub and lb, respectively
+        :return:
+        """
+        #jump * (-1 * max_dis_array[ind] + max_chg_array[ind]) / 2,
+
+        y2 = (random() - .5) * 2.0 * jump
+        #y2 = 50 * round(((random() - .5) * 2.0 * jump) / 50)
+        #y3 = x + y2
+        mid_point_of_valid_range = ((x+ub)+(x+lb))/2
+        y3 = mid_point_of_valid_range+y2
+        #y4 = z - y2
+        if (0):
+            if y3>(x+ub):
+                _log.info("Calc jump ub violated ")
+                _log.info("perturb by = " + str(y2)+"; mid point = "+str(mid_point_of_valid_range) + "final val = "+str(y3))
+            elif y3<(x+lb):
+                _log.info("Calc jump lb violated ")
+                _log.info("perturb by = " + str(y2)+"; mid point = "+str(mid_point_of_valid_range) + "final val = "+str(y3))
+                _log.info('LB is '+str(lb))
+                _log.info(self.ess.state_vars['EnergyAvailableForecast_kWh'])
+                _log.info(self.ess.state_vars['DemandForecast_kW'])
+
+        #return y3
+        return max(min(y3,max_chg), max_dis)   #, max(min(y4,ub), lb)
+
+    ############################
+    def calc_jump3(self, x, jump, lb, ub, max_dis, max_chg):
+        """
+        Returns a new value for an SSA weight by perturbing the current weight x by a random amount between +/- jump.
+        The new weight is subject to upper and lower bounds set by ub and lb, respectively
+        :return:
+        """
+        # jump * (-1 * max_dis_array[ind] + max_chg_array[ind]) / 2,
+
+        y2 = (random() - .5) * 2.0 * jump
+        # y2 = 50 * round(((random() - .5) * 2.0 * jump) / 50)
+        # y3 = x + y2
+        mid_point_of_valid_range = ((x + ub) + (x + lb)) / 2
+        y3 = mid_point_of_valid_range + y2
+        # y4 = z - y2
+        if (0):
+            if y3 > (x + ub):
+                _log.info("Calc jump ub violated ")
+                _log.info("perturb by = " + str(y2) + "; mid point = " + str(
+                    mid_point_of_valid_range) + "final val = " + str(y3))
+            elif y3 < (x + lb):
+                _log.info("Calc jump lb violated ")
+                _log.info("perturb by = " + str(y2) + "; mid point = " + str(
+                    mid_point_of_valid_range) + "final val = " + str(y3))
+                _log.info('LB is ' + str(lb))
+                _log.info(self.ess.state_vars['EnergyAvailableForecast_kWh'])
+                _log.info(self.ess.state_vars['DemandForecast_kW'])
+
+        # return y3
+        return max(min(y3, x+ub), x+lb)  # , max(min(y4,ub), lb)
 
     ############################
     def get_resource(self, sundial_profiles, resource_type):
@@ -298,13 +363,16 @@ class SimulatedAnnealer():
 
             system_net_demand_baseline = self.system.state_vars["DemandForecast_kW"]
 
+            self.ess.state_vars['EnergyAvailableForecast_kWh'] = numpy.array([self.ess.sundial_resources.state_vars["StartingSOE_kWh"]] * len(self.ess.state_vars["DemandForecast_kW"]))
+
+            min_cost = 1000000000
+
             # From the initial solution, follow the simulated annealing logic: disturb
             # 1 point and check if there is improvement.
             for ii in range(self.nIterations):
 
                 if (ii % self.display_pd == 0): # for debug - periodically publish results
                     _log.info("Iteration "+str(ii)+": T="+str(T)+"; Least Cost Soln = "+str(least_cost_soln.total_cost))
-
                 if ((ii+1) % self.jump_decrease_pd) == 0: # check if it's time to decrease jump size.
                     # decrease jump size
                     jump = jump*self.fract_jump
@@ -330,11 +398,30 @@ class SimulatedAnnealer():
                 # FIXME: currently this just deals with battery charge / discharge instructions - not other resources
                 # FIXME: e.g., PV curtailment
                 ind = int(floor(random()*self.nOptimizationPtsPerPd))
-                self.ess.state_vars["DemandForecast_kW"][ind] = self.calc_jump(self.ess.state_vars["DemandForecast_kW"][ind],
-                                                                               jump*(self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"]+self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])/2,
-                                                                               -1*self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"],
-                                                                               self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])
+                max_chg_array, max_dis_array = self.ess.sundial_resources.get_allowable_state(self.ess.state_vars, ind)
+                old_cmd = self.ess.state_vars["DemandForecast_kW"][ind]
 
+
+                if (1): # old way
+                    self.ess.state_vars["DemandForecast_kW"][ind] = self.calc_jump(self.ess.state_vars["DemandForecast_kW"][ind],
+                                                                                   jump*(self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"]+self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])/2,
+                                                                                   -1*self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"],
+                                                                                   self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])
+
+                else:
+                    # using full scale jump seems to work better
+                    self.ess.state_vars["DemandForecast_kW"][ind] = self.calc_jump2(self.ess.state_vars["DemandForecast_kW"][ind],
+                                                                                   jump*(self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"]+self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])/2,
+                                                                                   #jump * (-1*max_dis_array + max_chg_array) / 2,
+                                                                                   max_dis_array, #[ind],
+                                                                                   max_chg_array, #[ind],
+                                                                                   -1*self.ess.sundial_resources.state_vars["MaxDischargePwr_kW"],
+                                                                                   self.ess.sundial_resources.state_vars["MaxChargePwr_kW"])
+
+
+                if (0):  # Shouldn't ever happen - here for testing
+                    if abs(self.ess.state_vars["DemandForecast_kW"][ind])>500:
+                        _log.info("Old Command: "+ str(old_cmd) + "; New Command: "+str(ind)+": "+str(self.ess.state_vars["DemandForecast_kW"][ind])+"; Max: "+str(max_chg_array)+"; Min="+str(max_dis_array))
                 # Then: check for constraints.
                 # TODO - right now, just checking for battery limit violations.  Eventually put in ability to include
                 # TODO - additional constraints
@@ -367,6 +454,12 @@ class SimulatedAnnealer():
                 # Calculate delta cost between this test value and the current least cost solution
                 delta = total_cost - least_cost_soln.total_cost
 
+                if total_cost < min_cost:
+                    min_cost = total_cost
+                    iteration_cnt = ii
+                    #_log.info('****** MINIMUM FOUND = ' + str(min_cost) + "****************")
+                    final_soln = self.copy_profile(current_soln, final_soln)
+
                 dirty_flag = True
                 if delta < 0.0:
                     # Current test value is a new least-cost solution.  Use this!
@@ -381,16 +474,23 @@ class SimulatedAnnealer():
                     th = exp(-delta / T)
                     r  = random()
                     if r < th:
-                        #print("non best solution adopted.  r="+str(r)+"; Th = "+str(th)+"; T="+str(T)+"; delta = "+str(delta))
+                        #if delta>20:
+                        #    _log.info("non best solution adopted.  r="+str(r)+"; Th = "+str(th)+"; T="+str(T)+"; delta = "+str(delta))
                         least_cost_soln = self.copy_profile(current_soln, least_cost_soln)  # set least cost soln to current soln
                         dirty_flag = False
 
+                if (ii-iteration_cnt) > 1000:
+                    # revert to absoluate least cost solution
+                    least_cost_soln = self.copy_profile(final_soln, least_cost_soln)
+                    iteration_cnt = ii
+                    #_log.info("Reverting to previous LCS!")
                 # end of main loop (nIterations)
 
             t8 = datetime.now()
             deltaT = t8 - t0
             total_time = deltaT.total_seconds()
 
+            _log.info('****** MINIMUM FOUND = ' + str(min_cost) + "****************")
             _log.info("least cost soln is "+str(least_cost_soln.total_cost))
             _log.info("total time: "+str(total_time))
 
@@ -458,8 +558,13 @@ class SimulatedAnnealer():
         for ii in range(0, len(loadshift_resources.state_vars["LoadShiftOptions_kW"])):
             _log.info("*************** Searching Load Shift Option "+str(ii+1)+" of "+
                       str(len(loadshift_resources.state_vars["LoadShiftOptions_kW"]))+"***************************")
-            loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii]
-            sundial_resources.state_vars["DemandForecast_kW"]   = sundial_resources.state_vars["LoadShiftOptions_kW"][ii]
+            if loadshift_resources.schedule_vars["SelectedProfile"] is not None:
+                loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii] + loadshift_resources.schedule_vars["SelectedProfile"]
+                sundial_resources.state_vars["DemandForecast_kW"]   = sundial_resources.state_vars["LoadShiftOptions_kW"][ii] + loadshift_resources.schedule_vars["SelectedProfile"]
+            else:
+                loadshift_resources.state_vars["DemandForecast_kW"] = loadshift_resources.state_vars["LoadShiftOptions_kW"][ii]
+                sundial_resources.state_vars["DemandForecast_kW"]   = sundial_resources.state_vars["LoadShiftOptions_kW"][ii]
+
         #    sundial_resources.interpolate_forecast(schedule_timestamps)
             least_cost_soln = self.run_ssa_optimization(sundial_resources,timestamps)
             least_cost_soln_list.append(least_cost_soln)
@@ -566,8 +671,11 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
             sundial_resources.cfg_cost(schedule_timestamps,
                                        system_tariff = system_tariff,
                                        solarPlusStorage_tariff = solarPlusStorage_tariff)
-            #optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
-            optimizer.search_single_option(sundial_resources, schedule_timestamps)
+
+            if SEARCH_LOADSHIFT_OPTIONS == True:
+                optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
+            else:
+                optimizer.search_single_option(sundial_resources, schedule_timestamps)
         else:
             _log.info("No valid forecasts found - skipping")
 
@@ -577,7 +685,156 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
     return sundial_resources
 
 
+def retrieve_init_data(start_time):
+    """
+    retrieve initial conditions from database, for testing
+    :param start_time:
+    :return:
+    """
+    import post_process
+
+    OPTIMIZATION_SCENARIO = 1 # 0 = FORECAST; 1 = PERFECT INFORMATION; 2 = ACTUAL RESULTS; 3 = BASELINE (DO NOTHING)
+
+
+    engine = post_process.createDefaultEngine(credential_path='.my.cnf_replication')
+
+    end_time = start_time+timedelta(hours=24)
+    start_time_str = start_time.strftime("%Y-%m-%dT%H:%M:%S")
+    end_time_str = end_time.strftime("%Y-%m-%dT%H:%M:%S")
+
+    date_range = ' and ts>="'+start_time_str+'" and ts<"'+end_time_str+'"'
+
+    topics = pandas.read_sql("select * from volttron.topics", engine)
+
+    if OPTIMIZATION_SCENARIO == 0: # use forecast values for optimization
+        snapshot_hour = start_time.hour - 1
+        if snapshot_hour == -1:
+            snapshot_hour = 23
+        snapshot_topic_root = 'datalogger/Snapshot' + str(snapshot_hour)
+
+        load_topic_name = snapshot_topic_root+'/Load'
+        pv_topic_name = snapshot_topic_root+'/PV'
+
+        load_topic_name = snapshot_topic_root+'/Load'
+        pv_topic_name = snapshot_topic_root+'/PV'
+
+        load_topic = post_process.parse_topic(topics['topic_id'].loc[topics['topic_name'] == load_topic_name].iloc[0], engine, date_range=date_range)
+        pv_topic   = post_process.parse_topic(topics['topic_id'].loc[topics['topic_name'] == pv_topic_name].iloc[0], engine, date_range=date_range)
+
+        load = load_topic['vals'].tolist()
+        pv   = pv_topic['vals'].tolist()
+        max_chg = 500.0
+        max_dis = 500.0
+
+    elif OPTIMIZATION_SCENARIO == 1: # perfect information
+        load_topic_name = 'datalogger/FLAME/Baseline/OpStatus/Pwr_kW'
+        pv_topic_name   =  'datalogger/ShirleySouth/PVPlant/Inverter1/OpStatus/Pwr_kW'
+        load_topic = post_process.parse_topic(topics['topic_id'].loc[topics['topic_name'] == load_topic_name].iloc[0], engine, date_range=date_range)
+        pv_topic   = post_process.parse_topic(topics['topic_id'].loc[topics['topic_name'] == pv_topic_name].iloc[0], engine, date_range=date_range)
+
+        load = load_topic['vals'].resample('1H').mean().tolist()
+        pv   = pv_topic['vals'].resample('1H').mean().tolist()
+        max_chg = 500.0
+        max_dis = 500.0
+
+    elif OPTIMIZATION_SCENARIO == 2: # actual behavior -- not exactly right, because it's not accounting for system state..
+        load_topic_name = 'datalogger/Executive/netDemand_kW'
+        load_topic = post_process.parse_topic(topics['topic_id'].loc[topics['topic_name'] == load_topic_name].iloc[0], engine, date_range=date_range)
+
+        load = load_topic['vals'].resample('1H').mean().tolist()
+        pv   = [0.0]*24
+        max_chg = 0.0
+        max_dis = 0.0
+
+    elif OPTIMIZATION_SCENARIO == 3: # do nothing case
+        load_topic_name = 'datalogger/FLAME/Baseline/OpStatus/Pwr_kW'
+        pv_topic_name   =  'datalogger/ShirleySouth/PVPlant/Inverter1/OpStatus/Pwr_kW'
+        load_topic = post_process.parse_topic(topics['topic_id'].loc[topics['topic_name'] == load_topic_name].iloc[0], engine, date_range=date_range)
+        pv_topic   = post_process.parse_topic(topics['topic_id'].loc[topics['topic_name'] == pv_topic_name].iloc[0], engine, date_range=date_range)
+
+        load = load_topic['vals'].resample('1H').mean().tolist()
+        pv   = pv_topic['vals'].resample('1H').mean().tolist()
+        max_chg = 0.0
+        max_dis = 0.0
+
+
+    st = start_time-timedelta(minutes=1)
+    st_str = st.strftime("%Y-%m-%dT%H:%M:%S")
+    date_range = ' and ts>="'+st_str+'" and ts<"'+start_time_str+'"'
+    soe_init_topic = post_process.parse_topic(325, engine, date_range=date_range)
+    soe_init = soe_init_topic['vals'].values[len(soe_init_topic)-1]
+
+
+    return soe_init, max_chg, max_dis, pv, load
+
+
 def load_scenarios(cur_resource, gs_start_time):
+    FROM_DB = True
+
+    ess_forecast = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+    forecast_timestamps = [(gs_start_time.replace(minute=0, second=0) +
+                            timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%S") for t in range(0,
+                                                                                               SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
+                                                                                               SSA_SCHEDULE_RESOLUTION)]
+
+
+    if FROM_DB == True:
+        soe_init, max_chg, max_dis, pv_forecast, demand_forecast = retrieve_init_data(gs_start_time)
+        pass
+    else:
+        #### Just load with example values - ######
+        soe_init = 500.0
+        max_chg = 500.0
+        max_dis = 500.0
+
+        # forecast, indexed to 00:00
+        # pv_forecast_base = [0,0,0,0,0,0,0,0,-5.25, -19.585, -95.39, -169.4, -224,-255, -276, -278, -211, -124, -94, -61, -15, -0.45, 0,0]
+        scale = 1.0
+        pv_forecast_base = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -2.49, -11.39, -7.21, -12.04, -21.49, -29.84, -29.07, -18.27,
+                            -7.69, -2.71, -0.37, 0, 0, 0]
+
+        pv_forecast_base = [-329.8,-346.0,-347.4, -311.5,-276.6,-164.5,-44.5,-48.0,0,0,0,0,0,0,0,0,0,-1.5,-27,-57.8,-97.9,-179.5,0.0,-297.8]
+
+        pv_forecast_base = [scale * v for v in pv_forecast_base]
+
+
+        # demand_forecast_base = [142.4973, 142.4973, 142.4973, 145.9894,
+        #                        160.094, 289.5996, 339.7752, 572.17,
+        #                        658.6025, 647.2883, 650.1958, 639.7053,
+        #                        658.044, 661.158, 660.3772, 673.1098,
+        #                        640.9227, 523.3306, 542.7008, 499.3727,
+        #                        357.9398, 160.0936, 145.9894, 142.4973]
+
+        demand_forecast_base = [467, 436, 450, 341, 326, 321,
+                                317, 319, 391, 487, 551, 574,
+                                579, 584, 580, 551, 535, 535,
+                                513, 486, 454, 445, 446, 393]
+        demand_forecast_base = [401.2,398.8,398.5,393.6,
+                                392.4, 424.5,414.5,402.6,371.6,
+                                387.0,398.3,298.9,286.4,
+                                269.1,252.1,240.0,237.7,
+                                244.0,229.3,202.0,200.3,
+                                198.8,428.6,401.7]
+        # demand_forecast_base = [0.0]*24
+        demand_forecast_base = [scale * v for v in demand_forecast_base]
+
+        if shift_to_start_of_day == False:
+            # shift starting point to match up to current hour
+            forecast_start_hour = datetime.strptime(forecast_timestamps[0], "%Y-%m-%dT%H:%M:%S").hour
+            pv_forecast = pv_forecast_base[forecast_start_hour:len(pv_forecast_base)]
+            pv_forecast.extend(pv_forecast_base[0:forecast_start_hour])
+
+            demand_forecast = demand_forecast_base[forecast_start_hour:len(demand_forecast_base)]
+            demand_forecast.extend(demand_forecast_base[0:forecast_start_hour])
+
+        else:  # start sim at start of day.
+            pv_forecast = pv_forecast_base
+            demand_forecast = demand_forecast_base
+
     ess_resources = cur_resource.find_resource_type("ESSCtrlNode")[0]
     pv_resources = cur_resource.find_resource_type("PVCtrlNode")[0]
 
@@ -597,62 +854,17 @@ def load_scenarios(cur_resource, gs_start_time):
         load_resources = []
 
     ALIGN_SCHEDULES = True
-    _log.info("initializing variables")
-    forecast_timestamps = [(gs_start_time.replace(minute=0, second=0) +
-                            timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%S") for t in range(0,
-                                                                                               SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
-                                                                                               SSA_SCHEDULE_RESOLUTION)]
+    _log.info("initializing ESS")
 
-    #### Just load with example values - ######
-    ess_forecast = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
-    ess_resources.load_scenario(init_SOE=500.0,
+    ess_resources.load_scenario(init_SOE=soe_init,
                                 max_soe=1000.0 * ESS_MAX,
                                 min_soe=1000.0 * ESS_MIN,
-                                max_chg=500.0,
-                                max_discharge=500.0,
+                                max_chg=max_chg, #500.0,
+                                max_discharge=max_dis, #500.0,
                                 chg_eff=0.93,
                                 dischg_eff=0.93,
                                 demand_forecast=ess_forecast,
                                 t=forecast_timestamps)
-
-    # forecast, indexed to 00:00
-    # pv_forecast_base = [0,0,0,0,0,0,0,0,-5.25, -19.585, -95.39, -169.4, -224,-255, -276, -278, -211, -124, -94, -61, -15, -0.45, 0,0]
-    scale = 1.0
-    pv_forecast_base = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -2.49, -11.39, -7.21, -12.04, -21.49, -29.84, -29.07, -18.27,
-                        -7.69, -2.71, -0.37, 0, 0, 0]
-    pv_forecast_base = [scale * v for v in pv_forecast_base]
-
-
-    # demand_forecast_base = [142.4973, 142.4973, 142.4973, 145.9894,
-    #                        160.094, 289.5996, 339.7752, 572.17,
-    #                        658.6025, 647.2883, 650.1958, 639.7053,
-    #                        658.044, 661.158, 660.3772, 673.1098,
-    #                        640.9227, 523.3306, 542.7008, 499.3727,
-    #                        357.9398, 160.0936, 145.9894, 142.4973]
-
-    demand_forecast_base = [467, 436, 450, 341, 326, 321,
-                            317, 319, 391, 487, 551, 574,
-                            579, 584, 580, 551, 535, 535,
-                            513, 486, 454, 445, 446, 393]
-    # demand_forecast_base = [0.0]*24
-    demand_forecast_base = [scale * v for v in demand_forecast_base]
-
-    if shift_to_start_of_day == False:
-        # shift starting point to match up to current hour
-        forecast_start_hour = datetime.strptime(forecast_timestamps[0], "%Y-%m-%dT%H:%M:%S").hour
-        pv_forecast = pv_forecast_base[forecast_start_hour:len(pv_forecast_base)]
-        pv_forecast.extend(pv_forecast_base[0:forecast_start_hour])
-
-        demand_forecast = demand_forecast_base[forecast_start_hour:len(demand_forecast_base)]
-        demand_forecast.extend(demand_forecast_base[0:forecast_start_hour])
-
-    else:  # start sim at start of day.
-        pv_forecast = pv_forecast_base
-        demand_forecast = demand_forecast_base
 
     _log.info("Load scenarios")
     scale = 1.1
@@ -673,6 +885,9 @@ def load_scenarios(cur_resource, gs_start_time):
             load_shift_options = [ls[ii].tolist() for ii in range(0, 13)]
             loadshift_resources.load_scenario(load_options=load_shift_options,
                                               t=forecast_timestamps)
+            loadshift_resources.state_vars["IDList"] = [ii for ii in range(0,13)]
+            loadshift_resources.state_vars["OptionsPending"] = 1
+
     except:
         pass
 
@@ -692,30 +907,36 @@ if __name__ == '__main__':
     # this is a hard-coded version of what might happen in the executive
     # would eventually do all this via external configuration files, etc.
 
-    shift_to_start_of_day = False
+    shift_to_start_of_day = True
+    SET_TIME = True
 
     _log.setLevel(logging.INFO)
     msgs = logging.StreamHandler(stream=sys.stdout)
     #msgs.setLevel(logging.INFO)
     #_log.addHandler(msgs)
 
+    if SET_TIME == True:
+        shift_to_start_of_day = False
+        gs_start_time = datetime(2019,6,9,10)
+    else:
+        gs_start_time = datetime.utcnow().replace(microsecond=0)
+        if shift_to_start_of_day == True:
+            gs_start_time = gs_start_time.replace(hour=0, minute=0, second=0)
 
-    gs_start_time = datetime.utcnow().replace(microsecond=0)
-    if shift_to_start_of_day == True:
-        gs_start_time = gs_start_time.replace(hour=0, minute=0, second=0)
     gs_start_time_str = gs_start_time.strftime("%Y-%m-%dT%H:%M:%S")
 
-    day_ahead_resources = get_dispatch_schedule(gs_start_time,
-                                                "../cfg/SystemCfg/DayAheadSundialSystemConfiguration.json",
-                                                shift_to_start_of_day)
+    if USE_STRATEGIC_SCHEDULE == 1:
+        day_ahead_resources = get_dispatch_schedule(gs_start_time,
+                                                    "../cfg/SystemCfg/DayAheadSundialSystemConfiguration.json",
+                                                    shift_to_start_of_day)
 
-    inds = [v.hour for v in day_ahead_resources.schedule_vars['timestamp']]
-    #pandas.DataFrame(data = day_ahead_resources.schedule_vars['DemandForecast_kW'], index = day_ahead_resources.schedule_vars['timestamp']).to_csv("myloadshape.csv")
+        inds = [v.hour for v in day_ahead_resources.schedule_vars['timestamp']]
+        #pandas.DataFrame(data = day_ahead_resources.schedule_vars['DemandForecast_kW'], index = day_ahead_resources.schedule_vars['timestamp']).to_csv("myloadshape.csv")
 
 
-    pandas.DataFrame(data={'0': day_ahead_resources.schedule_vars['DemandForecast_kW'],
-                           '1': day_ahead_resources.schedule_vars['weights']},
-                             index=day_ahead_resources.schedule_vars['timestamp']).to_csv('myloadshape.csv')
+        pandas.DataFrame(data={'0': day_ahead_resources.schedule_vars['DemandForecast_kW'],
+                               '1': day_ahead_resources.schedule_vars['weights']},
+                                 index=day_ahead_resources.schedule_vars['timestamp']).to_csv('myloadshape.csv')
 
     sundial_resources   = get_dispatch_schedule(gs_start_time,
                                                 "../cfg/SystemCfg/EmulatedSundialSystemConfiguration.json",

@@ -69,18 +69,21 @@ ENABLE_LOAD_SELECT = False # If True, GS will propagate load shift commands to t
 
 ###################################
 ### Internal operating clocks.
-EXECUTIVE_CLKTIME = 2 # period, in seconds, at which the executive polls system state
+EXECUTIVE_CLKTIME = 1 # period, in seconds, at which the executive polls system state
 DATA_LOG_SCHEDULE = 1  # period at which state vars are logged, in executive clock cycles
 ENDPT_UPDATE_SCHEDULE  = DATA_LOG_SCHEDULE # period at which sundial system resource objects are updated
 GS_SCHEDULE       = 4*60 #2880/6  # GS optimizer period, in executive clock cycles
-ESS_SCHEDULE      = 1 # ess regulation period, in executive clock cycles
+ESS_SCHEDULE      = 2 # ess regulation period, in executive clock cycles
 UI_CMD_POLLING_FREQUENCY = 5 # period, in seconds, at which the UI agent polls UI_cmd.json for a new msg
-STRATEGIC_SCHEDULE = 24*60*60/15 #240
+STRATEGIC_SCHEDULE = 24*60*60/2 #240
 
+ESS_CMD_PUBLICATION_INTERVAL       = 10
+SUNDIAL_STATE_PUBLICATION_INTERVAL = 10
+EXECUTIVE_STATUS_PUBLICATION_INTERVAL = 10
 
 ####################################
 ### Some basic device and objective fcn configuration options:
-DEMAND_CHARGE_THRESHOLD = 475 #250
+DEMAND_CHARGE_THRESHOLD = 300 #250
 UPDATE_THRESHOLD = True
 
 # FIXME - ESS_RESERVE_xx should be set in absoluate terms, not relative terms - won't work if ESS_MIN is 0
@@ -90,8 +93,8 @@ ESS_RESERVE_HIGH = 0.95  # relative to ESS_MAX
 ESS_RESERVE_LOW  = 1.5   # relative to ESS_MIN
 
 USE_PV_ADJUST = 1 # 0 = no adjust; 1 = Use hour lookup adjust
-PV_ADJUST = 0.65
-DEMAND_ADJUST = 1.1
+PV_ADJUST = 1.0 #0.65
+DEMAND_ADJUST = 1.0
 #ERROR_MARGIN  = 1.1
 
 
@@ -148,25 +151,30 @@ EXEC_STARTING = 3
 if DEPLOYED == True:
     #SITE_CFG_FILE   = "SiteConfiguration-PlantLevel-original.json"
     #SITE_CFG_FILE   = "SiteConfiguration-DeviceLevel.json"
+    SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
     SITE_CFG_FILE   = "SiteConfiguration-PlantLevel.json"
+    DAY_AHEAD_SYSTEM_CFG_FILE = "DayAheadSundialSystemConfiguration.json"
 else:
-    SITE_CFG_FILE   = "SiteConfiguration-Emulator-2Sites.json"
+    SITE_CFG_FILE   = "SiteConfiguration-Emulator.json"
+    #SITE_CFG_FILE   = "SiteConfiguration-Emulator-2Sites.json"
+    SYSTEM_CFG_FILE = "EmulatedSundialSystemConfiguration.json"
+    DAY_AHEAD_SYSTEM_CFG_FILE = "DayAheadSundialSystemConfiguration.json"
 
 
 if USE_SIM == 0:
     SIM_HRS_PER_HR = 1 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
 
     # Configuration File Locations
-    SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
-    DAY_AHEAD_SYSTEM_CFG_FILE = "DayAheadSundialSystemConfiguration.json"
+    #SYSTEM_CFG_FILE = "SundialSystemConfiguration.json"
+    #DAY_AHEAD_SYSTEM_CFG_FILE = "DayAheadSundialSystemConfiguration.json"
 
     pass
 
 else:
-    SIM_HRS_PER_HR = 15 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
+    SIM_HRS_PER_HR = 1 # used to set time acceleration.  1 = normal time.  60 = 60x acceleration
     # Configuration File Locations
-    SYSTEM_CFG_FILE = "EmulatedSundialSystemConfiguration.json"
-    DAY_AHEAD_SYSTEM_CFG_FILE = "DayAheadSundialSystemConfiguration.json"
+    #SYSTEM_CFG_FILE = "EmulatedSundialSystemConfiguration.json"
+    #DAY_AHEAD_SYSTEM_CFG_FILE = "DayAheadSundialSystemConfiguration.json"
 
 
 ###################################

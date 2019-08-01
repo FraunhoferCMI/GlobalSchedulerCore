@@ -887,14 +887,14 @@ class ESSResource(SundialResource):
             time_elapsed = float((schedule_timestamps[0] - cur_time).total_seconds())  # seconds since the first forecast ts
             # fraction of an hour before the next schedule starts
             scale_factor = time_elapsed / float(MINUTES_PER_HR * SEC_PER_MIN)
-            eff_factor = self.get_eff_factor(self.state_vars["TgtPwr_kW"])
+            eff_factor = self.get_eff_factor(self.state_vars["AvgPwr_kW"]) # self.state_vars["TgtPwr_kW"]
 
             self.state_vars["StartingSOE_kWh"] = min(max(self.state_vars["SOE_kWh"] +
-                                                         self.state_vars["TgtPwr_kW"]*scale_factor*eff_factor,
+                                                         self.state_vars["AvgPwr_kW"]*scale_factor*eff_factor, # self.state_vars["TgtPwr_kW"]
                                                          self.state_vars["MinSOE_kWh"]),
                                                      self.state_vars["MaxSOE_kWh"])
             _log.info("Starting SOE is "+str(self.state_vars["StartingSOE_kWh"]))
-            _log.info("Current SOE is "+str(self.state_vars["SOE_kWh"]))
+            _log.info("Current SOE is "+str(self.state_vars["SOE_kWh"])+"; Avg Pwr is "+str(self.state_vars["AvgPwr_kW"])+"; TgtPwr is "+str(self.state_vars["TgtPwr_kW"]))
             _log.info(cur_time)
             _log.info(scale_factor)
 
@@ -1007,7 +1007,6 @@ class ESSResource(SundialResource):
 
         if cnt == 2:
             _log.info("What the hey??")  # should never happen!
-
         #if (self.state_vars["Nameplate"]) != 0.0:
         #    profile["Weight"][ind] = profile["DemandForecast_kW"][ind]/float(self.state_vars["Nameplate"])
         #else:
@@ -1054,6 +1053,87 @@ class ESSResource(SundialResource):
 
         return profile #schedule
 
+    def get_allowable_state(self, profile, ii):
+        """
+        Calculate the max & min power command at each time step, given the current state of the system
+        Call this before determining the perturbation command.
+        :return:
+        """
+        npts = len(profile["DemandForecast_kW"])
+
+        #_log.info('current energy available:')
+        #_log.info(profile['EnergyAvailableForecast_kWh'])
+
+        max_chg = self.state_vars["MaxChargePwr_kW"]
+        max_dis = -1*self.state_vars["MaxDischargePwr_kW"]
+
+        max_soe_allowable = self.state_vars["MaxSOE_kWh"]*ESS_RESERVE_HIGH
+        min_soe_allowable = self.state_vars["MinSOE_kWh"]*ESS_RESERVE_LOW
+
+        eff_factor_chg = self.get_eff_factor(500)
+        eff_factor_dis = self.get_eff_factor(-500)
+
+        energy_lst = [float(self.state_vars["StartingSOE_kWh"])]
+        #energy_lst.extend(profile['EnergyAvailableForecast_kWh'])
+
+        energy_lst.extend(numpy.cumsum(profile["DeltaEnergy_kWh"]) + [self.state_vars["StartingSOE_kWh"]] * len(
+            profile["DeltaEnergy_kWh"]))
+        energy = numpy.array(energy_lst)
+
+        # calculate min and max SOE for the remainder of the current profile
+        max_soe_profile = max(energy[ii:npts+1]) #max(profile['EnergyAvailableForecast_kWh'][ii:npts])
+        min_soe_profile = min(energy[ii:npts+1])#min(profile['EnergyAvailableForecast_kWh'][ii:npts])
+
+        max_chg = min(((max_soe_allowable - max_soe_profile) / eff_factor_chg), max_chg)
+        max_dis = max(-1*((min_soe_profile - min_soe_allowable) / eff_factor_dis), max_dis)
+
+        #_log.info(max_chg_array)
+        #_log.info(max_dis_array)
+        return max_chg, max_dis
+
+
+
+
+    def get_allowable_states(self, profile):
+        """
+        Calculate the max & min power command at each time step, given the current state of the system
+        Call this before determining the perturbation command.
+        :return:
+        """
+        npts = len(profile["DemandForecast_kW"])
+
+        #_log.info('current energy available:')
+        #_log.info(profile['EnergyAvailableForecast_kWh'])
+
+        max_chg_array = numpy.array([self.state_vars["MaxChargePwr_kW"]]*npts)
+        max_dis_array = numpy.array([-1*self.state_vars["MaxDischargePwr_kW"]]*npts)
+
+        max_soe_allowable = self.state_vars["MaxSOE_kWh"]*ESS_RESERVE_HIGH
+        min_soe_allowable = self.state_vars["MinSOE_kWh"]*ESS_RESERVE_LOW
+
+        eff_factor_chg = self.get_eff_factor(500)
+        eff_factor_dis = self.get_eff_factor(-500)
+
+        #energy = numpy.cumsum(profile["DeltaEnergy_kWh"]) + [self.state_vars["StartingSOE_kWh"]] * len(
+        #    profile["DeltaEnergy_kWh"])
+
+        energy_lst = [float(self.state_vars["StartingSOE_kWh"])]
+        #energy_lst.extend(profile['EnergyAvailableForecast_kWh'])
+        energy_lst.extend(numpy.cumsum(profile["DeltaEnergy_kWh"]) + [self.state_vars["StartingSOE_kWh"]] * len(
+            profile["DeltaEnergy_kWh"]))
+        energy = numpy.array(energy_lst)
+
+        for ii in range(0,npts):
+            # calculate min and max SOE for the remainder of the current profile
+            max_soe_profile = max(energy[ii:npts+1]) #max(profile['EnergyAvailableForecast_kWh'][ii:npts])
+            min_soe_profile = min(energy[ii:npts+1])#min(profile['EnergyAvailableForecast_kWh'][ii:npts])
+
+            max_chg_array[ii] = min(((max_soe_allowable - max_soe_profile) / eff_factor_chg), max_chg_array[ii])
+            max_dis_array[ii] = max(-1*((min_soe_profile - min_soe_allowable) / eff_factor_dis), max_dis_array[ii])
+
+        #_log.info(max_chg_array)
+        #_log.info(max_dis_array)
+        return max_chg_array, max_dis_array
 
 
 
@@ -1351,6 +1431,7 @@ def export_schedule(profile, timestamps, update=True):
     demand_df.index = pandas.Series(profile.sundial_resources.schedule_vars["timestamp"])
     pandas.options.display.float_format = '{:,.1f}'.format
     print(demand_df)
+    print(demand_df["Demand-"+profile.sundial_resources.resource_id].tolist())
 
 if __name__ == "__main__":
 

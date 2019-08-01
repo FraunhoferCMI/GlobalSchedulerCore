@@ -1,0 +1,9 @@
+Reference Point,Volttron Point Name,Units,Unit Details,Modbus Register,Writable,Point Address,Default Value,Notes
+,freq,cHz,,>h,TRUE,801,0,
+,W,100W,,>i,TRUE,808,0,
+,W_PhA,100W,,>i,TRUE,802,0,
+,W_PhB,100W,,>i,TRUE,804,0,
+,W_PhC,100W,,>i,TRUE,806,0,
+,V_a,V,,>h,TRUE,798,0,
+,V_b,V,,>h,TRUE,799,0,
+,V_c,V,,>h,TRUE,800,0,

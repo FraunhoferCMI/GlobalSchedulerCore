@@ -15,6 +15,11 @@ volttron-ctl config store platform.driver devices/Site1low ../cfg/Modbus/demo_si
 volttron-ctl config store platform.driver devices/Site1mid ../cfg/Modbus/demo_site_devicefilemid
 volttron-ctl config store platform.driver devices/Site1high ../cfg/Modbus/demo_site_devicefilehigh
 volttron-ctl config store platform.driver devices/Site2 ../cfg/Modbus/north_site_devicefile
+#volttron-ctl config store platform.driver devices/Site2 ../cfg/Modbus/demo_site_devicefile_local
+volttron-ctl config store platform.driver devices/Site1veryhigh ../cfg/Modbus/demo_site_devicefileveryhigh
+volttron-ctl config store platform.driver devices/FeederMonitor ../cfg/Modbus/feederMonitor
+
+
 
 #volttron-ctl config store platform.driver registry_configs/site1_registry.csv ../cfg/Modbus/ShirleyCore.csv --csv
 #volttron-ctl config store platform.driver registry_configs/site1_registry.csv ../cfg/Modbus/CtrlCore.csv --csv
@@ -25,7 +30,9 @@ volttron-ctl config store platform.driver devices/Site2 ../cfg/Modbus/north_site
 volttron-ctl config store platform.driver registry_configs/site1low_registry.csv ../cfg/Modbus/ShirleyTestLow.csv --csv
 volttron-ctl config store platform.driver registry_configs/site1mid_registry.csv ../cfg/Modbus/ShirleyTestMid.csv --csv
 volttron-ctl config store platform.driver registry_configs/site1high_registry.csv ../cfg/Modbus/ShirleyTestHigh.csv --csv
+volttron-ctl config store platform.driver registry_configs/site1veryhigh_registry.csv ../cfg/Modbus/ShirleyTestVeryHigh.csv --csv
 volttron-ctl config store platform.driver registry_configs/site2_registry.csv ../cfg/Modbus/ShirleyNorth.csv --csv
+volttron-ctl config store platform.driver registry_configs/feeder_monitor_registry.csv ../cfg/Modbus/FeederMonitor.csv --csv
 
 
 #volttron-ctl config store platform.driver registry_configs/site1_registry.csv ../cfg/Modbus/DemoRegistry.csv --csv

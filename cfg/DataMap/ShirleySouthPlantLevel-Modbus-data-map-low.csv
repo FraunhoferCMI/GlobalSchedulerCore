@@ -58,3 +58,6 @@ ess.tesla_meter.RealEnergyImported,ShirleySouth-ESSPlant-ESS1,OpStatus,kWhImp,,k
 ess.tesla_status.Status_FullChargeEnergy,ShirleySouth-ESSPlant-ESS1,OpStatus,FullChargeEnergy_kWh,Y,kWh
 ess.tesla_status.Status_MaxChargePower,ShirleySouth-ESSPlant-ESS1,OpStatus,MaxChargePwr_kW,Y,kW
 ess.tesla_status.Status_MaxDischargePower,ShirleySouth-ESSPlant-ESS1,OpStatus,MaxDischargePwr_kW,Y,kW
+ess.tesla_heatMode.HeatEnergy,ShirleySouth-ESSPlant,RealPwrCtrl,HeatEnergy,Y,
+ess.tesla_heatMode.HeatPMinCharge,ShirleySouth-ESSPlant,RealPwrCtrl,HeatPMinCharge,Y,kW
+ess.tesla_heatMode.HeatPMinDischarge,ShirleySouth-ESSPlant,RealPwrCtrl,HeatPMinDischarge,Y,kW
