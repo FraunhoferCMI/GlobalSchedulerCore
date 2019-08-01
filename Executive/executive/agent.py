@@ -103,7 +103,7 @@ default_units = {"setpoint":"kW",
                  "DemandChargeThreshold": "kW"}
 
 ##############################################################################
-def calc_ess_setpoint(targetPwr_kW, curPwr_kW, netDemand_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW, max_discharge_kW):
+def calc_ess_setpoint(targetPwr_kW, curPwr_kW, netDemand_kW, SOE_kWh, min_SOE_kWh, max_SOE_kWh, max_charge_kW, max_discharge_kW, rr_enable=True):
     """
     Calculates a setpoint command to an ESS resource to bridge the gap between forecast and actual generation
     (1) first determines delta between forecast and actual.
@@ -126,8 +126,7 @@ def calc_ess_setpoint(targetPwr_kW, curPwr_kW, netDemand_kW, SOE_kWh, min_SOE_kW
     setpoint_cmd_interval = GS_SCHEDULE
     sec_per_hr = 60.0 * 60.0
 
-    RR_CTRL = True
-    if RR_CTRL == True:
+    if rr_enable == True:
         MAX_RR_PCT_PER_MIN = 0.20
         cur_delta = targetPwr_kW - netDemand_kW
         max_delta = MAX_RR_PCT_PER_MIN * SOLAR_NAMEPLATE * setpoint_cmd_interval / 60.0   # kW per cmd
@@ -777,6 +776,7 @@ class ExecutiveAgent(Agent):
         #
         # retrieve the current power output of the system, not including energy storage.
         # taking a shortcut here - implicit assumption that there is a single pool of ESS
+        rr_enable    = False
         curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
         curPwrAvg_kW = self.system_resources.state_vars["AvgPwr_kW"] - self.ess_resources.state_vars["AvgPwr_kW"]
         netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
@@ -833,25 +833,56 @@ class ExecutiveAgent(Agent):
                 if ALIGN_SCHEDULES == True:
                     cur_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0,tzinfo=pytz.utc)
                     try:
-                        # this adjusts the target power based on how close we are to the battery's upper reserve margin
-                        reserve_soe_high = max_SOE_kWh * ESS_RESERVE_HIGH
-                        reserve_soe_low  = min_SOE_kWh * ESS_RESERVE_LOW
-                        soe_upper_buffer_used =  (SOE_kWh-reserve_soe_high) / (max_SOE_kWh-reserve_soe_high)
-                        soe_lower_buffer_used =  (reserve_soe_low-SOE_kWh) / (reserve_soe_high-min_SOE_kWh)
+                        ####  Main mode of operation ###
+                        # set the target power to the current scheduled power.  Note that this is the system target
                         targetPwr_kW = self.sundial_resources.schedule_vars["schedule_kW"][cur_time]
-                        reserve_target = netDemandAvg_kW - self.ess_resources.state_vars["AvgPwr_kW"]
-                        _log.debug('Calculating adjusted tgt: orig_tgt =' + str(targetPwr_kW) + '; reserve target = ' + str(reserve_target))
 
-                        if (soe_upper_buffer_used >= 0) & (targetPwr_kW>0):
-                            # SOE is above reserve margin and charge commanded - calculate the target as a
-                            # blended fraction of the scheduled value and the recent average solar production
-                            targetPwr_kW   = targetPwr_kW + soe_upper_buffer_used * (reserve_target-targetPwr_kW)
-                            _log.info('In ESS upper reserve margin: upper buffer = '+str(soe_upper_buffer_used)+'; reserve_soe_high = '+str(reserve_soe_high))
-                        elif (soe_lower_buffer_used >= 0) & (targetPwr_kW<0):
-                            # SOE is below lower reserve margin and discharge commanded - calculate the target as a
-                            # blended fraction of the scheduled value and the recent average solar production
-                            targetPwr_kW   = targetPwr_kW + soe_lower_buffer_used * (reserve_target - targetPwr_kW)
-                            _log.info('In ESS lower reserve margin: lower buffer = ' + str(soe_lower_buffer_used) + '; reserve_soe_low = ' + str(reserve_soe_low))
+                        ### Now adjust the target power based on the ESS state of charge
+                        # two different upper and lower SOE thresholds are in effect
+                        # max/min SOE is the highest / lowest the battery should ever get
+                        # The reserve margin (reserve high/low) is a buffer that is lower/higher than the respective
+                        # upper / lower limit.  This is the lowest SOE that the battery should ever SCHEDULE
+                        # The energy in the reserve margin is intended to provide some margin for missed forecasts
+                        # and a buffer for ramp rate control, etc.
+                        ESS_EMERGENCY_DISCHARGE = -50
+                        ESS_EMERGENCY_CHARGE = 50
+                        if (SOE_kWh > max_SOE_kWh):  # over max SOE - discharge battery
+                            targetPwr_kW = curPwr_kW + ESS_EMERGENCY_DISCHARGE # sets target pwr to unccontrolled power - EMER DISCHARGE
+                            rr_enable = False
+                            _log.info ('***** ESS MAX SOE EXCEEEDED - DISCHARGING, disabled RR Ctrl ***** ')
+                            _log.info ('target power is '+str(targetPwr_kW)+'; scheduled power is '+
+                                       str(self.sundial_resources.schedule_vars["schedule_kW"][cur_time])+ '; pv plus load is '+str(curPwrAvg_kW))
+                        elif (SOE_kWh < min_SOE_kWh): # below min SOE - ignore target power, charge battery
+                            targetPwr_kW = curPwr_kW + ESS_EMERGENCY_CHARGE # sets target pwr to unccontrolled power + EMER CHARGE
+                            rr_enable = False
+                            _log.info ('***** ESS MIN SOE EXCEEEDED - CHARGING, disabled RR Ctrl ***** ')
+                            _log.info ('target power is '+str(targetPwr_kW)+'; scheduled power is '+
+                                       str(self.sundial_resources.schedule_vars["schedule_kW"][cur_time])+ '; pv plus load is '+str(curPwrAvg_kW))
+                        else:
+                            # now check to see if the battery is in the reserve margin
+                            # if it is, we adjust the target ess to ramp from the scheduled value down to 0 as we approach the
+                            # max/min threshold
+                            reserve_soe_high = max_SOE_kWh * ESS_RESERVE_HIGH
+                            reserve_soe_low  = min_SOE_kWh * ESS_RESERVE_LOW
+
+                            # Calculates the fraction of the reserve margin that is used.
+                            soe_upper_buffer_used =  (SOE_kWh-reserve_soe_high) / (max_SOE_kWh-reserve_soe_high)
+                            soe_lower_buffer_used =  (reserve_soe_low-SOE_kWh) / (reserve_soe_low-min_SOE_kWh)
+                            reserve_target        = curPwrAvg_kW
+                            _log.info('Calculating adjusted tgt: orig_tgt =' + str(targetPwr_kW) + '; reserve target = ' + str(reserve_target))
+                            _log.info('Calculating adjusted tgt: ESS Avg' + str(self.ess_resources.state_vars['AvgPwr_kW']) + '; SOE Lower Buffer = ' + str(soe_lower_buffer_used))
+
+                            if (soe_upper_buffer_used >= 0) & (self.ess_resources.state_vars['AvgPwr_kW']>0): #(targetPwr_kW>0):
+                                # SOE is above reserve margin and charge commanded - calculate the target as a
+                                # blended fraction of the scheduled value and the recent average solar production
+                                targetPwr_kW   = targetPwr_kW + soe_upper_buffer_used * (reserve_target-targetPwr_kW)
+                                _log.info('In ESS upper reserve margin: upper buffer = '+str(soe_upper_buffer_used)+'; reserve_soe_high = '+str(reserve_soe_high))
+                            elif (soe_lower_buffer_used >= 0) & (self.ess_resources.state_vars['AvgPwr_kW']<0): #& (targetPwr_kW<0):
+                                # SOE is below lower reserve margin and discharge commanded - calculate the target as a
+                                # blended fraction of the scheduled value and the recent average solar production
+                                targetPwr_kW   = targetPwr_kW + soe_lower_buffer_used * (reserve_target - targetPwr_kW)
+                                _log.info('In ESS lower reserve margin: lower buffer = ' + str(soe_lower_buffer_used) + '; reserve_soe_low = ' + str(reserve_soe_low))
+
                         expectedPwr_kW = self.pv_resources.schedule_vars["schedule_kW"][cur_time] + self.load_resources.schedule_vars["schedule_kW"][cur_time]
                         essTargetPwr_kW = self.ess_resources.schedule_vars["schedule_kW"][cur_time]
                         expectedSOE_kWh = self.ess_resources.schedule_vars["schedule_kWh"][cur_time]
@@ -905,72 +936,72 @@ class ExecutiveAgent(Agent):
 
         max_discharge_kW = self.ess_resources.state_vars["MaxDischargePwr_kW"]
 
-        if self.OptimizerEnable == ENABLED:
+        REGULATE_PCC = True
+        if REGULATE_PCC == True:
+            pv_plus_ess_tgt = targetPwr_kW - self.load_resources.state_vars['Pwr_kW'] # Schedule - Load
+            setpoint = pv_plus_ess_tgt
 
-            REGULATE_PCC = True
-            if REGULATE_PCC == True:
-                pv_plus_ess_tgt = targetPwr_kW - self.load_resources.state_vars['Pwr_kW'] # Schedule - Load
-                setpoint = pv_plus_ess_tgt
+            for entries in self.sdr_to_sm_lookup_table:
+                if entries.sundial_resource.resource_type == "ESSCtrlNode":  # for each ESS
+                    for devices in entries.device_list:  # for each end point device associated with that ESS
+                        if devices["isAvailable"] == 1:  # device is available for control
+                            self.vip.rpc.call(str(devices["AgentID"]),
+                                              "set_pcc_target",
+                                              devices["DeviceID"],
+                                              pv_plus_ess_tgt,
+                                              rr_enable)
 
-                for entries in self.sdr_to_sm_lookup_table:
-                    if entries.sundial_resource.resource_type == "ESSCtrlNode":  # for each ESS
-                        for devices in entries.device_list:  # for each end point device associated with that ESS
-                            if devices["isAvailable"] == 1:  # device is available for control
-                                self.vip.rpc.call(str(devices["AgentID"]),
-                                                  "set_pcc_target",
-                                                  devices["DeviceID"],
-                                                  pv_plus_ess_tgt)
+            pass
+        else:
+            if REGULATE_ESS_OUTPUT == True:
+                # figure out set point command
+                # note that this returns a setpoint command for a SundialResource ESSCtrlNode, which can group together
+                # potentially multiple ESS end point devices
+                setpoint = calc_ess_setpoint(targetPwr_kW, # -> target state for the system (From schedule)
+                                             predPwr_kW,   # -> same as current pwr = PV + Load (not incl ESS)
+                                             #netDemand_kW, # -> current total system pwr
+                                             netDemand_5SecAvg, # -> current total system pwr
+                                             SOE_kWh,
+                                             min_SOE_kWh,
+                                             max_SOE_kWh,
+                                             max_charge_kW,
+                                             max_discharge_kW,
+                                             rr_enable)
 
-                pass
             else:
-                if REGULATE_ESS_OUTPUT == True:
-                    # figure out set point command
-                    # note that this returns a setpoint command for a SundialResource ESSCtrlNode, which can group together
-                    # potentially multiple ESS end point devices
-                    setpoint = calc_ess_setpoint(targetPwr_kW, # -> target state for the system (From schedule)
-                                                 predPwr_kW,   # -> same as current pwr = PV + Load (not incl ESS)
-                                                 #netDemand_kW, # -> current total system pwr
-                                                 netDemand_5SecAvg, # -> current total system pwr
-                                                 SOE_kWh,
-                                                 min_SOE_kWh,
-                                                 max_SOE_kWh,
-                                                 max_charge_kW,
-                                                 max_discharge_kW)
-
-                else:
-                    setpoint = essTargetPwr_kW
+                setpoint = essTargetPwr_kW
 
 
-                _log.debug("Regulator: setpoint = " + str(setpoint))
+            _log.debug("Regulator: setpoint = " + str(setpoint))
 
-                # figure out how to divide set point command between and propagate commands to end point devices
-                for entries in self.sdr_to_sm_lookup_table:
-                    if entries.sundial_resource.resource_type == "ESSCtrlNode":  # for each ESS
-                        for devices in entries.device_list:   # for each end point device associated with that ESS
-                            if devices["isAvailable"] == 1:   # device is available for control
-                                # retrieve a reference to the device end point operational registers
-                                device_state_vars = self.vip.rpc.call(str(devices["AgentID"]),
-                                                                      "get_device_state_vars",
-                                                                      devices["DeviceID"]).get(timeout=5)
+            # figure out how to divide set point command between and propagate commands to end point devices
+            for entries in self.sdr_to_sm_lookup_table:
+                if entries.sundial_resource.resource_type == "ESSCtrlNode":  # for each ESS
+                    for devices in entries.device_list:   # for each end point device associated with that ESS
+                        if devices["isAvailable"] == 1:   # device is available for control
+                            # retrieve a reference to the device end point operational registers
+                            device_state_vars = self.vip.rpc.call(str(devices["AgentID"]),
+                                                                  "get_device_state_vars",
+                                                                  devices["DeviceID"]).get(timeout=5)
 
-                                _log.debug("state vars = "+str(device_state_vars))
+                            _log.debug("state vars = "+str(device_state_vars))
 
-                                # Divides the set point command across the available ESS sites.
-                                # currently divided pro rata based on kWh available.
-                                # Right now configured with only one ESS - has not been tested this iteration with more
-                                # than one ESS end point in this iteration
-                                if (setpoint > 0):  # charging
-                                    pro_rata_share = float(device_state_vars["SOE_kWh"]+EPSILON) / (float(SOE_kWh)+EPSILON) * float(setpoint)
-                                    #todo - need to check for min SOE - implication of the above is that min = 0
-                                else: # discharging
-                                    pro_rata_share = float(device_state_vars["MaxSOE_kWh"] - device_state_vars["SOE_kWh"]+EPSILON) /\
-                                                     (max_SOE_kWh - float(SOE_kWh)+EPSILON) * float(setpoint)
-                                _log.debug("Optimizer: Sending request for " + str(pro_rata_share) + "to " + devices["AgentID"])
-                                # send command
-                                self.vip.rpc.call(str(devices["AgentID"]),
-                                                  "set_real_pwr_cmd",
-                                                  devices["DeviceID"],
-                                                  pro_rata_share)
+                            # Divides the set point command across the available ESS sites.
+                            # currently divided pro rata based on kWh available.
+                            # Right now configured with only one ESS - has not been tested this iteration with more
+                            # than one ESS end point in this iteration
+                            if (setpoint > 0):  # charging
+                                pro_rata_share = float(device_state_vars["SOE_kWh"]+EPSILON) / (float(SOE_kWh)+EPSILON) * float(setpoint)
+                                #todo - need to check for min SOE - implication of the above is that min = 0
+                            else: # discharging
+                                pro_rata_share = float(device_state_vars["MaxSOE_kWh"] - device_state_vars["SOE_kWh"]+EPSILON) /\
+                                                 (max_SOE_kWh - float(SOE_kWh)+EPSILON) * float(setpoint)
+                            _log.debug("Optimizer: Sending request for " + str(pro_rata_share) + "to " + devices["AgentID"])
+                            # send command
+                            self.vip.rpc.call(str(devices["AgentID"]),
+                                              "set_real_pwr_cmd",
+                                              devices["DeviceID"],
+                                              pro_rata_share)
 
 
         self.optimizer_info["setpoint"] = setpoint
