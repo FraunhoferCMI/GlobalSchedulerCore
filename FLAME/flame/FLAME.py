@@ -94,7 +94,6 @@ Dummy Message Loaded""" % self.type)
             self.response = json.loads(result_json)
             # (4) check for errors
             assert self.response['type'] == self.type + 'Response', 'msg received is wrong type %s' % self.type + 'Response'
-
         return None
 
 ## subclasses
@@ -192,7 +191,6 @@ class LoadShift(IPKeys):
 
         self._send_receive()
         if (1): #try:
-
             absolute_forecast, costs = parse_LoadShift_response(self.response)
             absolute_forecast.to_csv('LoadShapeResults.csv')
             ### FIXME - just have hard coded column name - needs to be fixed. ###
@@ -415,7 +413,6 @@ class LoadReport(IPKeys):
             self._send_receive()
             # assert facility is self.response['msg']['facility'],\
             #     'facility response does not match requested facility'
-
             if self.response['msg']['loadSchedule'] != []:
 
                 if scale_values == True:
@@ -596,10 +593,30 @@ def read_load_request():
     # # OLD STATIC WAY
     gs_root_dir = os.environ['GS_ROOT_DIR'] #'/Users/mkromer/PycharmProjects/GlobalSchedulerCore/'
     flame_path = "FLAME/flame/"
-    fname = 'Example4A_48hr.json'  # 'Example4A.json' #''defaultLoadRequest.json'
+
+    if (0):
+        fname = 'Example1_MiddayPk_48hr.json' #'Example06192019_48hr.json' #'Example06192019_48hr.json'  # 'Example4A.json' #''defaultLoadRequest.json'
+    else:
+        import sys
+        sys.path.insert(0, "/Users/mkromer/PycharmProjects/PriceMap")
+        import GeneratePriceMap
+        fname_path = '/Users/mkromer/PycharmProjects/PriceMap'
+        price_file = os.path.join(fname_path,'Example1_MiddayPk_48hr.xlsx')
+        #start_time = datetime.now().astimezone(pytz('US/Eastern')).replace(hour=0,minute=0,second=0, tzinfo=None)
+        start_time = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+        print(start_time)
+        load_shift_request = GeneratePriceMap.generate_price_map(price_file, start_time, 48, 10)
+        print(load_shift_request)
+        fname    = 'CurPriceMap.json'
+        filepath =  os.path.join(gs_root_dir, flame_path, fname)
+        json.dump(load_shift_request, open(filepath,'w'))
+
     filepath = os.path.join(gs_root_dir, flame_path, fname)
     with open(filepath) as f:
         msg = json.load(f)
+
+
+
 
     start_time = pytz.timezone("US/Eastern").localize(datetime.strptime(msg['marginalCostCurve'][0]['dstart'], TIME_FORMAT))
     #print("read load request: "+str(start_time))
@@ -666,7 +683,6 @@ def parse_LoadShift_response(response):
     response_options = response['msg']['options']
     ind_options = []
     costs = {}
-    #print(response['msg'])
     #print(response_options)
     for option in response_options:
         #print(option)
@@ -833,7 +849,7 @@ if __name__ == '__main__':
     # secure way
     sslopt = {"ca_certs": 'IPKeys_Root.pem'}
 
-    ws = create_connection(ws_url, sslopt=sslopt)
+    ws = create_connection(ws_url, timeout=45, sslopt=sslopt)
 
     TEST_BASELINE   = False
     TEST_STATUS     = False
@@ -850,6 +866,8 @@ if __name__ == '__main__':
         start =  datetime.now(pytz.timezone('US/Eastern')).replace(microsecond=0, second=0).strftime(TIME_FORMAT) #'2019-05-01T00:00:00'
         start =  datetime.now(pytz.timezone('US/Eastern')).replace(microsecond=0, second=0, hour=0,minute=0).strftime(TIME_FORMAT) #'2019-05-01T00:00:00'
 
+        start = '2019-06-28T03:00:03'
+
         granularity = 1
         # granularity =  'PT1H'
         duration = 'PT24H'
@@ -857,6 +875,7 @@ if __name__ == '__main__':
         print("processing Baseline")
         bl.process()
         print("Here's the Baseline forecast:\n", bl.forecast)
+        print(bl.forecast['value'].tolist())
         print("done processing Baseline")
         return bl
     if TEST_BASELINE == True:
@@ -896,7 +915,7 @@ if __name__ == '__main__':
         print("running LoadReport")
         current_time = datetime.now().replace(microsecond=0, second=0, minute=0)
         time_delta = timedelta(hours=24)
-        start_time = datetime.strptime('2018-10-16T02:25:00', "%Y-%m-%dT%H:%M:%S")#current_time - time_delta
+        start_time = datetime.strptime('2018-07-07T02:25:00', "%Y-%m-%dT%H:%M:%S")#current_time - time_delta
         print(start_time)
         loadReport_kwargs = {
             "dstart": start_time.strftime("%Y-%m-%dT%H:%M:%S"), #"2018-07-14T00:00:00",        #start time for report
@@ -931,7 +950,8 @@ if __name__ == '__main__':
     ##
 
     if STORE_FORECASTS == True:
-        start_time = "2019-01-03T00:00:04"
-        end_time   = "2019-03-29T00:00:04"
+        start_time = "2019-03-01T00:00:05"
+        #end_time = "2019-03-01T02:00:05"
+        end_time   = "2019-06-19T00:00:05"
         store_forecasts(start_time, end_time, res=1)
         #store_loadreports(start_time, end_time)
