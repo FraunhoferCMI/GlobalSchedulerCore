@@ -255,10 +255,15 @@ class FLAMECommsAgent(Agent):
 
 
     ##############################################################################
-    #@Core.periodic(period=LOADSHIFT_FORECAST_UPDATE_INTERVAL)
+    @Core.periodic(period=LOADSHIFT_FORECAST_UPDATE_INTERVAL)
     def publish_load_option_forecast(self):
         """
-
+        Called on either -
+        (1) initialization
+        (2) new load option selected
+        (3) LOADSHIFT_FORECAST_UPDATE_INTERVAL
+        Is used to make sure that the currently selected load shift option (even if null) is available for the applicable
+        optimizer time horizon
         :return:
         """
 
@@ -329,7 +334,8 @@ class FLAMECommsAgent(Agent):
         if ENABLE_LOAD_SELECT == True:
             ws = create_connection(ws_url, sslopt=sslopt)
             lsel = LoadSelect(websocket=ws,
-                              optionID=optionID)
+                              optionID=optionID,
+                              testMode='false')
             lsel.process()
 
             _log.info("LoadSelect status: " + lsel.status) # TODO setup self.comm_status check based on status
@@ -493,22 +499,24 @@ class FLAMECommsAgent(Agent):
 
     ##############################################################################
     #@Core.periodic(period=LOADSHIFT_QUERY_INTERVAL)
-    def query_loadshift(self):
+    def query_loadshift(self, use_static_price_map = False):
         """
         queries the FLAME server for baseline message
         """
         if self.initialization_complete == 1:
             _log.info("querying loadshift")
 
-            gcm_kwargs = {'n_time_steps': 24,
-                          'search_resolution': 25}
-            price_map = self.vip.rpc.call('executiveagent-1.0_1',
-                                         'generate_cost_map'
-                                         # **gcm_kwargs
-                                         ).get(timeout=5)
+            if use_static_price_map == False:
+                gcm_kwargs = {'n_time_steps': 24,
+                              'search_resolution': 25}
+                price_map = self.vip.rpc.call('executiveagent-1.0_1',
+                                             'generate_cost_map'
+                                             # **gcm_kwargs
+                                             ).get(timeout=5)
 
-            _log.info(price_map)
-
+                _log.info(price_map)
+            else:
+                price_map = None
 
             current_time = datetime.now(pytz.timezone('US/Eastern')).replace(minute=0, microsecond=0, second=0)
             _log.info("requesting load shift starting at time "+current_time.strftime(TIME_FORMAT))

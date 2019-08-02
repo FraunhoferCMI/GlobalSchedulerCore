@@ -164,7 +164,14 @@ class LoadShift(IPKeys):
             self.start_time = start_time
 
             # set the load shift request for the start of the next day:
-            req_start_time = start_time.replace(hour=0) #+ timedelta(days=1)
+            # the FLAME Server seems to expect requests to come for the current calendar day in UTC
+            # but expects the requests / provides time stamps in Eastern
+            if start_time.astimezone(pytz.timezone('UTC')).date() != start_time.date():  # new day
+                delta_t = 1
+            else:
+                delta_t = 0
+
+            req_start_time = start_time.replace(hour=0) + timedelta(days=delta_t)
             dstart         = req_start_time.strftime(TIME_FORMAT)
             self.request = create_load_request(price_map=price_map, start_time=dstart, nLoadOptions=nLoadOptions)
 
@@ -289,13 +296,14 @@ class LoadShift(IPKeys):
         return None
 
 class LoadSelect(IPKeys):
-    def __init__(self, websocket, optionID):
+    def __init__(self, websocket, optionID, testMode='true'):
         IPKeys.__init__(self, websocket)
 
         self.type = u'LoadSelect'
 
         self.request = json.dumps({'type': 'LoadSelectRequest',
-                                            'msg': {"optionID": optionID}
+                                            'msg': {"optionID": optionID,
+                                                    "test": testMode}
                                             }
                                            )
         return None
@@ -666,8 +674,9 @@ def parse_LoadShift_response(response):
     response_options = response['msg']['options']
     ind_options = []
     costs = {}
-    #print(response['msg'])
-    #print(response_options)
+    _log.info(response['msg'])
+    _log.info('******** options ******')
+    _log.info(response_options)
     for option in response_options:
         #print(option)
         implementationCost = option['implementationCost']
@@ -833,7 +842,7 @@ if __name__ == '__main__':
     # secure way
     sslopt = {"ca_certs": 'IPKeys_Root.pem'}
 
-    ws = create_connection(ws_url, sslopt=sslopt)
+    ws = create_connection(ws_url, timeout=45, sslopt=sslopt)
 
     TEST_BASELINE   = False
     TEST_STATUS     = False
