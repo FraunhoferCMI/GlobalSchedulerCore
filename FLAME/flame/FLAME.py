@@ -1,5 +1,5 @@
 "This is a tool to exchange messagers with the IPKeys webserver FLAME"
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 import websocket
 from websocket import create_connection
@@ -199,7 +199,10 @@ class LoadShift(IPKeys):
         self._send_receive()
         if (1): #try:
             absolute_forecast, costs = parse_LoadShift_response(self.response)
-            absolute_forecast.to_csv('LoadShapeResults.csv')
+            cur_date = datetime.now().date().strftime('%m-%d-%Y')
+            gs_root_dir = os.environ['GS_ROOT_DIR']  # '/Users/mkromer/PycharmProjects/GlobalSchedulerCore/'
+            flame_path  = "FLAME/flame/"
+            absolute_forecast.to_csv(os.path.join(gs_root_dir, flame_path,'LoadShapeResults-'+cur_date+'.csv'))
             ### FIXME - just have hard coded column name - needs to be fixed. ###
             #print(bl.forecast)
 
@@ -606,15 +609,17 @@ def read_load_request():
         fname = 'Example1_MiddayPk_48hr.json' #'Example06192019_48hr.json' #'Example06192019_48hr.json'  # 'Example4A.json' #''defaultLoadRequest.json'
     else:
         import sys
-        sys.path.insert(0, "/Users/mkromer/PycharmProjects/PriceMap")
+        lsa_path = "LoadShiftAgent/load_shift_agent/" # '/Users/mkromer/PycharmProjects/PriceMap'
+        sys.path.insert(0, os.path.join(gs_root_dir, lsa_path)) #"/Users/mkromer/PycharmProjects/PriceMap"
         import GeneratePriceMap
-        fname_path = '/Users/mkromer/PycharmProjects/PriceMap'
-        price_file = os.path.join(fname_path,'Example1_MiddayPk_48hr.xlsx')
+
+        price_file = 'Example2_MiddayPk_48hr.xlsx'
+        price_filepath = os.path.join(gs_root_dir, lsa_path, price_file)
         #start_time = datetime.now().astimezone(pytz('US/Eastern')).replace(hour=0,minute=0,second=0, tzinfo=None)
         start_time = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
         print(start_time)
-        load_shift_request = GeneratePriceMap.generate_price_map(price_file, start_time, 48, 10)
-        print(load_shift_request)
+        load_shift_request = GeneratePriceMap.generate_price_map(price_filepath, start_time, 48, 10)
+        #print(load_shift_request)
         fname    = 'CurPriceMap.json'
         filepath =  os.path.join(gs_root_dir, flame_path, fname)
         json.dump(load_shift_request, open(filepath,'w'))
@@ -691,9 +696,9 @@ def parse_LoadShift_response(response):
     response_options = response['msg']['options']
     ind_options = []
     costs = {}
-    #print(response_options)
+    #_log.info(response_options)
     for option in response_options:
-        #print(option)
+        #_log.info(option)
         implementationCost = option['implementationCost']
         optionID = option['optionID']
         costs[optionID] = implementationCost

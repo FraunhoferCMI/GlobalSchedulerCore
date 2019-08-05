@@ -323,15 +323,16 @@ class FLAMECommsAgent(Agent):
 
     ##############################################################################
     @RPC.export
-    def load_option_select(self, optionID):
+    def load_option_select(self, optionID, enable_load_select = ENABLE_LOAD_SELECT):
         """
         Communicate load option choice to IPKeys and publish this to VOLTTRON
         topic.
         """
 
-        _log.info("selecting load option")
+        _log.info("Selecting option "+optionID)
 
-        if ENABLE_LOAD_SELECT == True:
+        if enable_load_select == True:
+            _log.info('Sending Option to Server!')
             ws = create_connection(ws_url, sslopt=sslopt)
             lsel = LoadSelect(websocket=ws,
                               optionID=optionID,
@@ -347,7 +348,6 @@ class FLAMECommsAgent(Agent):
                 # message=lsel.status) # CHECK if this is what's wanted
             ws.close()
 
-        _log.info("selecting option "+optionID)
         #_log.info(self.pending_loadshift_options.forecast_dict[optionID])
 
         self.options_pending = 0
@@ -499,6 +499,7 @@ class FLAMECommsAgent(Agent):
 
     ##############################################################################
     #@Core.periodic(period=LOADSHIFT_QUERY_INTERVAL)
+    @RPC.export
     def query_loadshift(self, use_static_price_map = False):
         """
         queries the FLAME server for baseline message
@@ -540,7 +541,7 @@ class FLAMECommsAgent(Agent):
             self.options_pending           = 1
 
             message = ls.forecast.forecast_obj
-            _log.info(message)
+            #_log.info(message)
             self.vip.pubsub.publish(
                 peer="pubsub",
                 topic=self._config['loadshift_forecast_topic'],
