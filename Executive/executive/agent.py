@@ -776,7 +776,7 @@ class ExecutiveAgent(Agent):
         #
         # retrieve the current power output of the system, not including energy storage.
         # taking a shortcut here - implicit assumption that there is a single pool of ESS
-        rr_enable    = False
+        rr_enable    = True
         curPwr_kW    = self.system_resources.state_vars["Pwr_kW"] - self.ess_resources.state_vars["Pwr_kW"]
         curPwrAvg_kW = self.system_resources.state_vars["AvgPwr_kW"] - self.ess_resources.state_vars["AvgPwr_kW"]
         netDemand_kW = self.system_resources.state_vars["Pwr_kW"]
@@ -869,8 +869,8 @@ class ExecutiveAgent(Agent):
                             soe_upper_buffer_used =  (SOE_kWh-reserve_soe_high) / (max_SOE_kWh-reserve_soe_high)
                             soe_lower_buffer_used =  (reserve_soe_low-SOE_kWh) / (reserve_soe_low-min_SOE_kWh)
                             reserve_target        = curPwrAvg_kW
-                            _log.info('Calculating adjusted tgt: orig_tgt =' + str(targetPwr_kW) + '; reserve target = ' + str(reserve_target))
-                            _log.info('Calculating adjusted tgt: ESS Avg' + str(self.ess_resources.state_vars['AvgPwr_kW']) + '; SOE Lower Buffer = ' + str(soe_lower_buffer_used))
+                            _log.debug('Calculating adjusted tgt: orig_tgt =' + str(targetPwr_kW) + '; reserve target = ' + str(reserve_target))
+                            _log.debug('Calculating adjusted tgt: ESS Avg' + str(self.ess_resources.state_vars['AvgPwr_kW']) + '; SOE Lower Buffer = ' + str(soe_lower_buffer_used))
 
                             if (soe_upper_buffer_used >= 0) & (self.ess_resources.state_vars['AvgPwr_kW']>0): #(targetPwr_kW>0):
                                 # SOE is above reserve margin and charge commanded - calculate the target as a
