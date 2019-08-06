@@ -844,17 +844,25 @@ class ExecutiveAgent(Agent):
                         # upper / lower limit.  This is the lowest SOE that the battery should ever SCHEDULE
                         # The energy in the reserve margin is intended to provide some margin for missed forecasts
                         # and a buffer for ramp rate control, etc.
-                        ESS_EMERGENCY_DISCHARGE = -50
-                        ESS_EMERGENCY_CHARGE = 50
+
+                        # Add on an accessory-like charge/discharge load that ramps from 0 to Max Chg / Discharge
+                        # as the battery approaches its absolute limit
+                        max_charge_kW    = self.ess_resources.state_vars["MaxChargePwr_kW"]
+                        max_discharge_kW = -1*self.ess_resources.state_vars["MaxDischargePwr_kW"]
+                        full_charge_kWh  = max_SOE_kWh/ESS_MAX
+
+                        emergency_discharge = (SOE_kWh-max_SOE_kWh) / (full_charge_kWh - max_SOE_kWh) * max_discharge_kW
+                        emergency_charge    = (min_SOE_kWh-SOE_kWh) / (min_SOE_kWh-0) * max_charge_kW
+
                         if (SOE_kWh > max_SOE_kWh):  # over max SOE - discharge battery
-                            targetPwr_kW = curPwr_kW + ESS_EMERGENCY_DISCHARGE # sets target pwr to unccontrolled power - EMER DISCHARGE
-                            rr_enable = False
+                            targetPwr_kW = curPwr_kW + emergency_discharge # sets target pwr to unccontrolled power - EMER DISCHARGE
+                            rr_enable = True
                             _log.info ('***** ESS MAX SOE EXCEEEDED - DISCHARGING, disabled RR Ctrl ***** ')
                             _log.info ('target power is '+str(targetPwr_kW)+'; scheduled power is '+
                                        str(self.sundial_resources.schedule_vars["schedule_kW"][cur_time])+ '; pv plus load is '+str(curPwrAvg_kW))
                         elif (SOE_kWh < min_SOE_kWh): # below min SOE - ignore target power, charge battery
-                            targetPwr_kW = curPwr_kW + ESS_EMERGENCY_CHARGE # sets target pwr to unccontrolled power + EMER CHARGE
-                            rr_enable = False
+                            targetPwr_kW = curPwr_kW + emergency_charge # sets target pwr to unccontrolled power + EMER CHARGE
+                            rr_enable = True
                             _log.info ('***** ESS MIN SOE EXCEEEDED - CHARGING, disabled RR Ctrl ***** ')
                             _log.info ('target power is '+str(targetPwr_kW)+'; scheduled power is '+
                                        str(self.sundial_resources.schedule_vars["schedule_kW"][cur_time])+ '; pv plus load is '+str(curPwrAvg_kW))
