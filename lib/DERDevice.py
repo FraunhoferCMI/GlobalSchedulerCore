@@ -1940,6 +1940,7 @@ class ESSCtrlNode(DERModbusCtrlNode):
 
         self.state_vars["OrigDemandForecast_t_str"] = [0.0]*SSA_PTS_PER_SCHEDULE
         self.prev_setpt = 0.0
+        self.prev_err = 0.0
 
     ##############################################################################
     def update_state_vars(self, SiteMgr):
@@ -1967,14 +1968,27 @@ class ESSCtrlNode(DERModbusCtrlNode):
             #cur_setpoint = self.op_status.data_dict['CtrlRegister']
             #cur_setpoint = self.prev_setpt
             cur_setpoint = self.state_vars['Pwr_kW']
+            err = 0
         else:
             #cur_setpoint = self.state_vars['Pwr_kW']  # self.op_status.data_dict['CtrlRegister']
             cur_setpoint = -1*self.op_status.data_dict['CtrlRegister']
+            err = abs((cur_setpoint - self.state_vars['Pwr_kW'])/500) # FIXME - self.state_vars['Nameplate_kW']
+            # not scientific - seems like if the ESS misses twice by >20%, it indicates that the ESS is offline or the
+            # ESS is power limited.  In this case, set the control variable to the measured ESS power output, not
+            # the ESS set point.  This is a little bit less responsive, but will not cause an unstable response
+            err_threshold = 0.2
+            if (abs(err) > err_threshold) & (abs(self.prev_err)>err_threshold):
+                cur_setpoint = self.state_vars['Pwr_kW']
+                _log.info('*** ESS Set Pt Error exceeds 20% - Reverting to ESS Pwr output ****')
+
+        _log.info(self.state_vars['Nameplate_kW'])
+
+
 
         max_charge_kW = self.state_vars['MaxChargePwr_kW']
         max_discharge_kW = self.state_vars['MaxDischargePwr_kW']
 
-        _log.info("Estimated current ess output=  "+str(cur_setpoint))
+        _log.info("Estimated current ess output=  "+str(cur_setpoint)+'; error is '+str(err))
         _log.info("current ess setpoint=  "+str(self.pwr_ctrl.data_dict['SetPoint']))
         _log.info("ctrl reg = "+str(self.op_status.data_dict['CtrlRegister']))
         _log.info(req_delta)
@@ -1993,7 +2007,7 @@ class ESSCtrlNode(DERModbusCtrlNode):
         success = self.set_power_real(setpoint, SiteMgr)
 
         self.prev_setpt = self.pwr_ctrl.data_dict['SetPoint']
-
+        self.prev_err = err
 
 
 ##############################################################################
