@@ -96,6 +96,7 @@ default_units = {"setpoint":"kW",
                  "netDemand_kW": "kW",
                  "netDemandAvg_kW": "kW",
                  "netDemand5SecAvg_kW": "kW",
+                 "curPwr5SecAvg_kW": "kW",
                  "timestamp": "datetime",
                  "gs_start_time": "datetime",
                  "SIM_START_TIME": "datetime",
@@ -232,6 +233,7 @@ class ExecutiveAgent(Agent):
         self.optimizer_info.update({"forecastError_kW": 0.0})
         self.optimizer_info.update({"netDemand_kW": 0.0})
         self.optimizer_info.update({"netDemand5SecAvg_kW": 0.0})
+        self.optimizer_info.update({"curPwr5SecAvg_kW": 0.0})
         self.optimizer_info.update({"predPwr_kW": 0.0})
 
         self.optimizer_avg_info = {}
@@ -1038,6 +1040,7 @@ class ExecutiveAgent(Agent):
         self.optimizer_info["predPwr_kW"] = predPwr_kW
         self.optimizer_info["netDemand_kW"]   = netDemand_kW
         self.optimizer_info["netDemand5SecAvg_kW"] = netDemand_5SecAvg
+        self.optimizer_info["curPwr5SecAvg_kW"] = curPwr_5SecAvg
 
         self.optimizer_avg_info["curPwrAvg_kW"] = curPwrAvg_kW
         self.optimizer_avg_info["netDemandAvg_kW"] = netDemandAvg_kW
