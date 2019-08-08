@@ -784,7 +784,7 @@ class ExecutiveAgent(Agent):
 
         ####### Caalculated a 5 second average from the database
         end = datetime.utcnow()+timedelta(seconds=1)
-        st = end - timedelta(seconds=5)
+        st = end - timedelta(seconds=30)
 
         st_str = st.strftime(TIME_FORMAT)
         end_str = end.strftime(TIME_FORMAT)
@@ -792,11 +792,16 @@ class ExecutiveAgent(Agent):
         device_path_str = 'Executive/netDemand_kW'
         topic_name = 'datalogger/'+device_path_str
         netDemand_5SecAvg, n_pts = HistorianTools.calc_avg(self, topic_name, st_str, end_str)
+        device_path_str = 'Executive/curPwr_kW'
+        topic_name = 'datalogger/'+device_path_str
+        curPwr_5SecAvg, n_pts = HistorianTools.calc_avg(self, topic_name, st_str, end_str)
         _log.info("Calc Avg: "+str(netDemand_5SecAvg)+"; netDemand = "+str(netDemand_kW)+"; n pts = "+str(n_pts))
         if n_pts == 0:
             netDemand_5SecAvg = netDemand_kW
+            curPwr_5SecAvg = curPwr_kW
         else:
             netDemand_5SecAvg = netDemand_kW/(n_pts+1) + netDemand_5SecAvg*n_pts/(n_pts+1)
+            curPwr_5SecAvg    = curPwr_kW/(n_pts+1) + curPwr_5SecAvg*n_pts/(n_pts+1)
         ######
 
 
@@ -924,7 +929,7 @@ class ExecutiveAgent(Agent):
                 essTargetPwr_kW = 0
                 expectedSOE_kWh = self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][0]
         else:
-            targetPwr_kW = self.pv_resources.state_vars["AvgPwr_kW"]
+            targetPwr_kW = curPwrAvg_kW #self.pv_resources.state_vars["AvgPwr_kW"]
             expectedPwr_kW = self.pv_resources.state_vars["AvgPwr_kW"] + self.load_resources.state_vars["AvgPwr_kW"]
             essTargetPwr_kW = 0
             expectedSOE_kWh = self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][0]
@@ -945,6 +950,7 @@ class ExecutiveAgent(Agent):
         max_discharge_kW = self.ess_resources.state_vars["MaxDischargePwr_kW"]
 
         REGULATE_PCC = True
+        PCC_PRIORITY = False
         if REGULATE_PCC == True:
             pv_plus_ess_tgt = targetPwr_kW - self.load_resources.state_vars['Pwr_kW'] # Schedule - Load
             setpoint = pv_plus_ess_tgt
@@ -953,11 +959,22 @@ class ExecutiveAgent(Agent):
                 if entries.sundial_resource.resource_type == "ESSCtrlNode":  # for each ESS
                     for devices in entries.device_list:  # for each end point device associated with that ESS
                         if devices["isAvailable"] == 1:  # device is available for control
-                            self.vip.rpc.call(str(devices["AgentID"]),
-                                              "set_pcc_target",
-                                              devices["DeviceID"],
-                                              pv_plus_ess_tgt,
-                                              rr_enable)
+                            if PCC_PRIORITY == False:
+                                self.vip.rpc.call(str(devices["AgentID"]),
+                                                  "set_pcc_target",
+                                                  devices["DeviceID"],
+                                                  targetPwr_kW,
+                                                  rr_enable=rr_enable,
+                                                  pcc_priority=PCC_PRIORITY,
+                                                  netDemandAvg_kW=netDemand_5SecAvg,
+                                                  curLoad = self.load_resources.state_vars['Pwr_kW'])
+                            else:
+                                self.vip.rpc.call(str(devices["AgentID"]),
+                                                  "set_pcc_target",
+                                                  devices["DeviceID"],
+                                                  pv_plus_ess_tgt,
+                                                  rr_enable=rr_enable,
+                                                  pcc_priority=PCC_PRIORITY)
 
             pass
         else:
