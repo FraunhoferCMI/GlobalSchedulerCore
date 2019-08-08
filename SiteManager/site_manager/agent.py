@@ -125,6 +125,8 @@ class SiteManagerAgent(Agent):
         self.devices_to_display = []
         self.initialization_complete = False
 
+        self.prev_target = None
+
 
     ##############################################################################
     @RPC.export
@@ -593,6 +595,7 @@ class SiteManagerAgent(Agent):
         setpoint_cmd_interval = 2.5
         RR_CTRL = True
         MAX_RR_PCT_PER_MIN = 0.20
+        use_avg = False
 
         device = self.site.find_device(device_id)
 
@@ -609,18 +612,25 @@ class SiteManagerAgent(Agent):
             pccAvgPwr_kW = pccPwr_kW  / (n_pts+1) + pccAvgPwr_kW * n_pts / (n_pts+1)
             ######
 
-            if pcc_priority == True:
-                avg_pwr = pccAvgPwr_kW
-                _log.info('PCC Priority = TRUE')
+            if use_avg == True:
+                if pcc_priority == True:
+                    baseline_pwr = pccAvgPwr_kW
+                    _log.info('PCC Priority = TRUE')
+                else:
+                    baseline_pwr = netDemandAvg_kW
             else:
-                avg_pwr = netDemandAvg_kW
+                if self.prev_target is None:
+                    baseline_pwr = targetPwr_kW
+                else:
+                    baseline_pwr = self.prev_target
+
                 _log.info('PCC Priority = FALSE')
 
             # now calculate the requested change in power
-            _log.info("SetPCCTgt: Target is: "+str(targetPwr_kW)+"; current PCC = "+str(pccPwr_kW)+"; Avg Pwr="+str(avg_pwr))
+            _log.info("SetPCCTgt: Target is: "+str(targetPwr_kW)+"; current PCC = "+str(pccPwr_kW)+"; Baseline Tgt ="+str(baseline_pwr))
 
             if rr_enable == True:  # limit the change based on configured RR limits
-                init_req_delta = targetPwr_kW - avg_pwr
+                init_req_delta = targetPwr_kW - baseline_pwr
                 _log.info('orig req delta is: '+str(init_req_delta))
                 max_delta = MAX_RR_PCT_PER_MIN * SOLAR_NAMEPLATE * setpoint_cmd_interval / 60.0  # kW per cmd
                 if init_req_delta < 0:
@@ -628,7 +638,7 @@ class SiteManagerAgent(Agent):
                 else:
                     adj_req_delta = min(init_req_delta, max_delta)
                 _log.info('Ramp-limited req delta is: '+str(adj_req_delta))
-                targetPwr_kW = avg_pwr+adj_req_delta
+                targetPwr_kW = baseline_pwr+adj_req_delta
 
             if pcc_priority == True:
                 ess_req_delta = targetPwr_kW - pccPwr_kW
@@ -639,6 +649,7 @@ class SiteManagerAgent(Agent):
 
             _log.info("SetPCCTgt: Ramp-Limited Target is: "+str(targetPwr_kW)+"; Requested ESS delta = "+str(ess_req_delta))
 
+            self.prev_target = targetPwr_kW
             success = device.change_setpoint(ess_req_delta, self)
             if success == 0:
                 self.dirtyFlag = 0 # invalid write
