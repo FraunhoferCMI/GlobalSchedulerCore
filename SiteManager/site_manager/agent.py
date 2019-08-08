@@ -556,7 +556,35 @@ class SiteManagerAgent(Agent):
 
     ##############################################################################
     @RPC.export
-    def set_pcc_target(self, device_id, targetPwr_kW, rr_enable = True):
+    def set_pcc_target(self, device_id, targetPwr_kW, rr_enable = True, pcc_priority=False, netDemandAvg_kW=0, curLoad = 0):
+        """
+        Receives a target power output for the PCC.  Calculated as tgt - load
+
+        (1) calculate the difference between the average PCC power output over the last 30 seconds and the target pwr.
+        This is the initial requested power delta.
+        (2) Check to see if the requested delta exceeds ramp rate.  If so, take the max allowable rate of change.
+        (3) Adjusted target power = PCCAvg + Adjusted Delta
+        (4) ESS_delta_req = Adjusted Tgt - PCC_instantaneous
+
+
+        The above algorithm ramp limits the PCC output.
+
+        If we want to instead ramp-limit the Net output of the system, including loads, we would need to do the following:
+        (1) overall_target_pwr = overall system target power  (**need to pass in a different value??**)
+        (2) req_delta_init = overall_target_pwr - AvgNetDemand (**need to make it so the avg_pwr is set to netDemand**)
+        (3) adj_delta = ramp limited delta  (** no change **)
+        (3) Adjusted target = NetDemandAvg + adj_delta (** no change **)
+        (4) PVPlusESSTgt = adj_target - load
+        (5) req_ess_delta = PVPlusESSTgt - pccPwr_kW
+
+
+
+
+        :param device_id:
+        :param targetPwr_kW:
+        :param rr_enable:
+        :return:
+        """
 
         # find the device
         #device_id = args[0] #*args
@@ -581,24 +609,37 @@ class SiteManagerAgent(Agent):
             pccAvgPwr_kW = pccPwr_kW  / (n_pts+1) + pccAvgPwr_kW * n_pts / (n_pts+1)
             ######
 
+            if pcc_priority == True:
+                avg_pwr = pccAvgPwr_kW
+                _log.info('PCC Priority = TRUE')
+            else:
+                avg_pwr = netDemandAvg_kW
+                _log.info('PCC Priority = FALSE')
+
             # now calculate the requested change in power
-            _log.info("SetPCCTgt: PCC Target is: "+str(targetPwr_kW)+"; current PCC = "+str(pccPwr_kW)+"; Avg PCC="+str(pccAvgPwr_kW))
+            _log.info("SetPCCTgt: Target is: "+str(targetPwr_kW)+"; current PCC = "+str(pccPwr_kW)+"; Avg Pwr="+str(avg_pwr))
 
             if rr_enable == True:  # limit the change based on configured RR limits
-                req_delta = targetPwr_kW - pccAvgPwr_kW
-                _log.info('orig req delta is: '+str(req_delta))
+                init_req_delta = targetPwr_kW - avg_pwr
+                _log.info('orig req delta is: '+str(init_req_delta))
                 max_delta = MAX_RR_PCT_PER_MIN * SOLAR_NAMEPLATE * setpoint_cmd_interval / 60.0  # kW per cmd
-                if req_delta < 0:
-                    req_delta = max(req_delta, -1 * max_delta)
+                if init_req_delta < 0:
+                    adj_req_delta = max(init_req_delta, -1 * max_delta)
                 else:
-                    req_delta = min(req_delta, max_delta)
-                _log.info('Ramp-limited req delta is: '+str(req_delta))
-                targetPwr_kW = pccAvgPwr_kW+req_delta
+                    adj_req_delta = min(init_req_delta, max_delta)
+                _log.info('Ramp-limited req delta is: '+str(adj_req_delta))
+                targetPwr_kW = avg_pwr+adj_req_delta
 
-            req_delta = targetPwr_kW - pccPwr_kW
-            _log.info("SetPCCTgt: Ramp-Limited PCC Target is: "+str(targetPwr_kW)+"; Requested ESS delta = "+str(req_delta))
+            if pcc_priority == True:
+                ess_req_delta = targetPwr_kW - pccPwr_kW
+            else:
+                pv_plus_ess_tgtPwr = targetPwr_kW - curLoad
+                ess_req_delta = pv_plus_ess_tgtPwr - pccPwr_kW
+                _log.info('SetPCCTgt: pv_plus_ess='+str(pv_plus_ess_tgtPwr))
 
-            success = device.change_setpoint(req_delta, self)
+            _log.info("SetPCCTgt: Ramp-Limited Target is: "+str(targetPwr_kW)+"; Requested ESS delta = "+str(ess_req_delta))
+
+            success = device.change_setpoint(ess_req_delta, self)
             if success == 0:
                 self.dirtyFlag = 0 # invalid write
 

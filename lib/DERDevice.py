@@ -1941,6 +1941,7 @@ class ESSCtrlNode(DERModbusCtrlNode):
         self.state_vars["OrigDemandForecast_t_str"] = [0.0]*SSA_PTS_PER_SCHEDULE
         self.prev_setpt = 0.0
         self.prev_err = 0.0
+        self.err_buffer = []
 
     ##############################################################################
     def update_state_vars(self, SiteMgr):
@@ -1960,42 +1961,63 @@ class ESSCtrlNode(DERModbusCtrlNode):
 
     ##############################################################################
     def change_setpoint(self, req_delta, SiteMgr):
+        """
+        Modifies the current battery set point by the requested delta.
 
-        # see if the requested change is feasible:
+        :param req_delta:
+        :param SiteMgr:
+        :return:
+        """
+        err_buffer_length = 4
+        use_buffer = False
+
+        # define what end point actually controls the ESS.
         if DEPLOYED == False:
             # cur_setpoint = self.state_vars['SetPt']
-            # cur_setpoint = self.pwr_ctrl.data_dict['SetPoint']
+            cur_setpoint = self.pwr_ctrl.data_dict['SetPoint']
             #cur_setpoint = self.op_status.data_dict['CtrlRegister']
             #cur_setpoint = self.prev_setpt
-            cur_setpoint = self.state_vars['Pwr_kW']
-            err = 0
+            #cur_setpoint = self.state_vars['Pwr_kW']
         else:
             #cur_setpoint = self.state_vars['Pwr_kW']  # self.op_status.data_dict['CtrlRegister']
             cur_setpoint = -1*self.op_status.data_dict['CtrlRegister']
-            err = abs((cur_setpoint - self.state_vars['Pwr_kW'])/500) # FIXME - self.state_vars['Nameplate_kW']
+
+
+        err = abs((cur_setpoint - self.state_vars['Pwr_kW'])/self.state_vars['Nameplate_kW'])
+
+        #### Test to see if previous set point commands have been responsive.  If not, revert to using the measured ESS
+        # power output as ground truth.  (This is less responsive, but should avoid maxing out ESS cmds when battery
+        # goes off line.
+        if (use_buffer == True):
+            err_threshold = 0.05
+            self.err_buffer.insert(0, err)
+            if len(self.err_buffer) > err_buffer_length:
+                self.err_buffer.pop()
+
+            err_cnt = 0
+            for ii in range(0,len(self.err_buffer)):
+                if self.err_buffer[ii] > err_threshold:
+                    err_cnt+=1
+
+            if err_cnt == err_buffer_length:
+                cur_setpoint = self.state_vars['Pwr_kW']
+                _log.info('*** ESS Set Pt Error exceeds 20% - Reverting to ESS Pwr output ****')
+                _log.info('Err Buffer: '+str(self.err_buffer))
+        else:
             # not scientific - seems like if the ESS misses twice by >20%, it indicates that the ESS is offline or the
             # ESS is power limited.  In this case, set the control variable to the measured ESS power output, not
             # the ESS set point.  This is a little bit less responsive, but will not cause an unstable response
-            err_threshold = 0.2
+            err_threshold = 0.20
             if (abs(err) > err_threshold) & (abs(self.prev_err)>err_threshold):
                 cur_setpoint = self.state_vars['Pwr_kW']
                 _log.info('*** ESS Set Pt Error exceeds 20% - Reverting to ESS Pwr output ****')
 
-        _log.info(self.state_vars['Nameplate_kW'])
+        _log.info("Current ess pwr =  " + str(self.state_vars['Pwr_kW'])+"; Estimated current ess setpoint=  "+str(cur_setpoint)+'; error is '+str(err))
+        setpoint = cur_setpoint+req_delta
 
-
-
+        # see if the requested change is feasible:
         max_charge_kW = self.state_vars['MaxChargePwr_kW']
         max_discharge_kW = self.state_vars['MaxDischargePwr_kW']
-
-        _log.info("Estimated current ess output=  "+str(cur_setpoint)+'; error is '+str(err))
-        _log.info("current ess setpoint=  "+str(self.pwr_ctrl.data_dict['SetPoint']))
-        _log.info("ctrl reg = "+str(self.op_status.data_dict['CtrlRegister']))
-        _log.info(req_delta)
-        setpoint = cur_setpoint+req_delta
-        #_log.info(self.op_status.data_dict['SetPt'])
-        #_log.info(self.state_vars['SetPoint'])
-        # check that we are within power limits of the storage system
         if setpoint < -1 * max_discharge_kW:
             setpoint = -1 * max_discharge_kW
             _log.info("ESSCtrlNode: Power-limited Setpoint =" + str(setpoint)+"; current setpoint = "+str(cur_setpoint))
