@@ -155,7 +155,7 @@ def get_gs_path(local_path, fname):
 ##############################################################################
 def get_pv_correction_factors(forecast, ts, reference_forecast,
                               correction_type='Matrix',
-                              correction_file='pv_correction_factors_v2.csv'):
+                              correction_file='pv_correction_factors_update.csv'): #'pv_correction_factors_v2.csv'):
     if correction_type == 'Matrix':
         ghi_high_threshold = 5000
         ghi_med_threshold = 3000

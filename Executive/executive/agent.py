@@ -862,14 +862,14 @@ class ExecutiveAgent(Agent):
                         emergency_charge    = (min_SOE_kWh-SOE_kWh) / (min_SOE_kWh-0) * max_charge_kW
 
                         if (SOE_kWh > max_SOE_kWh):  # over max SOE - discharge battery
-                            targetPwr_kW = curPwr_kW + emergency_discharge # sets target pwr to unccontrolled power - EMER DISCHARGE
-                            rr_enable = True
+                            targetPwr_kW = min(targetPwr_kW, curPwr_kW + emergency_discharge) # sets target pwr to unccontrolled power - EMER DISCHARGE
+                            rr_enable = False
                             _log.info ('***** ESS MAX SOE EXCEEEDED - DISCHARGING, disabled RR Ctrl ***** ')
                             _log.info ('target power is '+str(targetPwr_kW)+'; scheduled power is '+
                                        str(self.sundial_resources.schedule_vars["schedule_kW"][cur_time])+ '; pv plus load is '+str(curPwrAvg_kW))
                         elif (SOE_kWh < min_SOE_kWh): # below min SOE - ignore target power, charge battery
-                            targetPwr_kW = curPwr_kW + emergency_charge # sets target pwr to unccontrolled power + EMER CHARGE
-                            rr_enable = True
+                            targetPwr_kW = max(targetPwr_kW, curPwr_kW + emergency_charge) # sets target pwr to unccontrolled power + EMER CHARGE
+                            rr_enable = False
                             _log.info ('***** ESS MIN SOE EXCEEEDED - CHARGING, disabled RR Ctrl ***** ')
                             _log.info ('target power is '+str(targetPwr_kW)+'; scheduled power is '+
                                        str(self.sundial_resources.schedule_vars["schedule_kW"][cur_time])+ '; pv plus load is '+str(curPwrAvg_kW))
@@ -884,8 +884,8 @@ class ExecutiveAgent(Agent):
                             soe_upper_buffer_used =  (SOE_kWh-reserve_soe_high) / (max_SOE_kWh-reserve_soe_high)
                             soe_lower_buffer_used =  (reserve_soe_low-SOE_kWh) / (reserve_soe_low-min_SOE_kWh)
                             reserve_target        = curPwrAvg_kW
-                            _log.info('Calculating adjusted tgt: orig_tgt =' + str(targetPwr_kW) + '; reserve target = ' + str(reserve_target))
-                            _log.info('Calculating adjusted tgt: ESS Avg' + str(self.ess_resources.state_vars['AvgPwr_kW']) + '; SOE Lower Buffer = ' + str(soe_lower_buffer_used))
+                            _log.debug('Calculating adjusted tgt: orig_tgt =' + str(targetPwr_kW) + '; reserve target = ' + str(reserve_target))
+                            _log.debug('Calculating adjusted tgt: ESS Avg' + str(self.ess_resources.state_vars['AvgPwr_kW']) + '; SOE Lower Buffer = ' + str(soe_lower_buffer_used))
 
                             if (soe_upper_buffer_used >= 0) & (self.ess_resources.state_vars['AvgPwr_kW']>0): #(targetPwr_kW>0):
                                 # SOE is above reserve margin and charge commanded - calculate the target as a
@@ -961,7 +961,7 @@ class ExecutiveAgent(Agent):
                 if entries.sundial_resource.resource_type == "ESSCtrlNode":  # for each ESS
                     for devices in entries.device_list:  # for each end point device associated with that ESS
                         if devices["isAvailable"] == 1:  # device is available for control
-                            if PCC_PRIORITY == False:
+                            if (PCC_PRIORITY == False) & (self.OptimizerEnable == ENABLED):
                                 self.vip.rpc.call(str(devices["AgentID"]),
                                                   "set_pcc_target",
                                                   devices["DeviceID"],
@@ -970,7 +970,7 @@ class ExecutiveAgent(Agent):
                                                   pcc_priority=PCC_PRIORITY,
                                                   netDemandAvg_kW=netDemand_5SecAvg,
                                                   curLoad = self.load_resources.state_vars['Pwr_kW'])
-                            else:
+                            elif (self.OptimizerEnable==ENABLED):
                                 self.vip.rpc.call(str(devices["AgentID"]),
                                                   "set_pcc_target",
                                                   devices["DeviceID"],

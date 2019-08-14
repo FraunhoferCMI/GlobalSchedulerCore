@@ -154,13 +154,15 @@ class LoadShiftAgent(Agent):
         :return:
         """
         cur_time = datetime.now()
-        _log.info('******** Checking Load Shift Query Schedule *************')
-        if cur_time.hour == 17:
+        scheduled_hr = 16
+        _log.info('******** LoadShiftAgent: Checking Load Shift Query Schedule *************')
+        if cur_time.hour == scheduled_hr:
             tst = self.vip.rpc.call('flameagent-0.1_1',
                                                   'query_loadshift',
                                                   use_static_price_map=True).get()
             self.options_pending = True
-
+        else:
+            _log.info('LoadShiftAgent: Not Scheduled Time (configured to '+str(scheduled_hr)+')')
         # to check!!! do we need to update the time stamp to addres utc issues?
         pass
 
@@ -174,7 +176,7 @@ class LoadShiftAgent(Agent):
         communicates the selection to the FLAME agent
         :return:
         """
-        _log.info("******** Receiving Load Shift Messages!!!*******")
+        _log.info("******** LoadShiftAgent: Receiving Load Shift Messages!!!*******")
 
         if type(message) is dict:
             data = message
@@ -200,7 +202,7 @@ class LoadShiftAgent(Agent):
             self.load_options = pd.DataFrame(data=self.load_option_dict['Forecast']).T
             self.load_options.index = pd.to_datetime(self.load_option_dict['Time'])
             self.load_options.columns = self.load_option_dict['ID']
-            _log.info(self.load_options)
+            _log.debug(self.load_options)
 
             self.load_option_select()
 
@@ -213,7 +215,7 @@ class LoadShiftAgent(Agent):
         self.vip.rpc.call('flameagent-0.1_1',
                           'load_option_select',
                           val,
-                          enable_load_select=False)
+                          enable_load_select=True)
 
 
         self.load_option_dict['Forecast'] = None
