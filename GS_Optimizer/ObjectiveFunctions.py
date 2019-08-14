@@ -132,6 +132,22 @@ class ObjectiveFunction():
         weights = numpy.array([0.0]*SSA_PTS_PER_SCHEDULE) #pandas.DataFrame(data=[0.0]*SSA_PTS_PER_SCHEDULE, index = schedule_timestamps)
         return weights
 
+    ##############################################################################
+    def obj_fcn_weighted_avg_cost(self, profile):
+
+        baseline = profile['DemandForecast_kW']
+        demand_high = baseline*1.25
+        demand_low = baseline*0.75
+        cost_bl   = self.obj_fcn_cost(profile)
+        profile['DemandForecast_kW'] = demand_high
+        cost_high =  self.obj_fcn_cost(profile)
+        profile['DemandForecast_kW'] = demand_low
+        cost_low  =  self.obj_fcn_cost(profile)
+        profile['DemandForecast_kW'] = baseline
+
+        return cost_bl*0+cost_high*1.0+cost_low*0
+        pass
+
 
 ##############################################################################
 class EnergyCostObjectiveFunction(ObjectiveFunction):
@@ -309,6 +325,28 @@ class StoredEnergyValueObjectiveFunction(ObjectiveFunction):
 
     def get_obj_fcn_data(self):
         return self.init_params["value_per_kWh"]
+
+
+##############################################################################
+class EnergyTargetObjectiveFunction(ObjectiveFunction):
+    """
+    assigns a cost to change in power (dPwr/dt)
+    """
+    def __init__(self, desc="", init_params=None, **kwargs):
+        ObjectiveFunction.__init__(self, desc=desc, init_params={}, **kwargs)
+        self.init_params["value_per_kWh"] = -1.0
+        self.init_params['TargetHr'] = 18
+
+    def obj_fcn_cost(self, profile):
+        end_ind = self.init_params['TargetHr']
+        cost = self.init_params["value_per_kWh"] * profile["EnergyAvailableForecast_kWh"][end_ind]
+        return cost
+
+    def get_obj_fcn_data(self):
+        return self.init_params["value_per_kWh"]
+
+
+
 
 ##############################################################################
 class dkWObjectiveFunction(ObjectiveFunction):
