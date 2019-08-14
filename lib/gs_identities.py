@@ -90,7 +90,7 @@ UPDATE_THRESHOLD = True
 ESS_MAX = 0.98
 ESS_MIN = 0.05
 ESS_RESERVE_HIGH = 0.95  # relative to ESS_MAX
-ESS_RESERVE_LOW  = 1.5   # relative to ESS_MIN
+ESS_RESERVE_LOW  = 3.00   # relative to ESS_MIN
 
 USE_PV_ADJUST = 1 # 0 = no adjust; 1 = Use hour lookup adjust
 PV_ADJUST = 1.0 #0.65
