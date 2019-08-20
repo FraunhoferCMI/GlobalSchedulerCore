@@ -254,7 +254,7 @@ class PeakerPlantObjectiveFunction(ObjectiveFunction):
         init_params = {'threshold': 100,
                        'cost_per_kW': 10,
                        'safety_buffer': 0.0,
-                       'hrs': [17,18,19,20],   # [18,19,20,21,22], [19,20,21,22]
+                       'hrs': [19,20,21,22],   # [18,19,20,21,22], [17,18,19,20]
                        'hrs_index': [],
                        'tariff_key': 'tariffs'}
         ObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
