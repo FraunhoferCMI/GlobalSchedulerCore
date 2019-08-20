@@ -253,7 +253,7 @@ class ExecutiveAgent(Agent):
         self.queuePwr = deque([0], maxlen=2)
         self.last_forecast_start   = datetime(1900, 1, 1, tzinfo=pytz.UTC)
 
-
+        self.optimizer_complete = False
         self.init_tariffs()
 
 
@@ -453,6 +453,11 @@ class ExecutiveAgent(Agent):
                                     "DemandChargeThreshold",
                                     self.tariffs["threshold"])
 
+        HistorianTools.publish_data(self,
+                                    "Tariffs",
+                                    default_units["DemandChargeThreshold"],
+                                    "PeakerThreshold",
+                                    self.peaker_tariffs["threshold"])
 
         self.OperatingMode_set = USER_CONTROL
 
@@ -537,6 +542,10 @@ class ExecutiveAgent(Agent):
         self.tariffs = {"threshold": DEMAND_CHARGE_THRESHOLD,
                         "isone": iso_data}
 
+        self.peaker_tariffs = {"threshold": PEAKER_THRESHOLD,
+                               "peaker_start": 19,
+                               "peaker_end": 22}
+
         #indices = [numpy.argmin(
         #    numpy.abs(
         #        numpy.array([pandas.Timestamp(t).replace(tzinfo=pytz.UTC).to_pydatetime() for t in self.energy_price_data.index]) -
@@ -556,6 +565,22 @@ class ExecutiveAgent(Agent):
                 	                        default_units["DemandChargeThreshold"],
                         	                "DemandChargeThreshold",
                                 	        self.tariffs["threshold"])
+        if UPDATE_PEAKER_THRESHOLD == True:
+            cur_time = datetime.utcnow()
+            prev_threshold = self.peaker_tariffs['threshold']
+            if (cur_time.hour < self.peaker_tariffs["peaker_start"]) | (cur_time.hour > self.peaker_tariffs["peaker_end"]):
+                self.peaker_tariffs["threshold"] = PEAKER_THRESHOLD
+            elif (self.system_resources.state_vars["AvgPwr_kW"] > 1.1*self.peaker_tariffs["threshold"]) & (self.optimizer_complete == True):
+                self.peaker_tariffs["threshold"] = self.system_resources.state_vars["AvgPwr_kW"]/1.1
+
+            if self.peaker_tariffs['threshold'] != prev_threshold:
+                _log.info('Avg Pwr = '+str(self.system_resources.state_vars["AvgPwr_kW"])+'; Updated Peaker Threshold from ' +str(prev_threshold)+' to '+str(self.peaker_tariffs['threshold']))
+
+                HistorianTools.publish_data(self,
+                                            "Tariffs",
+                                            default_units["DemandChargeThreshold"],
+                                            "PeakerThreshold",
+                                            self.peaker_tariffs["threshold"])
 
         #self.tariffs["demand_charge_threshold"] = max(self.tariffs["demand_charge_threshold"],self.system_resources.state_vars["Pwr_kW"])
         pass
@@ -679,7 +704,8 @@ class ExecutiveAgent(Agent):
 
         self.sundial_resources.interpolate_forecast(schedule_timestamps)
         self.sundial_resources.cfg_cost(schedule_timestamps,
-                                        system_tariff=self.tariffs)
+                                        system_tariff=self.tariffs,
+                                        peaker_tariff=self.peaker_tariffs)
 
 
         return GeneratePriceMap.generate_cost_map(self.sundial_resources,
@@ -1173,8 +1199,10 @@ class ExecutiveAgent(Agent):
 
                 ## queue up time-differentiated cost data
                 _log.info("THESE ARE THE TARIFFS: {}".format(sdr_dict['tariffs']))
+                _log.info("THESE ARE THE PEAKER TARIFFS: {}".format(self.peaker_tariffs))
                 sdr_dict['SDR'].cfg_cost(schedule_timestamps,
-                                         system_tariff=sdr_dict['tariffs'])
+                                         system_tariff=sdr_dict['tariffs'],
+                                         peaker_tariff=self.peaker_tariffs)
                                                 #tariffs = self.tariffs)
 
 
@@ -1200,6 +1228,7 @@ class ExecutiveAgent(Agent):
 
                 self.publish_schedules(sdr_dict)
                 self.send_ess_commands()
+                self.optimizer_complete = True
 
     ##############################################################################
     def publish_schedules(self, sdr_dict):

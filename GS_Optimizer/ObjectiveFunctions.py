@@ -145,7 +145,7 @@ class ObjectiveFunction():
         cost_low  =  self.obj_fcn_cost(profile)
         profile['DemandForecast_kW'] = baseline
 
-        return cost_bl*0+cost_high*1.0+cost_low*0
+        return cost_bl*0.6+cost_high*0.2+cost_low*0.2
         pass
 
 
@@ -254,17 +254,33 @@ class PeakerPlantObjectiveFunction(ObjectiveFunction):
         init_params = {'threshold': 100,
                        'cost_per_kW': 10,
                        'safety_buffer': 0.0,
-                       'hrs': [19,20,21,22],   # [18,19,20,21,22], [17,18,19,20]
+                       'peaker_start': 19,
+                       'peaker_end': 22,
                        'hrs_index': [],
-                       'tariff_key': 'tariffs'}
+                       'tariff_key': 'peaker_tariff'}
+
+        init_params = self.update_hrs_list(init_params)
         ObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
 
     ##############################################################################
+    def update_hrs_list(self,init_params):
+        init_params.update({'hrs': [v for v in range(init_params['peaker_start'],
+                                                     init_params['peaker_end']+1)]}),  # [17,18,19,20],   # [18,19,20,21,22], [19,20,21,22]
+        return init_params
+
+    ##############################################################################
     def obj_fcn_cfg(self, **kwargs):
+        print('*******In Peaker Plant Config!!!@*******')
+        for k, v in self.init_params.iteritems():
+            try:
+                self.init_params.update({k: kwargs['tariffs'][k]})
+                print("Peaker Plant Config: "+str(k)+": "+str(kwargs['tariffs'][k]))
+            except:
+                pass
+        self.init_params = self.update_hrs_list(self.init_params)
 
         # list of time stamps
         # need to generate the indices that are associated with the given hours
-
         self.init_params["hrs_index"] = []
 
         #print(kwargs['schedule_timestamps'])
@@ -596,7 +612,10 @@ class BatteryLossModelObjectiveFunction(ObjectiveFunction):
 
     ##############################################################################
     def obj_fcn_cost(self, profile):
-        cost = 0.0
+        price = 0.02
+
+        cost = (abs(profile['DemandForecast_kW']).sum())*price  # 8/20/2019 - charge per kWh throughput on ESS
+
         #cost = 0.10*profile['DemandForecast_kW'][profile['DemandForecast_kW']>0].sum()
 
 

@@ -40,13 +40,13 @@
       },
       {
         "FcnName": "PeakerPlantObjectiveFunction",
-        "params": "desc='DemandCharge', cost_per_kW=20.0, threshold=0, tariff_key='peaker_tariff'",
+        "params": "desc='DemandCharge', cost_per_kW=20.0, threshold=0, peaker_start=19, peaker_end=22, tariff_key='peaker_tariff'",
         "Use": "Y"
       },
       {
         "FcnName": "EnergyTargetObjectiveFunction",
         "params": "desc='EnergyTarget'",
-        "Use": "Y"
+        "Use": "N"
       }
     ],
     "VirtualPlantList": [
@@ -103,7 +103,13 @@
             "FcnName": "StoredEnergyValueObjectiveFunction",
             "params": "desc='StorageValue'",
             "Use": "Y"
+          },
+                    {
+            "FcnName": "BatteryLossModelObjectiveFunction",
+            "params": "desc='BatteryUsage'",
+            "Use": "Y"
           }
+
         ],
         "VirtualPlantList": [],
         "DeviceList": [
