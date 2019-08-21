@@ -256,8 +256,13 @@ class PeakerPlantObjectiveFunction(ObjectiveFunction):
                        'safety_buffer': 0.0,
                        'peaker_start': 19,
                        'peaker_end': 22,
+                       'hrs': [],
                        'hrs_index': [],
-                       'tariff_key': 'peaker_tariff'}
+                       'tariff_key': 'peaker_tariff',
+                       'hrs_index_by_day': [[] for ii in range(0,7)],
+                       'daily_threshold': [0 for ii in range(0, 7)],
+                       'day_index': [],
+                       'use_daily_threshold': True}
 
         init_params = self.update_hrs_list(init_params)
         ObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
@@ -282,6 +287,8 @@ class PeakerPlantObjectiveFunction(ObjectiveFunction):
         # list of time stamps
         # need to generate the indices that are associated with the given hours
         self.init_params["hrs_index"] = []
+        self.init_params["hrs_index_by_day"] = [[] for ii in range(0,7)]
+
 
         #print(kwargs['schedule_timestamps'])
         timestamps = [v + kwargs['sim_offset'] for v in kwargs['schedule_timestamps']]
@@ -290,9 +297,14 @@ class PeakerPlantObjectiveFunction(ObjectiveFunction):
         for ii in range(0,len(timestamps)):
             if timestamps[ii].hour in self.init_params['hrs']:
                 self.init_params['hrs_index'].append(ii)
+                self.init_params['hrs_index_by_day'][timestamps[ii].weekday()].append(ii)
+            self.init_params['day_index'].append(timestamps[ii].weekday())
+
 
         #print('hr index: ')
         #print(self.init_params['hrs_index'])
+        #print(self.init_params['hrs_index_by_day'])
+        #print(self.init_params['day_index'])
 
 
     ##############################################################################
@@ -302,12 +314,25 @@ class PeakerPlantObjectiveFunction(ObjectiveFunction):
         :return: cost of executing the profile, in $
         """
         #demand = numpy.array(profile)
-        max_demand = max(profile["DemandForecast_kW"][self.init_params['hrs_index']])
-        threshold  = self.init_params["threshold"]*(1-self.init_params["safety_buffer"])
-        if max_demand > threshold: #self.threshold:
-            cost = self.init_params["cost_per_kW"] * (max_demand - threshold)
+
+
+        if self.init_params['use_daily_threshold'] == False:
+            max_demand = max(profile["DemandForecast_kW"][self.init_params['hrs_index']])
+            threshold  = self.init_params["threshold"]*(1-self.init_params["safety_buffer"])
+            if max_demand > threshold: #self.threshold:
+                cost = self.init_params["cost_per_kW"] * (max_demand - threshold)
+            else:
+                cost = 0.0
         else:
             cost = 0.0
+            for ii in range(0,len(self.init_params['hrs_index_by_day'])):
+                if len(self.init_params['hrs_index_by_day'][ii]) != 0:
+                    max_demand = max(profile["DemandForecast_kW"][self.init_params['hrs_index_by_day'][ii]])
+                    threshold  = self.init_params["daily_threshold"][ii]*(1-self.init_params["safety_buffer"])
+                    if max_demand > threshold: #self.threshold:
+                        cost += self.init_params["cost_per_kW"] * (max_demand - threshold)
+
+
         return cost
 
 

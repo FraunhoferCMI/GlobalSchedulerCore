@@ -459,6 +459,12 @@ class ExecutiveAgent(Agent):
                                     "PeakerThreshold",
                                     self.peaker_tariffs["threshold"])
 
+        HistorianTools.publish_data(self,
+                                    "Tariffs",
+                                    default_units["DemandChargeThreshold"],
+                                    "DailyPeakerThreshold",
+                                    self.peaker_tariffs["daily_threshold"][self.gs_start_time.weekday()])
+
         self.OperatingMode_set = USER_CONTROL
 
 
@@ -543,6 +549,7 @@ class ExecutiveAgent(Agent):
                         "isone": iso_data}
 
         self.peaker_tariffs = {"threshold": PEAKER_THRESHOLD,
+                               "daily_threshold": [PEAKER_THRESHOLD for ii in range(0,7)],
                                "peaker_start": 19,
                                "peaker_end": 22}
 
@@ -568,9 +575,19 @@ class ExecutiveAgent(Agent):
         if UPDATE_PEAKER_THRESHOLD == True:
             cur_time = datetime.utcnow()
             prev_threshold = self.peaker_tariffs['threshold']
-            if (cur_time.hour < self.peaker_tariffs["peaker_start"]) | (cur_time.hour > self.peaker_tariffs["peaker_end"]):
+
+            # conditions to update are - (1) hr < end; (2) optimizer enable; and (3) time > peaker_start+15min; and (4) gs_start>15min
+            peaker_start_buffer = cur_time.replace(hour=self.peaker_tariffs["peaker_start"],minute=0,second=0,microsecond=0)+timedelta(minutes=15)
+            gs_start_buffer     = self.gs_start_time.replace(tzinfo=None) + timedelta(minutes=15)
+            _log.debug('Peaker Start Buffer = '+str(peaker_start_buffer))
+
+
+            #if (cur_time.hour < self.peaker_tariffs["peaker_start"]) | (cur_time.hour > self.peaker_tariffs["peaker_end"]):
+            if (cur_time < peaker_start_buffer) | (cur_time.hour > self.peaker_tariffs["peaker_end"]):
                 self.peaker_tariffs["threshold"] = PEAKER_THRESHOLD
-            elif (self.system_resources.state_vars["AvgPwr_kW"] > 1.1*self.peaker_tariffs["threshold"]) & (self.optimizer_complete == True):
+            elif ((self.system_resources.state_vars["AvgPwr_kW"] > 1.1*self.peaker_tariffs["threshold"]) &
+                  (cur_time > gs_start_buffer) &
+                  (self.optimizer_complete == True)):
                 self.peaker_tariffs["threshold"] = self.system_resources.state_vars["AvgPwr_kW"]/1.1
 
             if self.peaker_tariffs['threshold'] != prev_threshold:
@@ -581,6 +598,29 @@ class ExecutiveAgent(Agent):
                                             default_units["DemandChargeThreshold"],
                                             "PeakerThreshold",
                                             self.peaker_tariffs["threshold"])
+
+            # for optimizing a daily peak (by calendar day):
+            today = cur_time.weekday()
+            tomorrow = (cur_time + timedelta(days=1)).weekday()
+            prev_daily_threshold = self.peaker_tariffs['daily_threshold'][today]
+            self.peaker_tariffs["daily_threshold"][tomorrow] = PEAKER_THRESHOLD
+            if (cur_time < peaker_start_buffer): #self.peaker_tariffs["peaker_start"]):
+                self.peaker_tariffs["daily_threshold"][today] = PEAKER_THRESHOLD
+            elif ((self.system_resources.state_vars["AvgPwr_kW"] > 1.1*self.peaker_tariffs["daily_threshold"][today]) &
+                  (cur_time.hour <= self.peaker_tariffs["peaker_end"]) &
+                  (cur_time > gs_start_buffer) &
+                  (self.optimizer_complete == True)):
+                self.peaker_tariffs["daily_threshold"][today] = self.system_resources.state_vars["AvgPwr_kW"]/1.1
+            if self.peaker_tariffs['daily_threshold'][today] != prev_daily_threshold:
+                _log.info('Avg Pwr = '+str(self.system_resources.state_vars["AvgPwr_kW"])+'; Updated Daily Peaker Threshold from ' +str(prev_daily_threshold)+' to '+str(self.peaker_tariffs['daily_threshold'][today]))
+                HistorianTools.publish_data(self,
+                                            "Tariffs",
+                                            default_units["DemandChargeThreshold"],
+                                            "DailyPeakerThreshold",
+                                            self.peaker_tariffs["daily_threshold"][today])
+
+
+
 
         #self.tariffs["demand_charge_threshold"] = max(self.tariffs["demand_charge_threshold"],self.system_resources.state_vars["Pwr_kW"])
         pass
@@ -823,7 +863,7 @@ class ExecutiveAgent(Agent):
         device_path_str = 'Executive/curPwr_kW'
         topic_name = 'datalogger/'+device_path_str
         curPwr_5SecAvg, n_pts = HistorianTools.calc_avg(self, topic_name, st_str, end_str)
-        _log.info("Calc Avg: "+str(netDemand_5SecAvg)+"; netDemand = "+str(netDemand_kW)+"; n pts = "+str(n_pts))
+        _log.debug("Calc Avg: "+str(netDemand_5SecAvg)+"; netDemand = "+str(netDemand_kW)+"; n pts = "+str(n_pts))
         if n_pts == 0:
             netDemand_5SecAvg = netDemand_kW
             curPwr_5SecAvg = curPwr_kW
