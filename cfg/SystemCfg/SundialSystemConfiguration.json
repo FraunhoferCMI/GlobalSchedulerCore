@@ -6,17 +6,22 @@
       {
         "FcnName": "EnergyCostObjectiveFunction",
         "params": "desc='EnergyPrice', fname='energy_price_data.xlsx'",
-        "Use": "Y"
+        "Use": "N"
+      },
+      {
+        "FcnName": "EnergyCostObjectiveFunction_Dynamic",
+        "params": "desc='EnergyPrice', fname='energy_price_24hr.csv'",
+        "Use": "N"
       },
       {
         "FcnName": "DemandChargeObjectiveFunction",
-        "params": "desc='DemandCharge', cost_per_kW=10.0, threshold = 0, tariff_key='system_tariff'",
+        "params": "desc='DemandCharge', cost_per_kW=10.0, threshold = 200, tariff_key='system_tariff'",
         "Use": "Y"
       },
       {
         "FcnName": "MinPeakBFObjectiveFunction",
         "params": "desc='MinimizePeakBF', cost_per_kW=10.0, threshold = 0, tariff_key='minbf_tariff'",
-        "Use": "Y"
+        "Use": "N"
       },
       {
         "FcnName": "dkWObjectiveFunction",
@@ -35,7 +40,12 @@
       },
       {
         "FcnName": "PeakerPlantObjectiveFunction",
-        "params": "desc='DemandCharge', cost_per_kW=20.0, threshold=150, tariff_key='peaker_tariff'",
+        "params": "desc='DemandCharge', cost_per_kW=20.0, threshold=0, tariff_key='peaker_tariff'",
+        "Use": "Y"
+      },
+      {
+        "FcnName": "EnergyTargetObjectiveFunction",
+        "params": "desc='EnergyTarget'",
         "Use": "Y"
       }
     ],
