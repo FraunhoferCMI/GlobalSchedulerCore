@@ -953,15 +953,17 @@ class ExecutiveAgent(Agent):
                             _log.debug('Calculating adjusted tgt: orig_tgt =' + str(targetPwr_kW) + '; reserve target = ' + str(reserve_target))
                             _log.debug('Calculating adjusted tgt: ESS Avg' + str(self.ess_resources.state_vars['AvgPwr_kW']) + '; SOE Lower Buffer = ' + str(soe_lower_buffer_used))
 
-                            if (soe_upper_buffer_used >= 0) & (self.ess_resources.state_vars['AvgPwr_kW']>0): #(targetPwr_kW>0):
+                            if (soe_upper_buffer_used >= 0): #(targetPwr_kW>0):
                                 # SOE is above reserve margin and charge commanded - calculate the target as a
                                 # blended fraction of the scheduled value and the recent average solar production
-                                targetPwr_kW   = targetPwr_kW + soe_upper_buffer_used * (reserve_target-targetPwr_kW)
+                                targetPwr_kW   = min(targetPwr_kW + soe_upper_buffer_used * (reserve_target-targetPwr_kW),
+                                                     targetPwr_kW)
                                 _log.info('In ESS upper reserve margin: upper buffer = '+str(soe_upper_buffer_used)+'; reserve_soe_high = '+str(reserve_soe_high))
-                            elif (soe_lower_buffer_used >= 0) & (self.ess_resources.state_vars['AvgPwr_kW']<0): #& (targetPwr_kW<0):
+                            elif (soe_lower_buffer_used >= 0): #& (targetPwr_kW<0):
                                 # SOE is below lower reserve margin and discharge commanded - calculate the target as a
                                 # blended fraction of the scheduled value and the recent average solar production
-                                targetPwr_kW   = targetPwr_kW + soe_lower_buffer_used * (reserve_target - targetPwr_kW)
+                                targetPwr_kW   = max(targetPwr_kW + soe_lower_buffer_used * (reserve_target - targetPwr_kW),
+                                                     targetPwr_kW)
                                 _log.info('In ESS lower reserve margin: lower buffer = ' + str(soe_lower_buffer_used) + '; reserve_soe_low = ' + str(reserve_soe_low))
 
                         expectedPwr_kW = self.pv_resources.schedule_vars["schedule_kW"][cur_time] + self.load_resources.schedule_vars["schedule_kW"][cur_time]
@@ -1398,7 +1400,7 @@ class ExecutiveAgent(Agent):
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_tPlus1_kW",
                                     sdr_dict['ESS'].schedule_vars["DemandForecast_kW"][1],
-                                    TimeStamp_str=sdr_dict['ESS'].schedule_vars["timestamp"][1].strftime(
+                                    TimeStamp_str=sdr_dict['ESS'].schedule_vars["timestamp"][2].strftime(
                                         "%Y-%m-%dT%H:%M:%S"),
                                     ref_time=self.gs_start_time)
         HistorianTools.publish_data(self,
@@ -1406,7 +1408,7 @@ class ExecutiveAgent(Agent):
                                     default_units["DemandForecast_kW"],
                                     "DemandForecast_tPlus5_kW",
                                     sdr_dict['ESS'].schedule_vars["DemandForecast_kW"][5],
-                                    TimeStamp_str=sdr_dict['ESS'].schedule_vars["timestamp"][5].strftime(
+                                    TimeStamp_str=sdr_dict['ESS'].schedule_vars["timestamp"][6].strftime(
                                         "%Y-%m-%dT%H:%M:%S"),
                                     ref_time=self.gs_start_time)
         HistorianTools.publish_data(self,
@@ -1422,7 +1424,7 @@ class ExecutiveAgent(Agent):
                                     default_units["EnergyAvailableForecast_kWh"],
                                     "EnergyAvailableForecast_tPlus0_kWh",
                                     sdr_dict['ESS'].schedule_vars["EnergyAvailableForecast_kWh"][0],
-                                    TimeStamp_str=sdr_dict['ESS'].schedule_vars["timestamp"][0].strftime(
+                                    TimeStamp_str=sdr_dict['ESS'].schedule_vars["timestamp"][1].strftime(
                                         "%Y-%m-%dT%H:%M:%S"),
                                     ref_time = self.gs_start_time)
 
