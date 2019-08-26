@@ -40,7 +40,7 @@
       },
       {
         "FcnName": "PeakerPlantObjectiveFunction",
-        "params": "desc='DemandCharge', cost_per_kW=20.0, threshold=0, tariff_key='peaker_tariff'",
+        "params": "desc='DemandCharge', cost_per_kW=20.0, threshold=0, daily_threshold=[0,0,0,0,0,0], peaker_start=19, peaker_end=22, use_daily_threshold=True, tariff_key='peaker_tariff'",
         "Use": "Y"
       },
       {
