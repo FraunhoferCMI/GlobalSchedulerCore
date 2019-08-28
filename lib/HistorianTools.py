@@ -114,9 +114,9 @@ def query_data(agent_object, topic_name, query_start, query_end, max_count=1000)
     return data
 
 ##############################################################################
-def calc_avg(agent_object, topic ,st, end):
+def calc_avg(agent_object, topic ,st, end, max_count=1000):
     #_log.info(st + " "+end)
-    data = query_data(agent_object, topic, st, end)
+    data = query_data(agent_object, topic, st, end, max_count=max_count)
     #_log.info(data)
     if len(data) != 0:
         vals = [float(v[1]) for v in data['values']]
