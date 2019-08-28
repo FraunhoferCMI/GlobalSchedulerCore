@@ -70,7 +70,7 @@ import math
 from .FLAME import *
 import websocket
 from websocket import create_connection
-websocket.setdefaulttimeout(60)
+websocket.setdefaulttimeout(180)
 import ssl
 
 utils.setup_logging()
