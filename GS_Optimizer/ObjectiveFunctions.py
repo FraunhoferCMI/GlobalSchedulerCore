@@ -371,16 +371,63 @@ class StoredEnergyValueObjectiveFunction(ObjectiveFunction):
 ##############################################################################
 class EnergyTargetObjectiveFunction(ObjectiveFunction):
     """
-    assigns a cost to change in power (dPwr/dt)
+    assigns a cost to variance from a targeted ESS SOE
     """
     def __init__(self, desc="", init_params=None, **kwargs):
         ObjectiveFunction.__init__(self, desc=desc, init_params={}, **kwargs)
         self.init_params["value_per_kWh"] = -1.0
         self.init_params['TargetHr'] = 18
+        #self.init_params['']
+        self.init_params['use_multiple_tgts'] = True
+        self.init_params['Target'] = {0: (300, -0.3),
+                                      1: (300, -0.3),
+                                      2: (300, -0.3),
+                                      3: (300, -0.3),
+                                      4: (300, -0.3),
+                                      5: (300, -0.3),
+                                      6: (300, -0.3),
+                                      7: (300, -0.3),
+                                      8: (300, -0.3),
+                                      9: (300, -0.3),
+                                      10: (300, -0.3),
+                                      11: (300, -0.3),
+                                      12: (300, -0.3),
+                                      13: (300, -0.3)}
+
+    def obj_fcn_cfg(self, **kwargs):
+        print('*******In Energy Target Config!!!@*******')
+
+        # list of time stamps
+        # need to generate the indices that are associated with the given hours
+        self.init_params["hrs_index"] = {}
+
+
+        #print(kwargs['schedule_timestamps'])
+        timestamps = [v + kwargs['sim_offset'] for v in kwargs['schedule_timestamps']]
+        #print(self.init_params['hrs'])
+        #print(timestamps)
+
+        if self.init_params['use_multiple_tgts'] == True:
+            inds = []
+            for ii, v in self.init_params['Target'].iteritems():
+                inds.append(ii)
+        else:
+            inds = [self.init_params['TargetHr']]
+
+        for ii in range(0,len(timestamps)):
+            if timestamps[ii].hour in inds:
+                self.init_params['hrs_index'].update({timestamps[ii].hour: ii})
 
     def obj_fcn_cost(self, profile):
-        end_ind = self.init_params['TargetHr']
-        cost = self.init_params["value_per_kWh"] * profile["EnergyAvailableForecast_kWh"][end_ind]
+        if self.init_params['use_multiple_tgts'] == False:
+            end_ind = self.init_params['TargetHr']
+            cur_hr = self.init_params['hrs_index'][end_ind]
+            cost = self.init_params["value_per_kWh"] * profile["EnergyAvailableForecast_kWh"][cur_hr]
+        else:
+            cost = 0
+            for cur_ind, v in self.init_params['Target'].iteritems():
+                cur_hr = self.init_params['hrs_index'][cur_ind]
+                cost += -1*v[1] * abs(profile["EnergyAvailableForecast_kWh"][cur_hr] - v[0])
         return cost
 
     def get_obj_fcn_data(self):
