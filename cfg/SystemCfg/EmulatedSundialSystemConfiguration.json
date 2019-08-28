@@ -46,7 +46,7 @@
       {
         "FcnName": "EnergyTargetObjectiveFunction",
         "params": "desc='EnergyTarget'",
-        "Use": "N"
+        "Use": "Y"
       }
     ],
     "VirtualPlantList": [

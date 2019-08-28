@@ -444,7 +444,7 @@ class LoadReport(IPKeys):
 
                 # set the index to the time stamp
                 facility_loadSchedule.index        = facility_loadSchedule["dstart"]
-                facility_loadSchedule.index        = convert_FLAME_time_to_UTC(facility_loadSchedule.index)
+                #facility_loadSchedule.index        = convert_FLAME_time_to_UTC(facility_loadSchedule.index)
 
                 for ii in range(0, len(facility_loadSchedule)):
                     if facility_loadSchedule["value"][ii] == -1:
