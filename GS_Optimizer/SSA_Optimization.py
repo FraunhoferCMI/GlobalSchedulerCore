@@ -603,7 +603,7 @@ class SimulatedAnnealer():
         loadshift_resources.schedule_vars["SelectedProfile"] = loadshift_resources.state_vars["IDList"][lcs_ind]
 
 
-def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=45, nIterations=1):
+def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=60, nIterations=1):
     if shift_to_start_of_day == True:
         gs_start_time = gs_start_time.replace(hour=0, minute=0, second=0)
     gs_start_time_str = gs_start_time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -612,7 +612,7 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
     resource_cfg_list = json.load(open(cfg_file, 'r'))
     sundial_resources = SundialSystemResource(resource_cfg_list, gs_start_time_str)
     load_scenarios(sundial_resources, gs_start_time)
-    system_tariff = {"threshold": 500} #DEMAND_CHARGE_THRESHOLD}
+    system_tariff = {"threshold": 0} #DEMAND_CHARGE_THRESHOLD}
     solarPlusStorage_tariff = {"threshold": 150}
 
     ##### This section replicates the periodic call of the optimizer ######
@@ -622,10 +622,25 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
     optimizer = SimulatedAnnealer()
     last_forecast_start = datetime(1900, 1, 1, tzinfo=pytz.UTC)
 
+    today_peak = 0 #-150
+    tomorrow_peak = 0 #50
 
     _log.info("Starting optimization")
     for ii in range(0,nIterations):
         cur_time = gs_start_time.replace(tzinfo=pytz.UTC)+timedelta(minutes=toffset)
+
+        today = cur_time.weekday()
+        tomorrow = (cur_time + timedelta(days=1)).weekday()
+
+        daily_thresholds = [0]*7
+        daily_thresholds[tomorrow] = tomorrow_peak
+        daily_thresholds[today] = today_peak
+
+        peaker_tariff = {'threshold': 0,
+                         'daily_threshold': daily_thresholds,
+                         'peaker_start': 19,
+                         'peaker_end': 22}
+
         if ALIGN_SCHEDULES == True:
             if sundial_resources.schedule_vars["schedule_kW"] == {}:
                 schedule_start_time = cur_time.replace(minute=0, second=0)
@@ -670,7 +685,8 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
 
             sundial_resources.cfg_cost(schedule_timestamps,
                                        system_tariff = system_tariff,
-                                       solarPlusStorage_tariff = solarPlusStorage_tariff)
+                                       solarPlusStorage_tariff = solarPlusStorage_tariff,
+                                       peaker_tariff = peaker_tariff)
 
             if SEARCH_LOADSHIFT_OPTIONS == True:
                 optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
@@ -679,7 +695,7 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
         else:
             _log.info("No valid forecasts found - skipping")
 
-
+        today_peak+=0 #25
         toffset += tstep
 
     return sundial_resources
@@ -693,7 +709,7 @@ def retrieve_init_data(start_time):
     """
     import post_process
 
-    OPTIMIZATION_SCENARIO = 1 # 0 = FORECAST; 1 = PERFECT INFORMATION; 2 = ACTUAL RESULTS; 3 = BASELINE (DO NOTHING)
+    OPTIMIZATION_SCENARIO = 0 # 0 = FORECAST; 1 = PERFECT INFORMATION; 2 = ACTUAL RESULTS; 3 = BASELINE (DO NOTHING); 4 = Forecast, based on current hr
 
 
     engine = post_process.createDefaultEngine(credential_path='.my.cnf_replication')
@@ -757,6 +773,23 @@ def retrieve_init_data(start_time):
         max_chg = 0.0
         max_dis = 0.0
 
+    if OPTIMIZATION_SCENARIO == 4: # use forecast values for optimization
+        snapshot_hour = start_time.hour
+        snapshot_topic_root = 'datalogger/Snapshot' + str(snapshot_hour)
+
+        load_topic_name = snapshot_topic_root+'/Load'
+        pv_topic_name = snapshot_topic_root+'/PV'
+
+        load_topic_name = snapshot_topic_root+'/Load'
+        pv_topic_name = snapshot_topic_root+'/PV'
+
+        load_topic = post_process.parse_topic(topics['topic_id'].loc[topics['topic_name'] == load_topic_name].iloc[0], engine, date_range=date_range)
+        pv_topic   = post_process.parse_topic(topics['topic_id'].loc[topics['topic_name'] == pv_topic_name].iloc[0], engine, date_range=date_range)
+
+        load = load_topic['vals'].tolist()
+        pv   = pv_topic['vals'].tolist()
+        max_chg = 500.0
+        max_dis = 500.0
 
     st = start_time-timedelta(minutes=1)
     st_str = st.strftime("%Y-%m-%dT%H:%M:%S")
@@ -784,6 +817,12 @@ def load_scenarios(cur_resource, gs_start_time):
 
     if FROM_DB == True:
         soe_init, max_chg, max_dis, pv_forecast, demand_forecast = retrieve_init_data(gs_start_time)
+
+        #demand_forecast = [279.9, 288.1, 356.5, 416.0, 533.3, 554.0,  563.3, 570.4, 573.8, 575.6, 562.8, 558.8,
+        # 542.1, 517.9, 472.0,  461.7, 461.8, 413.9, 383.5, 407.7, 373.8, 332.9, 325.1, 302.6] # june 24
+
+        #demand_forecast = [300.8, 311.9, 385.1, 451.4, 524.8, 544.8, 552.6, 557.3, 558.6, 560.1, 547.6, 543.0, 490.9, 467.5, 439.4, 429.4,
+        # 418.5, 398.4, 367.3, 391.3, 358.1, 318.7, 309.8, 285.7] #june 28
         pass
     else:
         #### Just load with example values - ######
@@ -792,12 +831,12 @@ def load_scenarios(cur_resource, gs_start_time):
         max_dis = 500.0
 
         # forecast, indexed to 00:00
-        # pv_forecast_base = [0,0,0,0,0,0,0,0,-5.25, -19.585, -95.39, -169.4, -224,-255, -276, -278, -211, -124, -94, -61, -15, -0.45, 0,0]
+        pv_forecast_base = [0,0,0,0,0,0,0,0,-5.25, -19.585, -95.39, -169.4, -224,-255, -276, -278, -211, -124, -94, -61, -15, -0.45, 0,0]
         scale = 1.0
-        pv_forecast_base = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -2.49, -11.39, -7.21, -12.04, -21.49, -29.84, -29.07, -18.27,
-                            -7.69, -2.71, -0.37, 0, 0, 0]
+        #pv_forecast_base = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -2.49, -11.39, -7.21, -12.04, -21.49, -29.84, -29.07, -18.27,
+        #                    -7.69, -2.71, -0.37, 0, 0, 0]
 
-        pv_forecast_base = [-329.8,-346.0,-347.4, -311.5,-276.6,-164.5,-44.5,-48.0,0,0,0,0,0,0,0,0,0,-1.5,-27,-57.8,-97.9,-179.5,0.0,-297.8]
+        #pv_forecast_base = [-329.8,-346.0,-347.4, -311.5,-276.6,-164.5,-44.5,-48.0,0,0,0,0,0,0,0,0,0,-1.5,-27,-57.8,-97.9,-179.5,0.0,-297.8]
 
         pv_forecast_base = [scale * v for v in pv_forecast_base]
 
@@ -917,7 +956,7 @@ if __name__ == '__main__':
 
     if SET_TIME == True:
         shift_to_start_of_day = False
-        gs_start_time = datetime(2019,6,9,10)
+        gs_start_time = datetime(2019,8,22,18)
     else:
         gs_start_time = datetime.utcnow().replace(microsecond=0)
         if shift_to_start_of_day == True:
@@ -940,4 +979,5 @@ if __name__ == '__main__':
 
     sundial_resources   = get_dispatch_schedule(gs_start_time,
                                                 "../cfg/SystemCfg/EmulatedSundialSystemConfiguration.json",
-                                                shift_to_start_of_day)
+                                                shift_to_start_of_day,
+                                                nIterations=1)
