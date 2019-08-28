@@ -87,6 +87,7 @@ default_units = {"setpoint":"kW",
                  "curPwrAvg_kW": "kW",
                  "expectedPwr_kW": "kW",
                  "forecastError_kW": "kW",
+                 "forecastAvgError_kW": "kW",
                  "predPwr_kW": "kW",
                  "DemandForecast_kW": "kW",
                  "AvgPwr_kW": "kW",
@@ -239,6 +240,7 @@ class ExecutiveAgent(Agent):
         self.optimizer_avg_info = {}
         self.optimizer_avg_info.update({"curPwrAvg_kW": 0.0})
         self.optimizer_avg_info.update({"netDemandAvg_kW": 0.0})
+        self.optimizer_avg_info.update({"forecastAvgError_kW": 0.0})
 
         self.run_optimizer_cnt     = 0
         self.send_ess_commands_cnt = 0
@@ -1005,6 +1007,7 @@ class ExecutiveAgent(Agent):
             expectedSOE_kWh = self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][0]
 
         forecastError_kW = expectedPwr_kW - curPwr_kW
+        forecastAvgError_kW = expectedPwr_kW - curPwrAvg_kW
         _log.debug("Regulator: Forecast Power is " + str(expectedPwr_kW))
         _log.debug("Regulator: Scheduled power output is " + str(targetPwr_kW))
         _log.debug("Regulator: Current PV+Load is "+str(curPwr_kW))
@@ -1112,6 +1115,7 @@ class ExecutiveAgent(Agent):
 
         self.optimizer_avg_info["curPwrAvg_kW"] = curPwrAvg_kW
         self.optimizer_avg_info["netDemandAvg_kW"] = netDemandAvg_kW
+        self.optimizer_avg_info["forecastAvgError_kW"] = forecastAvgError_kW
 
         self.publish_ess_cmds()
 
@@ -1220,14 +1224,16 @@ class ExecutiveAgent(Agent):
                     forecast_start = datetime.strptime(sdr_dict['PV'].state_vars["OrigDemandForecast_t_str"][0],
                                                        "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)
 
-                try:
-                    predicted_energy_error =  abs(sdr_dict['ESS'].state_vars['EnergyAvailableForecast'][0]-
-                                                  sdr_dict['ESS'].state_vars['SOE_kWh'])/max(sdr_dict['ESS'].state_vars['MaxSOE_kWh'])
+                if (0):
+                    predicted_energy_error =  abs(sdr_dict['ESS'].schedule_vars['EnergyAvailableForecast_kWh'][0]-
+                                                  sdr_dict['ESS'].state_vars['SOE_kWh'])/sdr_dict['ESS'].state_vars['MaxSOE_kWh']
                     _log.info('Predicted Energy error is: '+str(predicted_energy_error))
                     _log.info('Actual Energy error is: ' + str(sdr_dict['ESS'].state_vars['SOE_kWh']) +
-                              '; predicted energy is: ' + str(sdr_dict['ESS'].state_vars['EnergyAvailableForecast'][0]))
+                              '; predicted energy is: ' + str(sdr_dict['ESS'].schedule_vars['EnergyAvailableForecast_kWh'][0]))
+                    _log.info(sdr_dict['ESS'].schedule_vars['EnergyAvailableForecast_kWh'])
 
-                except:
+
+                else:
                     predicted_energy_error = 0
 
                 if (forecast_start == sdr_dict['last_forecast']) & (predicted_energy_error<0.1):
