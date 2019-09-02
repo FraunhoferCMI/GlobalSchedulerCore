@@ -111,26 +111,26 @@ def query_data(agent_object, topic_name, query_start, query_end, max_count=1000)
                                      start=query_start,
                                      end=query_end,
                                      count=max_count).get(timeout=5)
-    return data
 
-##############################################################################
-def calc_avg(agent_object, topic ,st, end, max_count=1000):
-    #_log.info(st + " "+end)
-    data = query_data(agent_object, topic, st, end, max_count=max_count)
-    #_log.info(data)
     if len(data) != 0:
         vals = [float(v[1]) for v in data['values']]
         ts   = [pd.to_datetime(v[0]) for v in data['values']]
         df = pd.DataFrame(data=vals,index=ts)
         n_pts = len(df)
-        if len(df) != 0:
-            avg = df[0].mean()
-            #avg  = sum(vals) / float(n_pts)
-        else:
-            avg = 0
-            n_pts = 0
+        return df, n_pts
+    else:
+        return None, 0
+
+##############################################################################
+def calc_avg(agent_object, topic ,st, end, max_count=1000):
+    #_log.info(st + " "+end)
+    data, n_pts = query_data(agent_object, topic, st, end, max_count=max_count)
+    #_log.info(data)
+
+    if n_pts != 0:
+        avg = data[0].mean()
     else:
         avg = 0
-        n_pts = 0
+
     #_log.info("avg value is "+str(avg)+" over "+ str(n_pts)+" points")
     return avg, n_pts

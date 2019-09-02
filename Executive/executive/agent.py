@@ -606,8 +606,29 @@ class ExecutiveAgent(Agent):
             tomorrow = (cur_time + timedelta(days=1)).weekday()
             prev_daily_threshold = self.peaker_tariffs['daily_threshold'][today]
             self.peaker_tariffs["daily_threshold"][tomorrow] = PEAKER_THRESHOLD
-            if (cur_time < peaker_start_buffer): #self.peaker_tariffs["peaker_start"]):
-                self.peaker_tariffs["daily_threshold"][today] = PEAKER_THRESHOLD
+            if (cur_time < peaker_start_buffer):
+
+                # #### Use projected min feasible peak x safety margin as a stariting point for the target threshold ##
+                # this is meant to be somewhhat conservative
+                # retrieve the next 24 hrs scheduled system power output
+                st  = cur_time.replace(hour=0, minute=0,second=0,microsecond=0)  # start of day
+                end = st+ timedelta(hours=48)  # start of next daay
+                st_str = st.strftime(TIME_FORMAT)
+                end_str = end.strftime(TIME_FORMAT)
+                snapshot, n_pts = HistorianTools.query_data(self, 'datalogger/Snapshot23/System', st_str, end_str, max_count=24)
+
+                if n_pts != 24:  # insufficient data found in database, use fixed threshold
+                    _log.info('Update Peaker:'+ str(n_pts)+' retrieved - using default')
+                    self.peaker_tariffs["daily_threshold"][today] = PEAKER_THRESHOLD
+                else:
+                    # set the peaker threshold to max demand x a safety margin
+                    safety_margin = 1.2
+                    max_pkhr_demand = max(snapshot[0].loc[(snapshot.index.hour >= self.peaker_tariffs["peaker_start"]) &
+                                                          (snapshot.index.hour <= self.peaker_tariffs["peaker_end"])])
+                    self.peaker_tariffs["daily_threshold"][today] = max_pkhr_demand*safety_margin
+                    _log.info('Update Peaker: Peak='+ str(max_pkhr_demand)+'; setting threshold to '+str(self.peaker_tariffs["daily_threshold"][today]))
+                #####
+
             elif ((self.system_resources.state_vars["AvgPwr_kW"] > 1.1*self.peaker_tariffs["daily_threshold"][today]) &
                   (cur_time.hour <= self.peaker_tariffs["peaker_end"]) &
                   (cur_time > gs_start_buffer) &
