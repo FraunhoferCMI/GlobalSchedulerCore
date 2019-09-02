@@ -618,7 +618,7 @@ class ExecutiveAgent(Agent):
                 snapshot, n_pts = HistorianTools.query_data(self, 'datalogger/Snapshot23/System', st_str, end_str, max_count=24)
 
                 if n_pts != 24:  # insufficient data found in database, use fixed threshold
-                    _log.info('Update Peaker:'+ str(n_pts)+' retrieved - using default')
+                    _log.debug('Update Peaker:'+ str(n_pts)+' retrieved - using default')
                     self.peaker_tariffs["daily_threshold"][today] = PEAKER_THRESHOLD
                 else:
                     # set the peaker threshold to max demand x a safety margin
@@ -626,7 +626,7 @@ class ExecutiveAgent(Agent):
                     max_pkhr_demand = max(snapshot[0].loc[(snapshot.index.hour >= self.peaker_tariffs["peaker_start"]) &
                                                           (snapshot.index.hour <= self.peaker_tariffs["peaker_end"])])
                     self.peaker_tariffs["daily_threshold"][today] = max_pkhr_demand*safety_margin
-                    _log.info('Update Peaker: Peak='+ str(max_pkhr_demand)+'; setting threshold to '+str(self.peaker_tariffs["daily_threshold"][today]))
+                    _log.debug('Update Peaker: Peak='+ str(max_pkhr_demand)+'; setting threshold to '+str(self.peaker_tariffs["daily_threshold"][today]))
                 #####
 
             elif ((self.system_resources.state_vars["AvgPwr_kW"] > 1.1*self.peaker_tariffs["daily_threshold"][today]) &
