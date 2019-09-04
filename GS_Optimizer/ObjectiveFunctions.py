@@ -393,7 +393,7 @@ class EnergyTargetObjectiveFunction(ObjectiveFunction):
                                       11: (300, -0.3),
                                       12: (300, -0.3),
                                       13: (300, -0.3),
-                                      18: (900, -0.5)}
+                                      18: (ESS_MAX, -3.0)}
 
     def obj_fcn_cfg(self, **kwargs):
         print('*******In Energy Target Config!!!@*******')
