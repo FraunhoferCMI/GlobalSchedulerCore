@@ -15,7 +15,7 @@
       },
       {
         "FcnName": "DemandChargeObjectiveFunction",
-        "params": "desc='DemandCharge', cost_per_kW=10.0, threshold = 200, tariff_key='system_tariff'",
+        "params": "desc='DemandCharge', cost_per_kW=20.0, threshold = 200, tariff_key='system_tariff'",
         "Use": "Y"
       },
       {
@@ -40,7 +40,7 @@
       },
       {
         "FcnName": "PeakerPlantObjectiveFunction",
-        "params": "desc='DemandCharge', cost_per_kW=20.0, threshold=0, daily_threshold=[0,0,0,0,0,0], peaker_start=19, peaker_end=22, use_daily_threshold=True, tariff_key='peaker_tariff'",
+        "params": "desc='PeakerPlant', cost_per_kW=20.0, threshold=0, daily_threshold=[0,0,0,0,0,0], peaker_start=19, peaker_end=22, use_daily_threshold=True, tariff_key='peaker_tariff'",
         "Use": "Y"
       },
       {
@@ -66,13 +66,13 @@
       {
         "ID": "SystemLoad",
         "ResourceType": "Load",
-        "Use": "Y",
+        "Use": "N",
         "VirtualPlantList": [],
         "DeviceList": [
           {
             "AgentID": "FLAME",
             "DeviceID": "FLAME-Baseline",
-            "Use": "Y"
+            "Use": "N"
           }
         ]
       },
@@ -102,7 +102,7 @@
           {
             "FcnName": "StoredEnergyValueObjectiveFunction",
             "params": "desc='StorageValue'",
-            "Use": "Y"
+            "Use": "N"
           },
                     {
             "FcnName": "BatteryLossModelObjectiveFunction",

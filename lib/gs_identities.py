@@ -83,10 +83,10 @@ EXECUTIVE_STATUS_PUBLICATION_INTERVAL = 10
 
 ####################################
 ### Some basic device and objective fcn configuration options:
-DEMAND_CHARGE_THRESHOLD = 300 #250
+DEMAND_CHARGE_THRESHOLD = 0 #300 #250
 UPDATE_THRESHOLD = True
 UPDATE_PEAKER_THRESHOLD = True
-PEAKER_THRESHOLD = 0
+PEAKER_THRESHOLD = -500
 
 # FIXME - ESS_RESERVE_xx should be set in absoluate terms, not relative terms - won't work if ESS_MIN is 0
 ESS_MAX = 0.98
