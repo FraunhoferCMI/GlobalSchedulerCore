@@ -301,7 +301,7 @@ class ExecutiveAgent(Agent):
         try:
             load_resources = sdr.find_resource_type("Load")[0]
         except:
-            load_resources = []
+            load_resources = None
         sdr_dict = {'SDR': sdr,
                     'lookup_table': lookup_table,
                     'tariffs': tariffs,
@@ -989,7 +989,7 @@ class ExecutiveAgent(Agent):
                                                      targetPwr_kW)
                                 _log.info('In ESS lower reserve margin: lower buffer = ' + str(soe_lower_buffer_used) + '; reserve_soe_low = ' + str(reserve_soe_low))
 
-                        expectedPwr_kW = self.pv_resources.schedule_vars["schedule_kW"][cur_time] + self.load_resources.schedule_vars["schedule_kW"][cur_time]
+                        expectedPwr_kW = self.system_resources.schedule_vars['schedule_kW'][cur_time] - self.ess_resources.schedule_vars['schedule_kW'][cur_time]
                         essTargetPwr_kW = self.ess_resources.schedule_vars["schedule_kW"][cur_time]
                         expectedSOE_kWh = self.ess_resources.schedule_vars["schedule_kWh"][cur_time]
                         self.system_resources.state_vars["TgtPwr_kW"] = targetPwr_kW
@@ -1002,7 +1002,7 @@ class ExecutiveAgent(Agent):
                 else:
                     ii = self.find_current_timestamp_index()
                     targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ii]
-                    expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][ii] + self.load_resources.schedule_vars["DemandForecast_kW"][ii]
+                    expectedPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ii] - self.ess_resources.schedule_vars["DemandForecast_kW"][ii]
                     essTargetPwr_kW = self.ess_resources.schedule_vars["DemandForecast_kW"][ii]
                     expectedSOE_kWh = self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][ii]
             else:
@@ -1018,12 +1018,12 @@ class ExecutiveAgent(Agent):
                 _log.info(acc_load)
                 _log.info(cur_gs_time.hour)
                 targetPwr_kW = self.pv_resources.state_vars["AvgPwr_kW"] + acc_load
-                expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][0] + self.load_resources.schedule_vars["DemandForecast_kW"][0]
+                expectedPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][0] - self.ess_resources.schedule_vars["DemandForecast_kW"][0]
                 essTargetPwr_kW = 0
                 expectedSOE_kWh = self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][0]
         else:
             targetPwr_kW = curPwrAvg_kW #self.pv_resources.state_vars["AvgPwr_kW"]
-            expectedPwr_kW = self.pv_resources.state_vars["AvgPwr_kW"] + self.load_resources.state_vars["AvgPwr_kW"]
+            expectedPwr_kW = self.system_resources.state_vars["AvgPwr_kW"] - self.ess_resources.state_vars["AvgPwr_kW"]
             essTargetPwr_kW = 0
             expectedSOE_kWh = self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][0]
 
@@ -1046,7 +1046,12 @@ class ExecutiveAgent(Agent):
         REGULATE_PCC = True
         PCC_PRIORITY = False
         if REGULATE_PCC == True:
-            pv_plus_ess_tgt = targetPwr_kW - self.load_resources.state_vars['Pwr_kW'] # Schedule - Load
+            if self.load_resources is not None:
+                pv_plus_ess_tgt = targetPwr_kW - self.load_resources.state_vars['Pwr_kW']
+                cur_load = self.load_resources.state_vars['Pwr_kW']# Schedule - Load
+            else:
+                pv_plus_ess_tgt = targetPwr_kW
+                cur_load = 0
             setpoint = pv_plus_ess_tgt
 
             for entries in self.sdr_to_sm_lookup_table:
@@ -1061,7 +1066,7 @@ class ExecutiveAgent(Agent):
                                                   rr_enable=rr_enable,
                                                   pcc_priority=PCC_PRIORITY,
                                                   netDemandAvg_kW=netDemand_5SecAvg,
-                                                  curLoad = self.load_resources.state_vars['Pwr_kW'])
+                                                  curLoad = cur_load)
                             elif (self.OptimizerEnable==ENABLED):
                                 self.vip.rpc.call(str(devices["AgentID"]),
                                                   "set_pcc_target",
