@@ -87,6 +87,7 @@ default_units = {"setpoint":"kW",
                  "curPwrAvg_kW": "kW",
                  "expectedPwr_kW": "kW",
                  "forecastError_kW": "kW",
+                 "forecastAvgError_kW": "kW",
                  "predPwr_kW": "kW",
                  "DemandForecast_kW": "kW",
                  "AvgPwr_kW": "kW",
@@ -239,6 +240,7 @@ class ExecutiveAgent(Agent):
         self.optimizer_avg_info = {}
         self.optimizer_avg_info.update({"curPwrAvg_kW": 0.0})
         self.optimizer_avg_info.update({"netDemandAvg_kW": 0.0})
+        self.optimizer_avg_info.update({"forecastAvgError_kW": 0.0})
 
         self.run_optimizer_cnt     = 0
         self.send_ess_commands_cnt = 0
@@ -299,7 +301,7 @@ class ExecutiveAgent(Agent):
         try:
             load_resources = sdr.find_resource_type("Load")[0]
         except:
-            load_resources = []
+            load_resources = None
         sdr_dict = {'SDR': sdr,
                     'lookup_table': lookup_table,
                     'tariffs': tariffs,
@@ -604,8 +606,29 @@ class ExecutiveAgent(Agent):
             tomorrow = (cur_time + timedelta(days=1)).weekday()
             prev_daily_threshold = self.peaker_tariffs['daily_threshold'][today]
             self.peaker_tariffs["daily_threshold"][tomorrow] = PEAKER_THRESHOLD
-            if (cur_time < peaker_start_buffer): #self.peaker_tariffs["peaker_start"]):
-                self.peaker_tariffs["daily_threshold"][today] = PEAKER_THRESHOLD
+            if (cur_time < peaker_start_buffer):
+
+                # #### Use projected min feasible peak x safety margin as a stariting point for the target threshold ##
+                # this is meant to be somewhhat conservative
+                # retrieve the next 24 hrs scheduled system power output
+                st  = cur_time.replace(hour=0, minute=0,second=0,microsecond=0)  # start of day
+                end = st+ timedelta(hours=48)  # start of next daay
+                st_str = st.strftime(TIME_FORMAT)
+                end_str = end.strftime(TIME_FORMAT)
+                snapshot, n_pts = HistorianTools.query_data(self, 'datalogger/Snapshot23/System', st_str, end_str, max_count=24)
+
+                if n_pts != 24:  # insufficient data found in database, use fixed threshold
+                    _log.debug('Update Peaker:'+ str(n_pts)+' retrieved - using default')
+                    self.peaker_tariffs["daily_threshold"][today] = PEAKER_THRESHOLD
+                else:
+                    # set the peaker threshold to max demand x a safety margin
+                    safety_margin = 1.2
+                    max_pkhr_demand = max(snapshot[0].loc[(snapshot.index.hour >= self.peaker_tariffs["peaker_start"]) &
+                                                          (snapshot.index.hour <= self.peaker_tariffs["peaker_end"])])
+                    self.peaker_tariffs["daily_threshold"][today] = max_pkhr_demand*safety_margin
+                    _log.debug('Update Peaker: Peak='+ str(max_pkhr_demand)+'; setting threshold to '+str(self.peaker_tariffs["daily_threshold"][today]))
+                #####
+
             elif ((self.system_resources.state_vars["AvgPwr_kW"] > 1.1*self.peaker_tariffs["daily_threshold"][today]) &
                   (cur_time.hour <= self.peaker_tariffs["peaker_end"]) &
                   (cur_time > gs_start_buffer) &
@@ -966,7 +989,7 @@ class ExecutiveAgent(Agent):
                                                      targetPwr_kW)
                                 _log.info('In ESS lower reserve margin: lower buffer = ' + str(soe_lower_buffer_used) + '; reserve_soe_low = ' + str(reserve_soe_low))
 
-                        expectedPwr_kW = self.pv_resources.schedule_vars["schedule_kW"][cur_time] + self.load_resources.schedule_vars["schedule_kW"][cur_time]
+                        expectedPwr_kW = self.system_resources.schedule_vars['schedule_kW'][cur_time] - self.ess_resources.schedule_vars['schedule_kW'][cur_time]
                         essTargetPwr_kW = self.ess_resources.schedule_vars["schedule_kW"][cur_time]
                         expectedSOE_kWh = self.ess_resources.schedule_vars["schedule_kWh"][cur_time]
                         self.system_resources.state_vars["TgtPwr_kW"] = targetPwr_kW
@@ -979,7 +1002,7 @@ class ExecutiveAgent(Agent):
                 else:
                     ii = self.find_current_timestamp_index()
                     targetPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ii]
-                    expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][ii] + self.load_resources.schedule_vars["DemandForecast_kW"][ii]
+                    expectedPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][ii] - self.ess_resources.schedule_vars["DemandForecast_kW"][ii]
                     essTargetPwr_kW = self.ess_resources.schedule_vars["DemandForecast_kW"][ii]
                     expectedSOE_kWh = self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][ii]
             else:
@@ -995,16 +1018,17 @@ class ExecutiveAgent(Agent):
                 _log.info(acc_load)
                 _log.info(cur_gs_time.hour)
                 targetPwr_kW = self.pv_resources.state_vars["AvgPwr_kW"] + acc_load
-                expectedPwr_kW = self.pv_resources.schedule_vars["DemandForecast_kW"][0] + self.load_resources.schedule_vars["DemandForecast_kW"][0]
+                expectedPwr_kW = self.system_resources.schedule_vars["DemandForecast_kW"][0] - self.ess_resources.schedule_vars["DemandForecast_kW"][0]
                 essTargetPwr_kW = 0
                 expectedSOE_kWh = self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][0]
         else:
             targetPwr_kW = curPwrAvg_kW #self.pv_resources.state_vars["AvgPwr_kW"]
-            expectedPwr_kW = self.pv_resources.state_vars["AvgPwr_kW"] + self.load_resources.state_vars["AvgPwr_kW"]
+            expectedPwr_kW = self.system_resources.state_vars["AvgPwr_kW"] - self.ess_resources.state_vars["AvgPwr_kW"]
             essTargetPwr_kW = 0
             expectedSOE_kWh = self.ess_resources.schedule_vars["EnergyAvailableForecast_kWh"][0]
 
         forecastError_kW = expectedPwr_kW - curPwr_kW
+        forecastAvgError_kW = expectedPwr_kW - curPwrAvg_kW
         _log.debug("Regulator: Forecast Power is " + str(expectedPwr_kW))
         _log.debug("Regulator: Scheduled power output is " + str(targetPwr_kW))
         _log.debug("Regulator: Current PV+Load is "+str(curPwr_kW))
@@ -1022,7 +1046,12 @@ class ExecutiveAgent(Agent):
         REGULATE_PCC = True
         PCC_PRIORITY = False
         if REGULATE_PCC == True:
-            pv_plus_ess_tgt = targetPwr_kW - self.load_resources.state_vars['Pwr_kW'] # Schedule - Load
+            if self.load_resources is not None:
+                pv_plus_ess_tgt = targetPwr_kW - self.load_resources.state_vars['Pwr_kW']
+                cur_load = self.load_resources.state_vars['Pwr_kW']# Schedule - Load
+            else:
+                pv_plus_ess_tgt = targetPwr_kW
+                cur_load = 0
             setpoint = pv_plus_ess_tgt
 
             for entries in self.sdr_to_sm_lookup_table:
@@ -1037,7 +1066,7 @@ class ExecutiveAgent(Agent):
                                                   rr_enable=rr_enable,
                                                   pcc_priority=PCC_PRIORITY,
                                                   netDemandAvg_kW=netDemand_5SecAvg,
-                                                  curLoad = self.load_resources.state_vars['Pwr_kW'])
+                                                  curLoad = cur_load)
                             elif (self.OptimizerEnable==ENABLED):
                                 self.vip.rpc.call(str(devices["AgentID"]),
                                                   "set_pcc_target",
@@ -1112,6 +1141,7 @@ class ExecutiveAgent(Agent):
 
         self.optimizer_avg_info["curPwrAvg_kW"] = curPwrAvg_kW
         self.optimizer_avg_info["netDemandAvg_kW"] = netDemandAvg_kW
+        self.optimizer_avg_info["forecastAvgError_kW"] = forecastAvgError_kW
 
         self.publish_ess_cmds()
 
@@ -1220,14 +1250,16 @@ class ExecutiveAgent(Agent):
                     forecast_start = datetime.strptime(sdr_dict['PV'].state_vars["OrigDemandForecast_t_str"][0],
                                                        "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)
 
-                try:
-                    predicted_energy_error =  abs(sdr_dict['ESS'].state_vars['EnergyAvailableForecast'][0]-
-                                                  sdr_dict['ESS'].state_vars['SOE_kWh'])/max(sdr_dict['ESS'].state_vars['MaxSOE_kWh'])
+                if (0):
+                    predicted_energy_error =  abs(sdr_dict['ESS'].schedule_vars['EnergyAvailableForecast_kWh'][0]-
+                                                  sdr_dict['ESS'].state_vars['SOE_kWh'])/sdr_dict['ESS'].state_vars['MaxSOE_kWh']
                     _log.info('Predicted Energy error is: '+str(predicted_energy_error))
                     _log.info('Actual Energy error is: ' + str(sdr_dict['ESS'].state_vars['SOE_kWh']) +
-                              '; predicted energy is: ' + str(sdr_dict['ESS'].state_vars['EnergyAvailableForecast'][0]))
+                              '; predicted energy is: ' + str(sdr_dict['ESS'].schedule_vars['EnergyAvailableForecast_kWh'][0]))
+                    _log.info(sdr_dict['ESS'].schedule_vars['EnergyAvailableForecast_kWh'])
 
-                except:
+
+                else:
                     predicted_energy_error = 0
 
                 if (forecast_start == sdr_dict['last_forecast']) & (predicted_energy_error<0.1):

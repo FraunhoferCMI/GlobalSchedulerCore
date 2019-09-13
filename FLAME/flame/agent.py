@@ -70,7 +70,7 @@ import math
 from .FLAME import *
 import websocket
 from websocket import create_connection
-websocket.setdefaulttimeout(60)
+websocket.setdefaulttimeout(180)
 import ssl
 
 utils.setup_logging()
@@ -84,6 +84,7 @@ MINUTES_PER_DAY = 24 * MINUTES_PER_HR
 MINUTES_PER_YR = 365 * MINUTES_PER_DAY
 
 FORCE_TIME = USE_SIM  # for debugging - lets user force a start time.
+REPLACE_PREDICTED_WITH_MEASURED_LOAD = True
 max_load_report_length = 60
 
 ### WEBSOCKET ###
@@ -385,11 +386,16 @@ class FLAMECommsAgent(Agent):
     ##############################################################################
     def get_forecast_request_start_time(self, hrs_offset=0):
         ###  convert GS time to local time #####
-        real_start_time = datetime.strptime(get_schedule(self.gs_start_time,
-                                                         resolution=SSA_SCHEDULE_RESOLUTION),
-                                            "%Y-%m-%dT%H:%M:%S.%f")
-        _log.info(real_start_time)
-        start_time = real_start_time
+        if (0):   # deprecated, legacy code from previous iteration
+            # aligns schedule times to GS start time
+            real_start_time = datetime.strptime(get_schedule(self.gs_start_time,
+                                                             resolution=SSA_SCHEDULE_RESOLUTION),
+                                                "%Y-%m-%dT%H:%M:%S.%f")
+            _log.info(real_start_time)
+            start_time = real_start_time
+        else:
+            start_time = datetime.utcnow()
+
         if FORCE_TIME == True:
             elapsed_time = (datetime.utcnow().replace(tzinfo=pytz.UTC) - self.gs_start_time)*SIM_HRS_PER_HR #self.agent_start_time
             start_time = (self.force_start_time + elapsed_time).replace(microsecond=0, second=0)
@@ -446,14 +452,21 @@ class FLAMECommsAgent(Agent):
             _log.info(self.cur_load["time"])
             _log.info(forecast.forecast_values["Time"][0])
 
-            if self.cur_load["time"]:
-                if (datetime.strptime(self.cur_load["time"], "%Y-%m-%dT%H:%M:%S") >=
-                    datetime.strptime(forecast.forecast_values["Time"][0], "%Y-%m-%dT%H:%M:%S")):
-                    if math.isnan(self.cur_load["load"]) == False:
-                        _log.info("Replacing forecast load = "+str(forecast.forecast_values["Forecast"][0])+" with "+ str(self.cur_load["load"]))
-                        forecast.forecast_values["Forecast"][0] = self.cur_load["load"]
-                    else:
-                        _log.info("no recent values found for current load - using predicted value")
+            if REPLACE_PREDICTED_WITH_MEASURED_LOAD == True:
+                # this is not done quite correctly.
+                # moved this functionality to Sundial Resources.
+                if self.cur_load["time"]:
+                    err = 0
+                    if (datetime.strptime(self.cur_load["time"], "%Y-%m-%dT%H:%M:%S") >=
+                        datetime.strptime(forecast.forecast_values["Time"][0], "%Y-%m-%dT%H:%M:%S")):
+                        if math.isnan(self.cur_load["load"]) == False:
+                            err = self.cur_load['load'] - forecast.forecast_values["Forecast"][0]
+
+                            _log.info("Replacing forecast load = "+str(forecast.forecast_values["Forecast"][0])+" with "+ str(self.cur_load["load"]))
+                            forecast.forecast_values["Forecast"][0] = self.cur_load["load"]
+                            forecast.forecast_values["Forecast"][1] += err
+                        else:
+                            _log.info("no recent values found for current load - using predicted value")
 
             publish_data(self,
                          "flame/forecast",
@@ -478,6 +491,14 @@ class FLAMECommsAgent(Agent):
                          forecast.forecast_values["Forecast"][23],
                          TimeStamp_str=forecast.forecast_values["Time"][23],
                          ref_time=self.gs_start_time)
+
+            publish_data(self,
+                         "flame/forecast",
+                         forecast.forecast_meta_data["Forecast"]["units"],
+                         "err",
+                         err,
+                         ref_time=self.gs_start_time)
+
 
             self.vip.pubsub.publish(
                 peer="pubsub",
@@ -862,7 +883,6 @@ class FLAMECommsAgent(Agent):
                         topic=self._config['load_report_topic'],
                         headers={},
                         message=msg)
-
                 for xx in range(0, len(lr.loadSchedule)):
                     msg = {"Load": {"Readings": [lr.loadSchedule.index[xx],
                                                  float(lr.loadSchedule["value"][xx])],
