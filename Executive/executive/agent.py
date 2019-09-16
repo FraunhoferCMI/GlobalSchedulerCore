@@ -618,7 +618,8 @@ class ExecutiveAgent(Agent):
                 end_str = end.strftime(TIME_FORMAT)
                 snapshot, n_pts = HistorianTools.query_data(self, 'datalogger/Snapshot23/System', st_str, end_str, max_count=24)
 
-                if n_pts != 24:  # insufficient data found in database, use fixed threshold
+                use_preset_threshold = False
+                if (n_pts != 24) | (use_preset_threshold==False):  # insufficient data found in database, use fixed threshold
                     _log.debug('Update Peaker:'+ str(n_pts)+' retrieved - using default')
                     self.peaker_tariffs["daily_threshold"][today] = PEAKER_THRESHOLD
                 else:

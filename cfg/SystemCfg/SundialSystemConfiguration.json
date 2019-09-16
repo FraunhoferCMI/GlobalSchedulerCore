@@ -15,7 +15,7 @@
       },
       {
         "FcnName": "DemandChargeObjectiveFunction",
-        "params": "desc='DemandCharge', cost_per_kW=10.0, threshold = 200, tariff_key='system_tariff'",
+        "params": "desc='DemandCharge', cost_per_kW=20.0, threshold = 200, tariff_key='system_tariff'",
         "Use": "Y"
       },
       {
@@ -30,8 +30,8 @@
       },
       {
         "FcnName": "LoadShapeObjectiveFunction",
-        "params": "desc='LoadShape', fname='loadshape_prices.xlsx', vble_price=True",
-        "Use": "N"
+        "params": "desc='LoadShape', fname='loadshape_prices.xlsx', vble_price=False",
+        "Use": "Y"
       },
       {
         "FcnName": "DynamicLoadShapeObjectiveFunction",
@@ -40,13 +40,13 @@
       },
       {
         "FcnName": "PeakerPlantObjectiveFunction",
-        "params": "desc='DemandCharge', cost_per_kW=20.0, threshold=0, daily_threshold=[0,0,0,0,0,0], peaker_start=19, peaker_end=22, use_daily_threshold=True, tariff_key='peaker_tariff'",
-        "Use": "Y"
+        "params": "desc='Peaker', cost_per_kW=20.0, threshold=0, daily_threshold=[0,0,0,0,0,0], peaker_start=19, peaker_end=22, use_daily_threshold=True, tariff_key='peaker_tariff'",
+        "Use": "N"
       },
       {
         "FcnName": "EnergyTargetObjectiveFunction",
         "params": "desc='EnergyTarget'",
-        "Use": "Y"
+        "Use": "N"
       }
     ],
     "VirtualPlantList": [
@@ -102,6 +102,11 @@
           {
             "FcnName": "StoredEnergyValueObjectiveFunction",
             "params": "desc='StorageValue'",
+            "Use": "N"
+          },
+          {
+            "FcnName": "BatteryLossModelObjectiveFunction",
+            "params": "desc='BatteryUsage'",
             "Use": "Y"
           }
         ],
