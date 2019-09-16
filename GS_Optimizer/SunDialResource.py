@@ -145,7 +145,7 @@ class SundialResourceProfile():
         self.sundial_resources = sundial_resources
 
         self.cost = 0.0
-        self.total_cost = self.calc_cost()
+        self.total_cost = self.calc_cost(print_results=True)
 
     ##############################################################################
     def copy_profile(self, source):
@@ -154,7 +154,7 @@ class SundialResourceProfile():
         self.total_cost = source.total_cost
 
     ##############################################################################
-    def calc_cost(self):
+    def calc_cost(self, print_results=False):
         """
         Calculates cost of implementing the associated demand profile.  The cost of implementing a demand
         profile is calculated by recursively traversing the sundial resource tree, and for each resource, passing the
@@ -170,7 +170,6 @@ class SundialResourceProfile():
         total_cost = 0.0
         for virtual_plant in self.virtual_plants:
             total_cost += virtual_plant.calc_cost()
-
         self.cost = self.sundial_resources.calc_cost(self.state_vars)
 
         total_cost += self.cost
@@ -775,19 +774,22 @@ class SundialResource():
 
 
     ############################
-    def calc_cost(self, profile_state_vars, linear_approx = False):
+    def calc_cost(self, profile_state_vars, linear_approx = False, print_results=False):
         """
         Loops through each of the SundialResource's objective functions, calculates cost for the given profile
         :param profile: profile is a time-series list of values
         :return:
         """
-
+        use_weighted_avg_cost = False
         cost = 0 #[]
         for obj_fcn in self.obj_fcns:
             if linear_approx == False:
                 # print("PROFILE_STATE_VARS") # cost.append(obj_fcn.obj_fcn_cost(profile))
                 # print(profile_state_vars) # cost.append(obj_fcn.obj_fcn_cost(profile))
-                cost += obj_fcn.obj_fcn_cost(profile_state_vars) # cost.append(obj_fcn.obj_fcn_cost(profile))
+                if use_weighted_avg_cost == False:
+                    cost += obj_fcn.obj_fcn_cost(profile_state_vars) # cost.append(obj_fcn.obj_fcn_cost(profile))
+                else:
+                    cost += obj_fcn.obj_fcn_weighted_avg_cost(profile_state_vars)  # cost.append(obj_fcn.obj_fcn_cost(profile))
             else:
                 cost += obj_fcn.get_linear_approximation(profile_state_vars)  # cost.append(obj_fcn.obj_fcn_cost(profile))
 
@@ -860,7 +862,11 @@ class ESSResource(SundialResource):
         self.state_vars["MinSOE_kWh"] = min_soe
         self.state_vars["SOE_kWh"]    = init_SOE
         self.state_vars["DemandForecast_kW"] = numpy.array(demand_forecast)
-        self.state_vars["DemandForecast_t"]  = t
+        self.state_vars["OrigDemandForecast_t_str"]  = t
+        self.state_vars["DemandForecast_t"]          = [datetime.strptime(ts,
+                                                                          "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)
+                                                        for ts in t]
+
         self.state_vars["EnergyAvailableForecast_kWh"] = numpy.array([self.state_vars["SOE_kWh"]]*SSA_PTS_PER_SCHEDULE)
         self.state_vars["ChgEff"]    = chg_eff
         self.state_vars["DischgEff"] = dischg_eff
