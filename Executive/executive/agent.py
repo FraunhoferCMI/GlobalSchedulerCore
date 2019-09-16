@@ -555,6 +555,7 @@ class ExecutiveAgent(Agent):
                                "peaker_start": 19,
                                "peaker_end": 22}
 
+        self.target_schedule_initialized = False
         #indices = [numpy.argmin(
         #    numpy.abs(
         #        numpy.array([pandas.Timestamp(t).replace(tzinfo=pytz.UTC).to_pydatetime() for t in self.energy_price_data.index]) -
@@ -1204,11 +1205,98 @@ class ExecutiveAgent(Agent):
                 _log.info(ts_str+": "+str(self.strategic_sdr['System'].schedule_vars["DemandForecast_kW"][ii]))
 
 
+    ##############################################################################
+    @Core.periodic(GENERATE_TARGET_SCHEDULE)
+    def generate_target_schedule(self):
+        cur_time = datetime.utcnow().replace(second=0, minute=0, microsecond=0)
+        if (USE_TARGET_SCHEDULE == True) & (self.OperatingMode != EXEC_STARTING):
+            self.publish_sundial_state_cnt = 0  # force to zero to make sure this gets published
+            fname_fullpath  = get_gs_path("GS_Optimizer/", "myloadshape.csv")
+            fname_fullpath2 = get_gs_path("GS_Optimizer/", "MostRecentTgt.csv")
+
+            _log.info('***********************************************************************************************')
+            _log.info('*** RUNNING TARGET SCHEDULE ****')
+
+            # if it's the first hour since the GS started and we are within the target window, generate a load shape
+            # starting at the current hour through the end of the window.
+            # Otherwise: if the next hour is the start of the target window, generate a new load shape
+            # If the next hour is not the start of the target window, update load shape.
+            #if self.target_schedule_initialized == False:
+            #    self.target_schedule_initialized = True
+
+
+            if (0):
+                generate_new_schedule = False
+
+                if ((self.target_schedule_initialize==False) &
+                    ((cur_time.hour>=TARGET_HR_START) & (cur_time.hour<TARGET_HR_START+TARGET_HOURS))):
+                    generate_new_schedule = True
+                    cur_time_offset = 0
+                    self.target_schedule_initialize == True
+                else:
+                    cur_time_offset = 1
+
+            if (cur_time.hour + 1 == TARGET_HR_START):
+                _log.info("********Generating New Target Load Shape********")
+
+                self.update_sundial_resources(self.strategic_sdr,
+                                              update_forecasts = False)
+                self.run_optimizer(self.strategic_sdr, run_optimization=False)
+
+                weights = [0.0]*len(self.strategic_sdr['SDR'].schedule_vars['DemandForecast_kW'])
+                weights[0:TARGET_HOURS] = [10]*TARGET_HOURS
+
+                new_load_shape = pandas.DataFrame(data={'0': self.strategic_sdr['SDR'].schedule_vars['DemandForecast_kW'],
+                                                        '1': weights},
+                                                  index=self.strategic_sdr['SDR'].schedule_vars['timestamp'])
+                _log.info(new_load_shape)
+                new_load_shape.to_csv(fname_fullpath)
+                new_load_shape.to_csv(fname_fullpath2)
+
+            else:
+                # generate a new load shape as follows
+                # (1) Read the old load shape file
+                # (2) Extract the slice from now to the end...
+                # (3)
+                # (4)
+                _log.info("********Updating Target Load Shape********")
+                orig_load_shape = pd.read_csv(fname_fullpath, index_col=0)
+                orig_load_shape.index = pd.to_datetime(orig_load_shape.index)
+                tmp = orig_load_shape.loc[orig_load_shape.index >= cur_time+timedelta(hours=1)]
+
+                # create a dataframe of padding to fill out the optimization window
+                # data is irrelevant (as weights will be zero)
+                st_ind  = orig_load_shape.index[0] + timedelta(hours=len(tmp))    # gives start index for the padding
+                pad = len(orig_load_shape) - len(tmp)
+                ind = [(timedelta(hours=v) + st_ind) for v in range(0, pad)]
+                weights = [0.0] * pad
+                tgt     = [0.0] * pad
+                pad_df = pd.DataFrame(data={'0': tgt, '1': weights}, index=ind)
+                new_load_shape = pd.concat([tmp, pad_df])
+                new_load_shape.to_csv(fname_fullpath)
+                _log.info(new_load_shape)
+
+                # what to do if we start optimizer DURING the window?
+
+
+
+            for ii in range(0,len(self.strategic_sdr['System'].schedule_vars["DemandForecast_kW"])):
+                ts = self.strategic_sdr['System'].schedule_vars["timestamp"][ii] #+ timedelta(minutes=SSA_SCHEDULE_RESOLUTION*ii/SIM_HRS_PER_HR)
+                ts_str = ts.strftime("%Y-%m-%dT%H:%M:%S")
+                HistorianTools.publish_data(self,
+                                            self.strategic_sdr['path']+"SystemResource/Schedule",
+                                            default_units["DemandForecast_kW"],
+                                            "StrategicSchedule_kW",
+                                            self.strategic_sdr['System'].schedule_vars["DemandForecast_kW"][ii],
+                                            TimeStamp_str=ts_str,
+                                            ref_time=self.gs_start_time)
+                _log.info(ts_str+": "+str(self.strategic_sdr['System'].schedule_vars["DemandForecast_kW"][ii]))
+
 
 
     ##############################################################################
     #@Core.periodic(GS_SCHEDULE)
-    def run_optimizer(self, sdr_dict):
+    def run_optimizer(self, sdr_dict, run_optimization=True):
         """
         runs optimizer on specified schedule
         assumes that self.sundial_resources has up to date information from end point
@@ -1289,7 +1377,8 @@ class ExecutiveAgent(Agent):
                         _log.info("*** New Optimization Pass: New load options pending - Search Multiple!! ****")
                         self.optimizer.search_load_shift_options(sdr_dict['SDR'],
                                                                  sdr_dict['LoadShift'],
-                                                                 schedule_timestamps) # SSA optimization - search load shift space
+                                                                 schedule_timestamps,
+                                                                 run_optimization=run_optimization) # SSA optimization - search load shift space
                         self.send_loadshift_commands()
                     else:
                         _log.info("*** New Optimization Pass: No New load options pending! ****")
@@ -1298,7 +1387,8 @@ class ExecutiveAgent(Agent):
                 else:
                     _log.info("*** New Optimization Pass: Load Shift disabled! ****")
                     self.optimizer.search_single_option(sdr_dict['SDR'],
-                                                        schedule_timestamps)  # SSA optimization - single pass
+                                                        schedule_timestamps,
+                                                        run_optimization=run_optimization)  # SSA optimization - single pass
 
                 self.publish_schedules(sdr_dict)
                 self.send_ess_commands()
