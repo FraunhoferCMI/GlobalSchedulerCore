@@ -83,8 +83,8 @@ EXECUTIVE_STATUS_PUBLICATION_INTERVAL = 10
 
 ####################################
 ### Some basic device and objective fcn configuration options:
-DEMAND_CHARGE_THRESHOLD = 0 #300 #250
-UPDATE_THRESHOLD = True
+DEMAND_CHARGE_THRESHOLD = 425 #300 #250
+UPDATE_THRESHOLD = False
 UPDATE_PEAKER_THRESHOLD = True
 PEAKER_THRESHOLD = -500
 
