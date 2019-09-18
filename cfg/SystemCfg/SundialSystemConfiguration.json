@@ -31,12 +31,12 @@
       {
         "FcnName": "LoadShapeObjectiveFunction",
         "params": "desc='LoadShape', fname='loadshape_prices.xlsx', vble_price=False",
-        "Use": "Y"
+        "Use": "N"
       },
       {
         "FcnName": "DynamicLoadShapeObjectiveFunction",
         "params": "desc='LoadShape', fname='myloadshape.csv', vble_price=True",
-        "Use": "N"
+        "Use": "Y"
       },
       {
         "FcnName": "PeakerPlantObjectiveFunction",
@@ -46,7 +46,7 @@
       {
         "FcnName": "EnergyTargetObjectiveFunction",
         "params": "desc='EnergyTarget'",
-        "Use": "N"
+        "Use": "Y"
       }
     ],
     "VirtualPlantList": [
