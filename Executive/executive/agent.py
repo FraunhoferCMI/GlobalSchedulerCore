@@ -1213,7 +1213,8 @@ class ExecutiveAgent(Agent):
         if (USE_TARGET_SCHEDULE == True) & (self.OperatingMode != EXEC_STARTING):
             self.publish_sundial_state_cnt = 0  # force to zero to make sure this gets published
             fname_fullpath  = get_gs_path("GS_Optimizer/", "myloadshape.csv")
-            fname_fullpath2 = get_gs_path("GS_Optimizer/", "MostRecentTgt.csv")
+            archive_fname   = "MostRecentTgt-"+cur_time.strftime("%Y-%m-%d")+".csv"
+            fname_fullpath2 = get_gs_path("GS_Optimizer/", archive_fname) #"MostRecentTgt.csv")
 
             _log.info('***********************************************************************************************')
             _log.info('*** RUNNING TARGET SCHEDULE ****')
@@ -1237,7 +1238,7 @@ class ExecutiveAgent(Agent):
                 else:
                     cur_time_offset = 1
 
-            if (cur_time.hour + 1 == TARGET_HR_START):
+            if (cur_time.hour + 4 == TARGET_HR_START):
                 _log.info("********Generating New Target Load Shape********")
 
                 self.update_sundial_resources(self.strategic_sdr,
@@ -1245,7 +1246,7 @@ class ExecutiveAgent(Agent):
                 self.run_optimizer(self.strategic_sdr, run_optimization=False)
 
                 weights = [0.0]*len(self.strategic_sdr['SDR'].schedule_vars['DemandForecast_kW'])
-                weights[0:TARGET_HOURS] = [10]*TARGET_HOURS
+                weights[3:3+TARGET_HOURS] = [20]*TARGET_HOURS
 
                 new_load_shape = pandas.DataFrame(data={'0': self.strategic_sdr['SDR'].schedule_vars['DemandForecast_kW'],
                                                         '1': weights},
