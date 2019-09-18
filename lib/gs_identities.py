@@ -102,8 +102,9 @@ DEMAND_ADJUST = 1.0
 
 USE_TARGET_SCHEDULE = True
 GENERATE_TARGET_SCHEDULE = 3600
-TARGET_HR_START = 16
-TARGET_HOURS = 4
+TARGET_START_HR  = 16
+TARGET_TRIGGER_HR = 10
+TARGET_HOURS = 6
 
 #######################################################
 ## Constants, do not edit

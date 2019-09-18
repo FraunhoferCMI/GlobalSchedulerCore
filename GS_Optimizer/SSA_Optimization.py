@@ -606,7 +606,13 @@ class SimulatedAnnealer():
 def update_loadshape(cur_time, optimizer, schedule_timestamps, sundial_resources):
     loadshape_file = 'myloadshape.csv'
 
-    if (cur_time.hour == TARGET_HR_START):
+    pre_trigger_hours = [v for v in range(0, TARGET_TRIGGER_HR + 1)]
+    pre_trigger_hours.extend([v for v in range(TARGET_START_HR + TARGET_HOURS, 24)])
+    trigger_hours = [v for v in range(TARGET_TRIGGER_HR + 1, TARGET_START_HR + TARGET_HOURS)]
+    trigger_hours = [(v - 23) if v > 23 else v for v in trigger_hours]
+
+    #if (cur_time.hour == TARGET_HR_START):
+    if (cur_time.hour in pre_trigger_hours):
         _log.info('****** Generating new load shape target ******')
 
         sundial_resources.interpolate_forecast(schedule_timestamps)
@@ -616,7 +622,9 @@ def update_loadshape(cur_time, optimizer, schedule_timestamps, sundial_resources
         optimizer.search_single_option(sundial_resources, schedule_timestamps, run_optimization=False)
 
         weights = [0.0] * len(sundial_resources.schedule_vars['DemandForecast_kW'])
-        weights[0:TARGET_HOURS] = [10] * TARGET_HOURS
+        weights[TARGET_START_HR:TARGET_START_HR + TARGET_HOURS] = [20.0 for v in range(0, TARGET_HOURS)]
+        weights = weights[cur_time.hour:] + weights[:cur_time.hour]
+        #weights[0:TARGET_HOURS] = [10] * TARGET_HOURS
 
         new_load_shape = pandas.DataFrame(data={'0': sundial_resources.schedule_vars['DemandForecast_kW'],
                                '1': weights},
@@ -624,9 +632,8 @@ def update_loadshape(cur_time, optimizer, schedule_timestamps, sundial_resources
         _log.info('********* New Load Shape is: *****')
         _log.info(new_load_shape)
         new_load_shape.to_csv(loadshape_file)
-        new_load_shape.to_csv('MostRecentTgt.csv')
-
-
+        archive_fname = "MostRecentTgt-" + cur_time.strftime("%Y-%m-%dT%H:00:00") + ".csv"
+        new_load_shape.to_csv(archive_fname)
 
     else:
         # generate a new load shape as follows
@@ -640,7 +647,7 @@ def update_loadshape(cur_time, optimizer, schedule_timestamps, sundial_resources
         print(orig_load_shape.index[0])
         print(cur_time)
         if (cur_time >= orig_load_shape.index[0]) & (cur_time <= orig_load_shape.index[len(orig_load_shape)-1]):
-            tmp = orig_load_shape.loc[orig_load_shape.index >= cur_time]
+            tmp = orig_load_shape.loc[orig_load_shape.index >= cur_time + timedelta(hours=1)]
 
             # create a dataframe of padding to fill out the optimization window
             # data is irrelevant (as weights will be zero)
@@ -1099,7 +1106,7 @@ if __name__ == '__main__':
 
     if SET_TIME == True:
         shift_to_start_of_day = False
-        gs_start_time = datetime(2019,7,22,15)
+        gs_start_time = datetime(2019,7,22,4)
     else:
         gs_start_time = datetime.utcnow().replace(microsecond=0)
         if shift_to_start_of_day == True:
@@ -1130,4 +1137,4 @@ if __name__ == '__main__':
         sundial_resources   = get_dispatch_schedule(gs_start_time,
                                                     "../cfg/SystemCfg/EmulatedSundialSystemConfiguration.json",
                                                     shift_to_start_of_day,
-                                                    nIterations=10)
+                                                    nIterations=25)

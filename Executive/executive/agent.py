@@ -1226,19 +1226,25 @@ class ExecutiveAgent(Agent):
             #if self.target_schedule_initialized == False:
             #    self.target_schedule_initialized = True
 
+            pre_trigger_hours = [v for v in range(0, TARGET_TRIGGER_HR+1)]
+            pre_trigger_hours.extend([v for v in range(TARGET_START_HR + TARGET_HOURS, 24)])
+            trigger_hours = [v for v in range(TARGET_TRIGGER_HR+1,TARGET_START_HR+TARGET_HOURS)]
+            trigger_hours = [(v - 23) if v > 23 else v for v in trigger_hours]
+
 
             if (0):
                 generate_new_schedule = False
 
                 if ((self.target_schedule_initialize==False) &
-                    ((cur_time.hour>=TARGET_HR_START) & (cur_time.hour<TARGET_HR_START+TARGET_HOURS))):
+                    ((cur_time.hour>=TARGET_START_HR) & (cur_time.hour<TARGET_START_HR+TARGET_HOURS))):
                     generate_new_schedule = True
                     cur_time_offset = 0
                     self.target_schedule_initialize == True
                 else:
                     cur_time_offset = 1
 
-            if (cur_time.hour + 4 == TARGET_HR_START):
+            if (cur_time.hour in pre_trigger_hours):
+            #if (cur_time.hour == TARGET_TRIGGER_HR):
                 _log.info("********Generating New Target Load Shape********")
 
                 self.update_sundial_resources(self.strategic_sdr,
@@ -1246,7 +1252,9 @@ class ExecutiveAgent(Agent):
                 self.run_optimizer(self.strategic_sdr, run_optimization=False)
 
                 weights = [0.0]*len(self.strategic_sdr['SDR'].schedule_vars['DemandForecast_kW'])
-                weights[3:3+TARGET_HOURS] = [20]*TARGET_HOURS
+                weights[TARGET_START_HR:TARGET_START_HR + TARGET_HOURS] = [20.0 for v in range(0, TARGET_HOURS)]
+                weights = weights[cur_time.hour:] + weights[:cur_time.hour]
+                #weights[3:3+TARGET_HOURS] = [20]*TARGET_HOURS
 
                 new_load_shape = pandas.DataFrame(data={'0': self.strategic_sdr['SDR'].schedule_vars['DemandForecast_kW'],
                                                         '1': weights},

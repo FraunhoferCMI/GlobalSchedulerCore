@@ -396,10 +396,10 @@ class EnergyTargetObjectiveFunction(ObjectiveFunction):
                                           13: (300, -0.6),
                                           18: (930, -3.0)}
         else:
-            if TARGET_HR_START == 0:
+            if TARGET_START_HR == 0:
                  hr = 23
             else:
-                 hr = TARGET_HR_START-1
+                 hr = TARGET_START_HR-1
             self.init_params['Target'] = {hr: (500, -10.0)}
 
     def obj_fcn_cfg(self, **kwargs):
