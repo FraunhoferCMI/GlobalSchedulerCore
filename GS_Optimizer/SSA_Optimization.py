@@ -223,7 +223,7 @@ class SimulatedAnnealer():
 
 
     ############################
-    def run_ssa_optimization(self, sundial_resources, timestamps):
+    def run_ssa_optimization(self, sundial_resources, timestamps, run_optimization=True):
 
         """
         Executes simulated Annealing optimization algorithm.
@@ -294,7 +294,7 @@ class SimulatedAnnealer():
         schedule_var data points are valid
         :return: None
         """
-        run_optimization = True
+        #run_optimization = True
         use_recursive    = False
 
         # get an initial set of commands to seed the ssa process
@@ -518,7 +518,7 @@ class SimulatedAnnealer():
         return least_cost_soln
 
     ############################
-    def search_single_option(self, sundial_resources, timestamps):
+    def search_single_option(self, sundial_resources, timestamps, run_optimization=True):
         """
         searches a single load shape to find a least cost solution.
         It is assumed that load shift options are not available
@@ -526,7 +526,7 @@ class SimulatedAnnealer():
         :param timestamps: schedule time stamps
         :return: None
         """
-        least_cost_soln = self.run_ssa_optimization(sundial_resources, timestamps)
+        least_cost_soln = self.run_ssa_optimization(sundial_resources, timestamps, run_optimization=run_optimization)
         # exports least_cost_soln to sundial_resources.schedule_vars
         if (self.persist_lowest_cost == 0):
             _log.info("SSA: New set of timestamps - generating new solution")
@@ -603,6 +603,71 @@ class SimulatedAnnealer():
         loadshift_resources.schedule_vars["SelectedProfile"] = loadshift_resources.state_vars["IDList"][lcs_ind]
 
 
+def update_loadshape(cur_time, optimizer, schedule_timestamps, sundial_resources):
+    loadshape_file = 'myloadshape.csv'
+
+    pre_trigger_hours = [v for v in range(0, TARGET_TRIGGER_HR + 1)]
+    pre_trigger_hours.extend([v for v in range(TARGET_START_HR + TARGET_HOURS, 24)])
+    trigger_hours = [v for v in range(TARGET_TRIGGER_HR + 1, TARGET_START_HR + TARGET_HOURS)]
+    trigger_hours = [(v - 23) if v > 23 else v for v in trigger_hours]
+
+    #if (cur_time.hour == TARGET_HR_START):
+    if (cur_time.hour in pre_trigger_hours):
+        _log.info('****** Generating new load shape target ******')
+
+        sundial_resources.interpolate_forecast(schedule_timestamps)
+        sundial_resources.interpolate_soe(schedule_timestamps, cur_time)
+
+        sundial_resources.cfg_cost(schedule_timestamps)
+        optimizer.search_single_option(sundial_resources, schedule_timestamps, run_optimization=False)
+
+        weights = [0.0] * len(sundial_resources.schedule_vars['DemandForecast_kW'])
+        weights[TARGET_START_HR:TARGET_START_HR + TARGET_HOURS] = [20.0 for v in range(0, TARGET_HOURS)]
+        weights = weights[cur_time.hour:] + weights[:cur_time.hour]
+        #weights[0:TARGET_HOURS] = [10] * TARGET_HOURS
+
+        new_load_shape = pandas.DataFrame(data={'0': sundial_resources.schedule_vars['DemandForecast_kW'],
+                               '1': weights},
+                         index=sundial_resources.schedule_vars['timestamp'])
+        _log.info('********* New Load Shape is: *****')
+        _log.info(new_load_shape)
+        new_load_shape.to_csv(loadshape_file)
+        archive_fname = "MostRecentTgt-" + cur_time.strftime("%Y-%m-%dT%H:00:00") + ".csv"
+        new_load_shape.to_csv(archive_fname)
+
+    else:
+        # generate a new load shape as follows
+        # (1) Read the old load shape file
+        # (2) Extract the slice from now to the end...
+        # (3)
+        # (4)
+        orig_load_shape = pandas.read_csv(loadshape_file, index_col=0)
+        orig_load_shape.index = pandas.to_datetime(orig_load_shape.index)
+        orig_load_shape.index = orig_load_shape.index.tz_localize('UTC')
+        print(orig_load_shape.index[0])
+        print(cur_time)
+        if (cur_time >= orig_load_shape.index[0]) & (cur_time <= orig_load_shape.index[len(orig_load_shape)-1]):
+            tmp = orig_load_shape.loc[orig_load_shape.index >= cur_time + timedelta(hours=1)]
+
+            # create a dataframe of padding to fill out the optimization window
+            # data is irrelevant (as weights will be zero)
+            st_ind = orig_load_shape.index[0] + timedelta(hours=len(tmp))  # gives start index for the padding
+            pad = len(orig_load_shape) - len(tmp)
+            ind = [(timedelta(hours=v) + st_ind) for v in range(0, pad)]
+        else:
+            # existing load shape file is stale - make a new one:
+            tmp = None
+            pad = len(orig_load_shape)
+            ind = [(timedelta(hours=v) + cur_time) for v in range(0, pad)]
+
+        weights = [0.0] * pad
+        tgt = [0.0] * pad
+        pad_df = pandas.DataFrame(data={'0': tgt, '1': weights}, index=ind)
+        new_load_shape = pandas.concat([tmp, pad_df])
+        print(new_load_shape)
+        new_load_shape.to_csv(loadshape_file)
+
+
 def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=60, nIterations=1):
     if shift_to_start_of_day == True:
         gs_start_time = gs_start_time.replace(hour=0, minute=0, second=0)
@@ -611,9 +676,17 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
 
     resource_cfg_list = json.load(open(cfg_file, 'r'))
     sundial_resources = SundialSystemResource(resource_cfg_list, gs_start_time_str)
-    load_scenarios(sundial_resources, gs_start_time)
     system_tariff = {"threshold": 0} #DEMAND_CHARGE_THRESHOLD}
+    #noimport_tariff = {"threshold": 0} #DEMAND_CHARGE_THRESHOLD}
     solarPlusStorage_tariff = {"threshold": 150}
+
+    ess_resources = sundial_resources.find_resource_type("ESSCtrlNode")[0]
+    pv_resources  = sundial_resources.find_resource_type("PVCtrlNode")[0]
+    try:
+        load_resources  = sundial_resources.find_resource_type("Load")[0]
+    except:
+        load_resources = []
+
 
     ##### This section replicates the periodic call of the optimizer ######
     # calls the actual optimizer.
@@ -622,19 +695,22 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
     optimizer = SimulatedAnnealer()
     last_forecast_start = datetime(1900, 1, 1, tzinfo=pytz.UTC)
 
-    today_peak = 0 #-150
-    tomorrow_peak = 0 #50
+
+    init_peak  = -500
+    today_peak = init_peak # 150*1.2 #-150
+    tomorrow_peak = init_peak #0 #50
+    daily_thresholds = [0] * 7
 
     _log.info("Starting optimization")
     for ii in range(0,nIterations):
         cur_time = gs_start_time.replace(tzinfo=pytz.UTC)+timedelta(minutes=toffset)
+        print(cur_time)
 
+        # configure tariffs
         today = cur_time.weekday()
         tomorrow = (cur_time + timedelta(days=1)).weekday()
-
-        daily_thresholds = [0]*7
         daily_thresholds[tomorrow] = tomorrow_peak
-        daily_thresholds[today] = today_peak
+        daily_thresholds[today]    = today_peak
 
         peaker_tariff = {'threshold': 0,
                          'daily_threshold': daily_thresholds,
@@ -642,7 +718,7 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
                          'peaker_end': 22}
 
         if ALIGN_SCHEDULES == True:
-            if sundial_resources.schedule_vars["schedule_kW"] == {}:
+            if (sundial_resources.schedule_vars["schedule_kW"] == {}) | (1):
                 schedule_start_time = cur_time.replace(minute=0, second=0)
             else:
                 schedule_start_time = cur_time.replace(minute=0, second=0) + timedelta(hours=1)
@@ -653,50 +729,119 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
                                timedelta(minutes=t) for t in range(0,
                                                                    SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
                                                                    SSA_SCHEDULE_RESOLUTION)]
-        print(schedule_timestamps)
 
-        try:
-            try:
-                loadshift_resources = sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
-            except:
-                loadshift_resources = []
-
-            print("load shift options")
-            print(loadshift_resources.state_vars["LoadShiftOptions_kW"])
-            print(loadshift_resources.state_vars["OrigLoadShiftOptions_t_str"])
-        except:
-            pass
-        sundial_resources.interpolate_forecast(schedule_timestamps)
-        sundial_resources.interpolate_soe(schedule_timestamps, cur_time)
-
-        if sundial_resources.state_vars["DemandForecast_kW"][0] != None:
-            if ALIGN_SCHEDULES == True:
-                forecast_start = schedule_timestamps[0]
-            else:
-                pv_resources = sundial_resources.find_resource_type("PVCtrlNode")[0]
-                forecast_start = datetime.strptime(pv_resources.state_vars["OrigDemandForecast_t_str"][0],
-                                                   "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)
-
-            if forecast_start == last_forecast_start:
-                optimizer.persist_lowest_cost = 1
-            else:
-                optimizer.persist_lowest_cost = 0
-            last_forecast_start = forecast_start
-
-            sundial_resources.cfg_cost(schedule_timestamps,
-                                       system_tariff = system_tariff,
-                                       solarPlusStorage_tariff = solarPlusStorage_tariff,
-                                       peaker_tariff = peaker_tariff)
-
-            if SEARCH_LOADSHIFT_OPTIONS == True:
-                optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
-            else:
-                optimizer.search_single_option(sundial_resources, schedule_timestamps)
+        #load_scenarios(sundial_resources, gs_start_time)
+        if ii==0:
+            load_scenarios(sundial_resources, cur_time)
         else:
-            _log.info("No valid forecasts found - skipping")
+            load_scenarios(sundial_resources, cur_time, soe_init = sundial_resources.schedule_vars['EnergyAvailableForecast_kWh'][0])
 
-        today_peak+=0 #25
+        print('***** Schedule Time Stamps****')
+        print(schedule_timestamps)
+        print('***************************')
+
+
+        if USE_TARGET_SCHEDULE == True:
+            target_sundial_resources = sundial_resources
+            update_loadshape(cur_time, optimizer, schedule_timestamps, target_sundial_resources)
+
+
+        if (1):
+            try:
+                try:
+                    loadshift_resources = sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
+                except:
+                    loadshift_resources = []
+
+                print("load shift options")
+                print(loadshift_resources.state_vars["LoadShiftOptions_kW"])
+                print(loadshift_resources.state_vars["OrigLoadShiftOptions_t_str"])
+            except:
+                pass
+            sundial_resources.interpolate_forecast(schedule_timestamps)
+            sundial_resources.interpolate_soe(schedule_timestamps, cur_time)
+
+            if sundial_resources.state_vars["DemandForecast_kW"][0] is not None:
+                if ALIGN_SCHEDULES == True:
+                    forecast_start = schedule_timestamps[0]
+                else:
+                    pv_resources = sundial_resources.find_resource_type("PVCtrlNode")[0]
+                    forecast_start = datetime.strptime(pv_resources.state_vars["OrigDemandForecast_t_str"][0],
+                                                       "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.UTC)
+
+                if forecast_start == last_forecast_start:
+                    optimizer.persist_lowest_cost = 1
+                else:
+                    optimizer.persist_lowest_cost = 0
+                last_forecast_start = forecast_start
+
+                sundial_resources.cfg_cost(schedule_timestamps,
+                                           system_tariff = system_tariff,
+                                           solarPlusStorage_tariff = solarPlusStorage_tariff,
+                                           peaker_tariff = peaker_tariff)
+
+                if SEARCH_LOADSHIFT_OPTIONS == True:
+                    optimizer.search_load_shift_options(sundial_resources, loadshift_resources, schedule_timestamps)
+                else:
+                    optimizer.search_single_option(sundial_resources, schedule_timestamps)
+            else:
+                _log.info("No valid forecasts found - skipping")
+
+            if (1):
+                if (cur_time.hour == 23) or (cur_time.hour < peaker_tariff['peaker_start']):
+                    today_peak = init_peak
+                elif ((cur_time.hour >= peaker_tariff['peaker_start']) &
+                      (cur_time.hour <= peaker_tariff['peaker_end'])):
+                    today_peak = max(today_peak, sundial_resources.schedule_vars["DemandForecast_kW"][0])
+            else:
+                today_peak+=0 #25
+            print('End of Cycle - '+str(cur_time))
+
+            cur_energy_df = pandas.DataFrame(data = sundial_resources.schedule_vars['EnergyAvailableForecast_kWh'],
+                                             index=pandas.to_datetime(sundial_resources.schedule_vars["timestamp"]),
+                                             columns=[cur_time])
+            cur_system_df = pandas.DataFrame(data = sundial_resources.schedule_vars['DemandForecast_kW'],
+                                             index=pandas.to_datetime(sundial_resources.schedule_vars["timestamp"]),
+                                             columns=[cur_time])
+            cur_ess_df = pandas.DataFrame(data = ess_resources.schedule_vars['DemandForecast_kW'],
+                                          index=pandas.to_datetime(sundial_resources.schedule_vars["timestamp"]),
+                                          columns=[cur_time])
+            cur_pv_df = pandas.DataFrame(data = pv_resources.schedule_vars['DemandForecast_kW'],
+                                         index=pandas.to_datetime(sundial_resources.schedule_vars["timestamp"]),
+                                         columns=[cur_time])
+            if (1): #try:
+                cur_load_df = pandas.DataFrame(data = load_resources.schedule_vars['DemandForecast_kW'],
+                                               index=pandas.to_datetime(sundial_resources.schedule_vars["timestamp"]),
+                                               columns=[cur_time])
+            else: #except:
+                cur_load_df = pandas.DataFrame([0.0]*24,
+                                               index=pandas.to_datetime(sundial_resources.schedule_vars["timestamp"]),
+                                               columns=[cur_time])
+            cur_cost = pandas.DataFrame(data=[sundial_resources.schedule_vars['total_cost']],
+                                        index=[pandas.to_datetime(cur_time)])
+
+            if ii==0:
+                energy_df = cur_energy_df
+                system_df = cur_system_df
+                ess_df    = cur_ess_df
+                pv_df     = cur_pv_df
+                load_df   = cur_load_df
+                cost      = cur_cost
+            else:
+                energy_df = pandas.concat([energy_df, cur_energy_df], axis=1)
+                system_df = pandas.concat([system_df, cur_system_df], axis=1)
+                ess_df    = pandas.concat([ess_df, cur_ess_df], axis=1)
+                pv_df     = pandas.concat([pv_df, cur_pv_df], axis=1)
+                load_df   = pandas.concat([load_df, cur_load_df], axis=1)
+                cost      = pandas.concat([cost, cur_cost], axis=0)
+
         toffset += tstep
+
+    energy_df.to_csv('energy.csv')
+    system_df.to_csv('system.csv')
+    ess_df.to_csv('ess.csv')
+    pv_df.to_csv('pv.csv')
+    load_df.to_csv('load.csv')
 
     return sundial_resources
 
@@ -801,7 +946,7 @@ def retrieve_init_data(start_time):
     return soe_init, max_chg, max_dis, pv, load
 
 
-def load_scenarios(cur_resource, gs_start_time):
+def load_scenarios(cur_resource, gs_start_time, soe_init=None):
     FROM_DB = True
 
     ess_forecast = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -814,10 +959,14 @@ def load_scenarios(cur_resource, gs_start_time):
                                                                                                SSA_SCHEDULE_DURATION * MINUTES_PER_HR,
                                                                                                SSA_SCHEDULE_RESOLUTION)]
 
+    print('forecast timestamps - ')
+    print(forecast_timestamps)
 
     if FROM_DB == True:
-        soe_init, max_chg, max_dis, pv_forecast, demand_forecast = retrieve_init_data(gs_start_time)
-
+        soe_init_fromdb, max_chg, max_dis, pv_forecast, demand_forecast = retrieve_init_data(gs_start_time)
+        if soe_init is None:
+            soe_init = soe_init_fromdb
+        #demand_forecast=[v*0.5 for v in demand_forecast]
         #demand_forecast = [279.9, 288.1, 356.5, 416.0, 533.3, 554.0,  563.3, 570.4, 573.8, 575.6, 562.8, 558.8,
         # 542.1, 517.9, 472.0,  461.7, 461.8, 413.9, 383.5, 407.7, 373.8, 332.9, 325.1, 302.6] # june 24
 
@@ -826,7 +975,8 @@ def load_scenarios(cur_resource, gs_start_time):
         pass
     else:
         #### Just load with example values - ######
-        soe_init = 500.0
+        if soe_init is None:
+            soe_init = 500.0
         max_chg = 500.0
         max_dis = 500.0
 
@@ -956,7 +1106,7 @@ if __name__ == '__main__':
 
     if SET_TIME == True:
         shift_to_start_of_day = False
-        gs_start_time = datetime(2019,8,22,18)
+        gs_start_time = datetime(2019,7,22,4)
     else:
         gs_start_time = datetime.utcnow().replace(microsecond=0)
         if shift_to_start_of_day == True:
@@ -976,8 +1126,15 @@ if __name__ == '__main__':
         pandas.DataFrame(data={'0': day_ahead_resources.schedule_vars['DemandForecast_kW'],
                                '1': day_ahead_resources.schedule_vars['weights']},
                                  index=day_ahead_resources.schedule_vars['timestamp']).to_csv('myloadshape.csv')
-
-    sundial_resources   = get_dispatch_schedule(gs_start_time,
-                                                "../cfg/SystemCfg/EmulatedSundialSystemConfiguration.json",
-                                                shift_to_start_of_day,
-                                                nIterations=1)
+    run_multiple = False
+    if run_multiple == True:
+        # save state between runs, increment timestep
+        # (a) save the SOE
+        # (b) save tariff info
+        # (c) anything else?
+        pass
+    else:
+        sundial_resources   = get_dispatch_schedule(gs_start_time,
+                                                    "../cfg/SystemCfg/EmulatedSundialSystemConfiguration.json",
+                                                    shift_to_start_of_day,
+                                                    nIterations=25)

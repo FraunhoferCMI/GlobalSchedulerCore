@@ -36,12 +36,12 @@
       {
         "FcnName": "DynamicLoadShapeObjectiveFunction",
         "params": "desc='LoadShape', fname='myloadshape.csv', vble_price=True",
-        "Use": "N"
+        "Use": "Y"
       },
       {
         "FcnName": "PeakerPlantObjectiveFunction",
         "params": "desc='PeakerPlant', cost_per_kW=20.0, threshold=0, daily_threshold=[0,0,0,0,0,0], peaker_start=19, peaker_end=22, use_daily_threshold=True, tariff_key='peaker_tariff'",
-        "Use": "Y"
+        "Use": "N"
       },
       {
         "FcnName": "EnergyTargetObjectiveFunction",
@@ -66,13 +66,13 @@
       {
         "ID": "SystemLoad",
         "ResourceType": "Load",
-        "Use": "N",
+        "Use": "Y",
         "VirtualPlantList": [],
         "DeviceList": [
           {
             "AgentID": "FLAME",
             "DeviceID": "FLAME-Baseline",
-            "Use": "N"
+            "Use": "Y"
           }
         ]
       },
@@ -107,7 +107,7 @@
                     {
             "FcnName": "BatteryLossModelObjectiveFunction",
             "params": "desc='BatteryUsage'",
-            "Use": "Y"
+            "Use": "N"
           }
 
         ],

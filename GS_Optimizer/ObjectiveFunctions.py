@@ -379,21 +379,28 @@ class EnergyTargetObjectiveFunction(ObjectiveFunction):
         self.init_params['TargetHr'] = 18
         #self.init_params['']
         self.init_params['use_multiple_tgts'] = True
-        self.init_params['Target'] = {0: (300, -0.3),
-                                      1: (300, -0.3),
-                                      2: (300, -0.3),
-                                      3: (300, -0.3),
-                                      4: (300, -0.3),
-                                      5: (300, -0.3),
-                                      6: (300, -0.3),
-                                      7: (300, -0.3),
-                                      8: (300, -0.3),
-                                      9: (300, -0.3),
-                                      10: (300, -0.3),
-                                      11: (300, -0.3),
-                                      12: (300, -0.3),
-                                      13: (300, -0.3),
-                                      18: (ESS_MAX, -3.0)}
+        if 0:
+            self.init_params['Target'] = {0: (300, -0.3),
+                                          1: (300, -0.3),
+                                          2: (300, -0.6),
+                                          3: (300, -0.6),
+                                          4: (300, -0.6),
+                                          5: (300, -0.6),
+                                          6: (300, -0.6),
+                                          7: (300, -0.6),
+                                          8: (300, -0.6),
+                                          9: (300, -0.6),
+                                          10: (300, -0.6),
+                                          11: (300, -0.6),
+                                          12: (300, -0.6),
+                                          13: (300, -0.6),
+                                          18: (930, -3.0)}
+        else:
+            if TARGET_START_HR == 0:
+                 hr = 23
+            else:
+                 hr = TARGET_START_HR-1
+            self.init_params['Target'] = {hr: (500, -10.0)}
 
     def obj_fcn_cfg(self, **kwargs):
         print('*******In Energy Target Config!!!@*******')
@@ -605,6 +612,15 @@ class LoadShapeObjectiveFunction(ObjectiveFunction):
     def obj_fcn_cfg(self, **kwargs):
         self.init_params["cur_cost"] = self.lookup_data(kwargs["schedule_timestamps"],
                                                         kwargs["sim_offset"])
+        orig_avg = kwargs['forecast']['DemandForecast_kW'].mean()
+        tgt_avg  = self.init_params['cur_cost'][0].mean()
+        self.init_params['cur_cost'][0] = numpy.array([float(v) for v in self.init_params['cur_cost'][0]])
+
+
+        adjust_loadshape = False
+        if adjust_loadshape == True:
+            self.init_params['cur_cost'][0] = self.init_params['cur_cost'][0] * (orig_avg/tgt_avg)
+
 
         print("Target Load Shape is:")
         print(self.init_params['cur_cost'])
