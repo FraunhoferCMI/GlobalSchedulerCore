@@ -379,7 +379,8 @@ class EnergyTargetObjectiveFunction(ObjectiveFunction):
         self.init_params['TargetHr'] = 18
         #self.init_params['']
         self.init_params['use_multiple_tgts'] = True
-        if 0:
+        case = 2   # 1 = peaker plant; 2 = flat; else = forecast follow
+        if case == 1:
             self.init_params['Target'] = {0: (300, -0.3),
                                           1: (300, -0.3),
                                           2: (300, -0.6),
@@ -395,6 +396,20 @@ class EnergyTargetObjectiveFunction(ObjectiveFunction):
                                           12: (300, -0.6),
                                           13: (300, -0.6),
                                           18: (930, -3.0)}
+        elif case == 2:
+            cost = -0.1
+            self.init_params['Target'] = {1: (300, cost),
+                                          2: (300, cost),
+                                          3: (300, cost),
+                                          4: (300, cost),
+                                          5: (300, cost),
+                                          6: (300, cost),
+                                          7: (300, cost),
+                                          8: (300, cost),
+                                          9: (300, cost),
+                                          10: (300, cost),
+                                          17: (930, -0.6),
+                                          18: (300, cost)}
         else:
             if TARGET_START_HR == 0:
                  hr = 23
