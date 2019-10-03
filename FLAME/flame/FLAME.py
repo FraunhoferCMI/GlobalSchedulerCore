@@ -613,7 +613,7 @@ def read_load_request():
         sys.path.insert(0, os.path.join(gs_root_dir, lsa_path)) #"/Users/mkromer/PycharmProjects/PriceMap"
         import GeneratePriceMap
 
-        price_file = 'Example4_EarlyMiddayPk_48hr.xlsx' #'Example1_MiddayPk_48hr.xlsx'
+        price_file = 'Example5_MiddaySurplus_48hr.xlsx' #'Example4_EarlyMiddayPk_48hr.xlsx' #'Example1_MiddayPk_48hr.xlsx'
         price_filepath = os.path.join(gs_root_dir, lsa_path, price_file)
         #start_time = datetime.now().astimezone(pytz('US/Eastern')).replace(hour=0,minute=0,second=0, tzinfo=None)
         start_time = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
