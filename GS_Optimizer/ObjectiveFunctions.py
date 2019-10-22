@@ -663,6 +663,72 @@ class LoadShapeObjectiveFunction(ObjectiveFunction):
     def get_obj_fcn_data(self):
         return self.init_params["cur_cost"][0].tolist()
 
+##############################################################################
+class HighLowSOEObjectiveFunction(ObjectiveFunction):
+
+    ##############################################################################
+    def __init__(self, desc="", **kwargs): #fname, schedule_timestamps, sim_offset=timedelta(0), desc=""):
+        init_params = {'high_constraint_enable': False,
+                       'low_constraint_enable': True,
+                       'low_cost': 2.0,
+                       'high_cost': 2.0,
+                       'soe_low_lb': 100,
+                       'soe_low_ub': 300,
+                       'soe_high_lb': 700,
+                       'soe_high_ub': 930,}
+        ObjectiveFunction.__init__(self, desc=desc, init_params=init_params, **kwargs)
+
+        self.cost_per_kWh_low = (self.init_params['low_cost']-self.init_params['high_cost'])/\
+                                (self.init_params['soe_low_ub']-self.init_params['soe_low_lb'])
+        self.cost_per_kWh_high = (self.init_params['high_cost'] - self.init_params['low_cost']) / \
+                                 (self.init_params['soe_high_ub'] - self.init_params['soe_high_lb'])
+
+        self.cost = 0.0
+        self.err  = 0.0
+
+
+    ##############################################################################
+    def obj_fcn_cfg(self, **kwargs):
+        print('In High/LOW SOE Constraint Objective: High Constraint - '+
+              str(self.init_params['high_constraint_enable']) +
+              '; Low Constraint - '+ str(self.init_params['low_constraint_enable']) +
+              '; High Cost - ' + str(self.init_params['high_cost']) +
+              '; Low Cost - ' + str(self.init_params['low_cost']))
+
+        print('Cost per kWh High = '+str(self.cost_per_kWh_high)+'; Cost per kWh Low = '+str(self.cost_per_kWh_low))
+
+        soe_low_ub = 300
+        soe_low_lb = 100
+        soe_high_ub = 930
+        soe_high_lb = 700
+
+        low_cost = 2.0
+        high_cost = 10.0
+
+
+
+    ##############################################################################
+    def obj_fcn_cost(self, profile):
+
+        cost = 0
+
+        if (self.init_params['high_constraint_enable'] == True):
+            soe_max = max(profile["EnergyAvailableForecast_kWh"])
+            if (soe_max > self.init_params['soe_high_lb']):
+                cost += ((soe_max-self.init_params['soe_high_ub'])*self.cost_per_kWh_high+self.init_params['high_cost'])*((soe_max-self.init_params['soe_low_lb']))
+
+        if self.init_params['low_constraint_enable'] == True:
+            soe_min = min(profile["EnergyAvailableForecast_kWh"])
+            if (soe_min < self.init_params['soe_low_ub']):
+                cost += ((soe_min-self.init_params['soe_low_lb'])*self.cost_per_kWh_low+self.init_params['high_cost'])*((self.init_params['soe_low_ub']-soe_min))
+                #print('Min SOE = '+str(soe_min)+'; cost = '+str(cost))
+            pass
+        return cost
+
+    ##############################################################################
+    def get_obj_fcn_data(self):
+        pass
+
 
 ##############################################################################
 class DynamicLoadShapeObjectiveFunction(LoadShapeObjectiveFunction):

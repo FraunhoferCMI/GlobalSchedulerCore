@@ -16,12 +16,12 @@
       {
         "FcnName": "DemandChargeObjectiveFunction",
         "params": "desc='DemandCharge', cost_per_kW=100.0, threshold = 200, tariff_key='system_tariff'",
-        "Use": "Y"
+        "Use": "N"
       },
       {
         "FcnName": "MinPeakBFObjectiveFunction",
         "params": "desc='MinimizePeakBF', cost_per_kW=10.0, threshold = 0, tariff_key='minbf_tariff'",
-        "Use": "N"
+        "Use": "Y"
       },
       {
         "FcnName": "dkWObjectiveFunction",
@@ -47,6 +47,11 @@
         "FcnName": "EnergyTargetObjectiveFunction",
         "params": "desc='EnergyTarget'",
         "Use": "Y"
+      },
+      {
+        "FcnName": "HighLowSOEObjectiveFunction",
+        "params": "desc='HighLowSOE', high_constraint_enable=True, low_constraint_enable=True, high_cost=10.0, low_cost=2.0",
+        "Use": "N"
       }
     ],
     "VirtualPlantList": [
@@ -66,13 +71,13 @@
       {
         "ID": "SystemLoad",
         "ResourceType": "Load",
-        "Use": "Y",
+        "Use": "N",
         "VirtualPlantList": [],
         "DeviceList": [
           {
             "AgentID": "FLAME",
             "DeviceID": "FLAME-Baseline",
-            "Use": "Y"
+            "Use": "N"
           }
         ]
       },
