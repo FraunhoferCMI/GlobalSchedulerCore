@@ -168,9 +168,10 @@ class SundialResourceProfile():
         """
         self.cost  = 0.0
         total_cost = 0.0
+
         for virtual_plant in self.virtual_plants:
-            total_cost += virtual_plant.calc_cost()
-        self.cost = self.sundial_resources.calc_cost(self.state_vars)
+            total_cost += virtual_plant.calc_cost(print_results=print_results)
+        self.cost = self.sundial_resources.calc_cost(self.state_vars, print_results=print_results)
 
         total_cost += self.cost
         self.total_cost = total_cost
@@ -787,11 +788,14 @@ class SundialResource():
                 # print("PROFILE_STATE_VARS") # cost.append(obj_fcn.obj_fcn_cost(profile))
                 # print(profile_state_vars) # cost.append(obj_fcn.obj_fcn_cost(profile))
                 if use_weighted_avg_cost == False:
-                    cost += obj_fcn.obj_fcn_cost(profile_state_vars) # cost.append(obj_fcn.obj_fcn_cost(profile))
+                    cur_obj_fcn_cost = obj_fcn.obj_fcn_cost(profile_state_vars) # cost.append(obj_fcn.obj_fcn_cost(profile))
                 else:
-                    cost += obj_fcn.obj_fcn_weighted_avg_cost(profile_state_vars)  # cost.append(obj_fcn.obj_fcn_cost(profile))
+                    cur_obj_fcn_cost = obj_fcn.obj_fcn_weighted_avg_cost(profile_state_vars) # cost.append(obj_fcn.obj_fcn_cost(profile))
             else:
-                cost += obj_fcn.get_linear_approximation(profile_state_vars)  # cost.append(obj_fcn.obj_fcn_cost(profile))
+                cur_obj_fcn_cost = obj_fcn.get_linear_approximation(profile_state_vars)  # cost.append(obj_fcn.obj_fcn_cost(profile))
+            cost += cur_obj_fcn_cost
+            if print_results==True:
+                _log.info("Resource " + self.resource_id + "- Obj Fcn "+obj_fcn.desc+": "+str(cur_obj_fcn_cost))
 
         #cost = 0
         #for fcn in self.obj_fcns:
