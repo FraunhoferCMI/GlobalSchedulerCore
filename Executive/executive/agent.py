@@ -1302,7 +1302,36 @@ class ExecutiveAgent(Agent):
                                             ref_time=self.gs_start_time)
                 _log.info(ts_str+": "+str(self.strategic_sdr['System'].schedule_vars["DemandForecast_kW"][ii]))
 
+    ##############################################################################
+    @Core.periodic(60*10)
+    def email_test(self):
+        import smtplib, ssl
 
+        port = 465  # For SSL
+        password = 'satcon-1' #input("Type your password and press enter: ")
+
+        # Create a secure SSL context
+        context = ssl.create_default_context()
+
+        # with smtplib.SMTP_SSL("localhost", port) as server:  # smtp.gmail.com , context=context)
+        server = smtplib.SMTP_SSL("smtp.gmail.com", port)  # ,context=context)
+        # server = smtplib.SMTP(local_hostname="localhost", port=port)
+        # server.connect(port=port)
+        server.login("mksatcon@gmail.com", password)
+        # TODO: Send email here
+
+        sender_email = "GlobalScheduler@gmail.com"
+        receiver_email = "mksatcon@gmail.com"
+
+
+        cur_time = datetime.now()
+        cur_date = cur_time.date().strftime('%Y-%m-%d')
+        #generation =
+        message = """\
+        Subject: Daily Digest - """ + cur_date + """\
+
+        This message is sent from Python."""
+        server.sendmail(sender_email, receiver_email, message)
 
     ##############################################################################
     #@Core.periodic(GS_SCHEDULE)
