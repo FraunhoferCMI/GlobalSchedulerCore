@@ -550,6 +550,64 @@ class DemandChargeObjectiveFunction(ObjectiveFunction):
         return self.init_params["threshold"]
 
 ##############################################################################
+class EnergyAboveThresholdObjectiveFunction(DemandChargeObjectiveFunction):
+
+    ##############################################################################
+    def obj_fcn_cost(self, profile):
+        """
+        (1) calculate how much energy is expected to be consumed in excess of the threshold = sum(max(forecast-threshold,0))
+        (2) calculate total cost = max(forecast) x cost
+        (3) calculate imputed cost per kWh = energy / cost
+        :param profile:
+        :return:
+        """
+        v = profile["DemandForecast_kW"]-self.init_params["threshold"]
+        energy_above_threshold = v[numpy.where(v > 0)].sum()
+
+        cost_per_kWh = 4.5
+
+        return energy_above_threshold*cost_per_kWh
+
+##############################################################################
+class DelayedDemandChargeObjectiveFunction(DemandChargeObjectiveFunction):
+
+    ##############################################################################
+    def obj_fcn_cost(self, profile):
+        """
+        (1) calculate how much energy is expected to be consumed in excess of the threshold = sum(max(forecast-threshold,0))
+        (2) calculate total cost = max(forecast) x cost
+        (3) calculate imputed cost per kWh = energy / cost
+        :param profile:
+        :return:
+        """
+
+        cost_per_kWh = 0.3
+
+        nPts = len(profile["DemandForecast_kW"])
+
+
+        # the batch version:
+        # (1) multiply
+        if (1):
+            v = profile["DemandForecast_kW"]-self.init_params["threshold"]
+            v[numpy.where(v <= 0)] = 0
+            cnt = 24-numpy.array([ii for ii in range(0, nPts)])
+
+            cost = (v*cnt*cost_per_kWh).sum()
+
+        else:
+            # the iterative version:
+            cost = 0
+            for ii in range(0,nPts):
+                if profile['DemandForecast_kW'][ii] > self.init_params["threshold"]:
+                    cost += (24 - ii) * (profile['DemandForecast_kW'][ii] - self.init_params["threshold"]) * cost_per_kWh
+
+        return cost
+
+
+
+
+##############################################################################
 class MinPeakBFObjectiveFunction(DemandChargeObjectiveFunction):
 
     ##############################################################################
@@ -671,7 +729,7 @@ class HighLowSOEObjectiveFunction(ObjectiveFunction):
         init_params = {'high_constraint_enable': False,
                        'low_constraint_enable': True,
                        'low_cost': 2.0,
-                       'high_cost': 2.0,
+                       'high_cost': 10.0,
                        'soe_low_lb': 100,
                        'soe_low_ub': 300,
                        'soe_high_lb': 700,
