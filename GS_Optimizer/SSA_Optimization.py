@@ -670,7 +670,8 @@ def update_loadshape(cur_time, optimizer, schedule_timestamps, sundial_resources
         new_load_shape.to_csv(loadshape_file)
 
 
-def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=60, nIterations=1, soe_init=None, fname='SystemState.csv'):
+def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=60, nIterations=1, soe_init=None, fname='SystemState.csv',
+                          end_time=datetime(2019,10,17,tzinfo=pytz.timezone('UTC')),optimization_scenario=5, dct=370):
     if shift_to_start_of_day == True:
         gs_start_time = gs_start_time.replace(hour=0, minute=0, second=0)
     gs_start_time_str = gs_start_time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -678,7 +679,7 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
 
     resource_cfg_list = json.load(open(cfg_file, 'r'))
     sundial_resources = SundialSystemResource(resource_cfg_list, gs_start_time_str)
-    system_tariff = {"threshold": 332} #200 #394} #200} #DEMAND_CHARGE_THRESHOLD}
+    system_tariff = {"threshold": dct} #200 #394} #200} #DEMAND_CHARGE_THRESHOLD}  # was 332 # was 370
     #noimport_tariff = {"threshold": 0} #DEMAND_CHARGE_THRESHOLD}
     solarPlusStorage_tariff = {"threshold": 150}
 
@@ -705,10 +706,17 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
 
 
     _log.info("Starting optimization")
+    err_cnt = 0
     for ii in range(0,nIterations):
         _log.info('******** Iteration #'+str(ii))
         cur_time = gs_start_time.replace(tzinfo=pytz.UTC)+timedelta(minutes=toffset)
+        if cur_time >= end_time:
+            break
+
         print(cur_time)
+
+        if (cur_time.day==30) & (cur_time.hour == 0):  # reset at start of the month
+            system_tariff['threshold'] *= 0.85   # 200 #394} #200} #DEMAND_CHARGE_THRESHOLD}
 
         # configure tariffs
         today = cur_time.weekday()
@@ -737,14 +745,14 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
         #load_scenarios(sundial_resources, gs_start_time)
         if ii==0:
             if soe_init is not None:
-                load_scenarios(sundial_resources, cur_time, soe_init=soe_init)
+                res = load_scenarios(sundial_resources, cur_time, soe_init=soe_init, optimization_scenario=optimization_scenario)
             else:
-                load_scenarios(sundial_resources, cur_time)
+                res = load_scenarios(sundial_resources, cur_time, optimization_scenario=optimization_scenario)
                 soe_init = ess_resources.state_vars['SOE_kWh']
                 if soe_init is None:
                     soe_init=500
         else:
-            load_scenarios(sundial_resources, cur_time, soe_init = soe_init)  # was sundial_resources.schedule_vars['EnergyAvailableForecast_kWh'][0]
+            res = load_scenarios(sundial_resources, cur_time, soe_init = soe_init, optimization_scenario=optimization_scenario)  # was sundial_resources.schedule_vars['EnergyAvailableForecast_kWh'][0]
 
 
         print('***** Schedule Time Stamps****')
@@ -757,7 +765,7 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
             update_loadshape(cur_time, optimizer, schedule_timestamps, target_sundial_resources)
 
 
-        if (1):
+        if res == 1: # a valid forecast was found - ok to continue
             try:
                 try:
                     loadshift_resources = sundial_resources.find_resource_type("LoadShiftCtrlNode")[0]
@@ -841,24 +849,33 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
                 PVPlusLoad = pv_actual+load_actual
                 sys_actual = sundial_resources.schedule_vars['DemandForecast_kW'][0]
 
-                ess_actual = min(max(sys_actual - PVPlusLoad,-500),500)
-                eff = 0.93
-                if ess_actual<0:
-                    eff_factor = 1/eff
-                else:
-                    eff_factor = eff
-                soe_actual = soe_init+eff_factor*ess_actual
-                if soe_actual<ESS_MIN*950:
-                    soe_actual = ESS_MIN*950
-                elif soe_actual>ESS_MAX*950:
-                    soe_actual = ESS_MAX*950
-                delta_energy = (soe_actual-soe_init)
+                if ( (math.isnan(pv_actual)==False) & (math.isnan(load_actual)==False)):
+                    ess_actual = min(max(sys_actual - PVPlusLoad,-500),500)
+                    eff = 0.93
+                    if ess_actual<0:
+                        eff_factor = 1/eff
+                    else:
+                        eff_factor = eff
+                    soe_actual = soe_init+eff_factor*ess_actual
+                    if soe_actual<ESS_MIN*950:
+                        soe_actual = ESS_MIN*950
+                    elif soe_actual>ESS_MAX*950:
+                        soe_actual = ESS_MAX*950
+                    delta_energy = (soe_actual-soe_init)
 
-                if delta_energy<0:
-                    ess_actual = delta_energy*eff
+                    if delta_energy<0:
+                        ess_actual = delta_energy*eff
+                    else:
+                        ess_actual = delta_energy/eff
+                    sys_actual = PVPlusLoad+ess_actual
                 else:
-                    ess_actual = delta_energy/eff
-                sys_actual = PVPlusLoad+ess_actual
+                    ess_actual = 0
+                    if err_cnt>10:  # reset value if we've been offline for a long period of time
+                        soe_actual = 700
+                    else:
+                        soe_actual = soe_init
+                    delta_energy = 0
+
 
                 system_tariff['threshold'] = max(system_tariff['threshold'], sys_actual/1.1)
 
@@ -898,29 +915,39 @@ def get_dispatch_schedule(gs_start_time, cfg_file, shift_to_start_of_day, tstep=
                     system_state_df = pandas.concat([system_state_df, cur_system_state_df])
                 system_state_df.to_csv(fname)
                 print(system_state_df)
-            except:
-                _log.info('**** Errror - probably data is unavailable in database?*******')
 
-        if (ii % 25 == 0):  # for debug - periodically publish results
-            energy_df.to_csv('energy.csv')
-            system_df.to_csv('system.csv')
-            ess_df.to_csv('ess.csv')
-            pv_df.to_csv('pv.csv')
-            load_df.to_csv('load.csv')
+                if (ii % 25 == 0):  # for debug - periodically publish results
+                    energy_df.to_csv('energy.csv')
+                    system_df.to_csv('system.csv')
+                    ess_df.to_csv('ess.csv')
+                    pv_df.to_csv('pv.csv')
+                    load_df.to_csv('load.csv')
+
+                err_cnt = 0
+            except:
+                err_cnt+=1
+                _log.info('**** Errror - probably data is unavailable in database?*******')
+        else:
+            err_cnt+=1
+            _log.info('****** Invalid Forecast - Skipping ******* ')
+
 
         toffset += tstep
 
-    energy_df.to_csv('energy.csv')
-    system_df.to_csv('system.csv')
-    ess_df.to_csv('ess.csv')
-    pv_df.to_csv('pv.csv')
-    load_df.to_csv('load.csv')
-    system_state_df.to_csv(fname)
+    try:
+        energy_df.to_csv('energy.csv')
+        system_df.to_csv('system.csv')
+        ess_df.to_csv('ess.csv')
+        pv_df.to_csv('pv.csv')
+        load_df.to_csv('load.csv')
+        system_state_df.to_csv(fname)
+    except:
+        _log.info('Finished - dfs not found - skipping')
 
     return sundial_resources
 
 
-def retrieve_init_data(start_time):
+def retrieve_init_data(start_time, OPTIMIZATION_SCENARIO=5):
     """
     retrieve initial conditions from database, for testing
     :param start_time:
@@ -928,7 +955,7 @@ def retrieve_init_data(start_time):
     """
     import post_process
 
-    OPTIMIZATION_SCENARIO = 1 # 0 = FORECAST; 1 = PERFECT INFORMATION; 5 = FORECAST PV FROM DB / FORECAST LOAD FROM CSV; 2 = ACTUAL RESULTS; 3 = BASELINE (DO NOTHING); 4 = Forecast, based on current hr
+    #OPTIMIZATION_SCENARIO = 5 # 0 = FORECAST; 1 = PERFECT INFORMATION; 5 = FORECAST PV FROM DB / FORECAST LOAD FROM CSV; 2 = ACTUAL RESULTS; 3 = BASELINE (DO NOTHING); 4 = Forecast, based on current hr
 
 
     engine = post_process.createDefaultEngine(credential_path='.my.cnf_replication')
@@ -967,8 +994,15 @@ def retrieve_init_data(start_time):
         load_topic = post_process.parse_topic(topics['topic_id'].loc[topics['topic_name'] == load_topic_name].iloc[0], engine, date_range=date_range)
         pv_topic   = post_process.parse_topic(topics['topic_id'].loc[topics['topic_name'] == pv_topic_name].iloc[0], engine, date_range=date_range)
 
-        load = load_topic['vals'].resample('1H').mean().tolist()
-        pv   = pv_topic['vals'].resample('1H').mean().tolist()
+        if len(load_topic['vals']):
+            load = load_topic['vals'].resample('1H').mean().tolist()
+        else:
+            load = None
+
+        if len(pv_topic['vals']!=0):
+            pv   = pv_topic['vals'].resample('1H').mean().tolist()
+        else:
+            pv = None
         max_chg = 500.0
         max_dis = 500.0
 
@@ -1022,7 +1056,7 @@ def retrieve_init_data(start_time):
 
         pv_topic   = post_process.parse_topic(topics['topic_id'].loc[topics['topic_name'] == pv_topic_name].iloc[0], engine, date_range=date_range)
 
-        loads = pandas.read_csv('ScaledLoadPredictions.csv',index_col=0)
+        loads = pandas.read_csv('ScaledLoadPredictions2.csv',index_col=0)
         loads.index = pandas.to_datetime(loads.index)
 
         load = loads.loc[loads.index==start_time].values[0].tolist()
@@ -1050,8 +1084,9 @@ def retrieve_init_data(start_time):
     return soe_init, max_chg, max_dis, pv, load
 
 
-def load_scenarios(cur_resource, gs_start_time, soe_init=None):
+def load_scenarios(cur_resource, gs_start_time, soe_init=None, optimization_scenario=5):
     FROM_DB = True
+    return_val = 1
 
     ess_forecast = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -1067,9 +1102,16 @@ def load_scenarios(cur_resource, gs_start_time, soe_init=None):
     print(forecast_timestamps)
 
     if FROM_DB == True:
-        soe_init_fromdb, max_chg, max_dis, pv_forecast, demand_forecast = retrieve_init_data(gs_start_time)
+        soe_init_fromdb, max_chg, max_dis, pv_forecast, demand_forecast = retrieve_init_data(gs_start_time, OPTIMIZATION_SCENARIO=optimization_scenario)
         if soe_init is None:
             soe_init = soe_init_fromdb
+        if pv_forecast is None:
+            return_val = 0
+            pv_forecast = [0.0]*24
+        if demand_forecast is None:
+            return_val = 0
+            demand_forecast = [0.0]*24
+
         #demand_forecast=[v*0.5 for v in demand_forecast]
         #demand_forecast = [279.9, 288.1, 356.5, 416.0, 533.3, 554.0,  563.3, 570.4, 573.8, 575.6, 562.8, 558.8,
         # 542.1, 517.9, 472.0,  461.7, 461.8, 413.9, 383.5, 407.7, 373.8, 332.9, 325.1, 302.6] # june 24
@@ -1165,11 +1207,18 @@ def load_scenarios(cur_resource, gs_start_time, soe_init=None):
                                pk_capacity=500.0,
                                t=forecast_timestamps)
     print(pv_forecast)
+    if numpy.isnan(pv_resources.state_vars['DemandForecast_kW']).any() == True:
+        return_val=0
+
 
     if load_resources != []:
         load_resources.load_scenario(demand_forecast=demand_forecast,
                                      pk_capacity=1000.0,
                                      t=forecast_timestamps)
+        print(demand_forecast)
+        print(load_resources.state_vars['DemandForecast_kW'])
+        if numpy.isnan(load_resources.state_vars['DemandForecast_kW']).any() == True:
+            return_val = 0
 
     try:
         if loadshift_resources != []:
@@ -1188,6 +1237,7 @@ def load_scenarios(cur_resource, gs_start_time, soe_init=None):
     #    solarPlusStorage_resources.load_scenario()
 
     system_resources.load_scenario()
+    return return_val
 
     #########
 
@@ -1245,7 +1295,7 @@ if __name__ == '__main__':
 
     if SET_TIME == True:
         shift_to_start_of_day = False
-        gs_start_time = datetime(2019,7,17)  # was 7/11
+        gs_start_time = datetime(2019,8,20)  # was 7/11
     else:
         gs_start_time = datetime.utcnow().replace(microsecond=0)
         if shift_to_start_of_day == True:
@@ -1273,12 +1323,51 @@ if __name__ == '__main__':
         # (c) anything else?
         pass
     else:
-        sundial_resources   = get_dispatch_schedule(gs_start_time,
-                                                    "../cfg/SystemCfg/EmulatedSundialSystemConfiguration.json",
-                                                    shift_to_start_of_day,
-                                                    nIterations=2000,
-                                                    fname='SysState_07172019_08312019_PI_DDC.csv',
-                                                    soe_init=500)
+
+        if 1:
+            nIterations = 3600
+            #scenario_setup = (#{'cfg': "../cfg/SystemCfg/EmulatedSundialSystemConfiguration_LC.json",'fname': 'SysState_06012019_10162019_LC_DDC_Opt5.csv','optimization_scenario': 5, 'nIterations':nIterations},
+                              #{'cfg': "../cfg/SystemCfg/EmulatedSundialSystemConfiguration.json",'fname': 'SysState_06012019_10162019_Basecase_DDC_Opt5.csv', 'optimization_scenario': 5,'nIterations': nIterations},
+                              #{'cfg': "../cfg/SystemCfg/EmulatedSundialSystemConfiguration_LC.json", 'fname': 'SysState_06012019_10162019_LC_DDC_Opt1.csv','optimization_scenario': 0, 'nIterations': nIterations},
+                              #{'cfg': "../cfg/SystemCfg/EmulatedSundialSystemConfiguration_PI.json", 'fname': 'SysState_06012019_10162019_PI.csv','optimization_scenario': 1, 'nIterations': nIterations})
+
+            scenario_setup = ({'cfg': "../cfg/SystemCfg/EmulatedSundialSystemConfiguration_LC.json",'fname': 'SysState_08202019_09012019_LC_DDC_Opt5.csv','optimization_scenario': 5, 'nIterations':nIterations, 'DCTInit': 370, 'start_time': datetime(2019,8,20), 'end_time': datetime(2019,9,1, tzinfo=pytz.timezone('UTC'))},
+                              {'cfg': "../cfg/SystemCfg/EmulatedSundialSystemConfiguration.json",'fname': 'SysState_08202019_09012019_Basecase_DDC_Opt5.csv', 'optimization_scenario': 5,'nIterations': nIterations, 'DCTInit': 455, 'start_time': datetime(2019,8,20), 'end_time': datetime(2019,9,1, tzinfo=pytz.timezone('UTC'))},
+                              {'cfg': "../cfg/SystemCfg/EmulatedSundialSystemConfiguration_LC_Peaker.json",'fname': 'SysState_08012019_08312019_LC_Peaker_Opt5.csv', 'optimization_scenario': 5,'nIterations': nIterations, 'DCTInit': 370, 'start_time': datetime(2019, 8, 1),'end_time': datetime(2019, 9, 1, tzinfo=pytz.timezone('UTC'))},
+                              {'cfg': "../cfg/SystemCfg/EmulatedSundialSystemConfiguration_BaseCase_Peaker.json",'fname': 'SysState_08012019_08312019_BaseCase_Peaker_Opt5.csv', 'optimization_scenario': 5, 'nIterations': nIterations, 'DCTInit': 370, 'start_time': datetime(2019, 8, 1),'end_time': datetime(2019, 9, 1, tzinfo=pytz.timezone('UTC'))},
+                              {'cfg': "../cfg/SystemCfg/EmulatedSundialSystemConfiguration_PI.json",'fname': 'SysState_09012019_10162019_PI.csv', 'optimization_scenario': 1, 'nIterations': nIterations, 'DCTInit': 370, 'start_time': datetime(2019,9,1), 'end_time': datetime(2019,10,17, tzinfo=pytz.timezone('UTC'))})
+
+            try:
+                for ii in range(0,len(scenario_setup)):
+                    sundial_resources = get_dispatch_schedule(scenario_setup[ii]['start_time'], #gs_start_time
+                                                              scenario_setup[ii]['cfg'],
+                                                              shift_to_start_of_day,
+                                                              nIterations=scenario_setup[ii]['nIterations'],
+                                                              fname=scenario_setup[ii]['fname'],  # 'SysState_08262019_10162019_PI_DDC.csv',
+                                                              soe_init=500,
+                                                              end_time = scenario_setup[ii]['end_time'],
+                                                              optimization_scenario=scenario_setup[ii]['optimization_scenario'],
+                                                              dct = scenario_setup[ii]['DCTInit'])
+            except:
+                sundial_resources = get_dispatch_schedule(scenario_setup['start_time'], #gs_start_time,
+                                                          scenario_setup['cfg'],
+                                                          shift_to_start_of_day,
+                                                          nIterations=scenario_setup['nIterations'],
+                                                          fname=scenario_setup['fname'],
+                                                          # 'SysState_08262019_10162019_PI_DDC.csv',
+                                                          soe_init=500,
+                                                          end_time=scenario_setup['end_time'],
+                                                          optimization_scenario=scenario_setup['optimization_scenario'],
+                                                          dct=scenario_setup['DCTInit'])
+        else:
+            sundial_resources   = get_dispatch_schedule(datetime(2019,8,20), #gs_start_time,
+                                                        "../cfg/SystemCfg/EmulatedSundialSystemConfiguration_LC_Peaker.json",
+                                                        shift_to_start_of_day,
+                                                        nIterations=2,
+                                                        fname='tst.csv', #'SysState_08262019_10162019_PI_DDC.csv',
+                                                        soe_init=500,
+                                                        optimization_scenario=5,
+                                                        dct=370)
         #sundial_resources   = get_dispatch_schedule(gs_start_time,
         #                                            "../cfg/SystemCfg/EmulatedSundialSystemConfiguration.json",
         #                                            shift_to_start_of_day,
